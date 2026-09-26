@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Launch the Auxo installer. If there is no internet, offer to connect first
+# (Plasma and the stable kernel install offline; other desktops need a connection).
+if ! auxo-netcheck; then
+  if command -v kdialog >/dev/null; then
+    kdialog --title "Auxo installer" --yesno "You're offline.\n\nKDE Plasma and the stable kernel install fine without internet,\nbut other desktops, kernels and extra software need a connection.\n\nOpen network settings first?" \
+      --yes-label "Connect to a network" --no-label "Install offline"
+    if [[ $? -eq 0 ]]; then
+      kcmshell6 kcm_networkmanagement 2>/dev/null || konsole -e nmtui
+    fi
+  else
+    read -rp "Offline. Run nmtui to connect first? [Y/n] " a
+    [[ ${a,,} == n* ]] || nmtui
+  fi
+fi
+command -v xhost >/dev/null && xhost +si:localuser:root >/dev/null 2>&1
+exec sudo -E QT_QPA_PLATFORM="wayland;xcb" calamares "$@"

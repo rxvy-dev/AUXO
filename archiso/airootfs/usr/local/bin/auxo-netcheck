@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# exit 0 when the internet is reachable
+for h in archlinux.org auxolinux.com 1.1.1.1; do
+  if curl -fsI --max-time 4 "https://$h" >/dev/null 2>&1 || ping -c1 -W2 "$h" >/dev/null 2>&1; then exit 0; fi
+done
+exit 1

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Auxo Update
+Comment=Snapshot and update the whole system
+Exec=auxo-update
+Icon=/usr/share/pixmaps/auxo-logo.png
+Terminal=true
+Categories=System;

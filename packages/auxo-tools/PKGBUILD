@@ -1,0 +1,31 @@
+# Maintainer: Auxo Linux <https://auxolinux.com>
+pkgname=auxo-tools
+pkgver=3.0.0
+pkgrel=1
+pkgdesc="Auxo Linux tools: auxo-tweak, auxo-fetch, auxo-update, auxo-rollback, auxo-welcome, rices and branding"
+arch=('any')
+url="https://auxolinux.com"
+license=('GPL-3.0-or-later')
+depends=('python' 'libnewt' 'pciutils' 'sudo' 'polkit')
+optdepends=('python-pyqt6: auxo-welcome GUI'
+            'snapper: btrfs snapshots'
+            'reflector: auxo-tweak mirrors'
+            'grub: themed boot menu')
+backup=('etc/auxo/auxo.conf')
+install=auxo-tools.install
+source=()
+
+package() {
+  local src="$startdir/files"
+  install -d "$pkgdir"/usr/{bin,lib/auxo,share/{auxo,applications,pixmaps,wallpapers,libalpm/hooks}} "$pkgdir"/etc/{auxo,skel}
+  install -m755 "$src"/bin/* "$pkgdir/usr/bin/"
+  install -m644 "$src"/lib/*.py "$pkgdir/usr/lib/auxo/"
+  cp -r "$src"/share/auxo/. "$pkgdir/usr/share/auxo/"
+  install -m644 "$src"/share/wallpapers/* "$pkgdir/usr/share/wallpapers/"
+  install -m644 "$src"/share/pixmaps/* "$pkgdir/usr/share/pixmaps/"
+  install -m644 "$src"/applications/*.desktop "$pkgdir/usr/share/applications/"
+  install -m644 "$src"/hooks/*.hook "$pkgdir/usr/share/libalpm/hooks/"
+  install -m644 "$src"/etc/auxo/auxo.conf "$pkgdir/etc/auxo/auxo.conf"
+  install -m644 "$src"/etc/skel/.zshrc "$pkgdir/etc/skel/"   # .bashrc belongs to the bash package
+  find "$pkgdir/usr/share/auxo" -name '*.sh' -exec chmod 755 {} +
+}

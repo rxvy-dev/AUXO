@@ -1,0 +1,5 @@
+work/
+out/
+branding/out/
+__pycache__/
+*.pkg.tar.zst

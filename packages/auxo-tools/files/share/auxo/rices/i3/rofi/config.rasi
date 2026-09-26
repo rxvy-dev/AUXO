@@ -1,0 +1,10 @@
+configuration { modi: "drun,run,window"; show-icons: true; display-drun: "climb to"; font: "Inter 11"; }
+@import "~/.config/auxo/colors.rasi"
+window { background-color: @bg; border: 2px; border-color: @accent; border-radius: 16px; width: 560px; padding: 12px; }
+mainbox, inputbar, listview, element, element-text, element-icon, prompt, entry { background-color: transparent; text-color: @fg; }
+inputbar { padding: 10px 12px; background-color: @bg2; border-radius: 10px; children: [prompt, entry]; spacing: 10px; }
+prompt { text-color: @accent; }
+listview { lines: 8; margin: 10px 0 0 0; }
+element { padding: 8px 10px; border-radius: 10px; }
+element selected { background-color: @accent; text-color: @bg; }
+element-text selected { text-color: @bg; }

@@ -1,0 +1,7 @@
+@import url("../auxo/colors.css");
+window { background-color: alpha(@bg, 0.94); border: 2px solid @accent; border-radius: 16px; font-family: Inter; }
+#input { margin: 12px; padding: 10px 14px; border: none; border-radius: 10px; background: @bg2; color: @fg; }
+#entry { padding: 8px 12px; border-radius: 10px; }
+#entry:selected { background: alpha(@accent, 0.22); outline: none; }
+#text { color: @fg; margin-left: 8px; }
+#text:selected { color: @accent; }

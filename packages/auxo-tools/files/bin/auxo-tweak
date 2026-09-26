@@ -1,0 +1,561 @@
+#!/usr/bin/env python3
+"""auxo-tweak — change your Auxo system after install, no reinstall needed.
+
+Run with no arguments for the interactive menu, or use a sub-command:
+
+  auxo-tweak accent [NAME]          system + user accent colour (GRUB, SDDM, MOTD, terminals, bars)
+  auxo-tweak kernel NAME            linux | linux-lts | linux-zen | linux-hardened
+  auxo-tweak shell NAME             zsh | fish | bash
+  auxo-tweak desktop NAME           plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
+  auxo-tweak rice NAME              (re)apply the Auxo dotfiles for hyprland | sway | i3
+  auxo-tweak snapshots on|off|status  btrfs time-travel: snapper + bootable snapshots in GRUB
+  auxo-tweak drivers                detect GPU and install the right driver (NVIDIA / AMD / Intel)
+  auxo-tweak mirrors                rank the fastest mirrors with reflector
+  auxo-tweak zram on|off            compressed RAM swap
+  auxo-tweak multilib on            enable 32-bit repo (Steam, Wine)
+  auxo-tweak aur                    install the paru AUR helper
+  auxo-tweak service NAME on|off    bluetooth | cups | sshd | ufw | power-profiles
+  auxo-tweak info                   show current Auxo settings
+"""
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+from auxo_accents import ACCENTS, ansi  # noqa: E402
+from auxo_core import (R, DRY, AuxoError, log, warn, run, have, pacman, installed, online, require_root,  # noqa: E402
+                       read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
+                       invoking_user, systemctl_enable, systemctl_disable, SHARE, RESET, BOLD, DIM)
+from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS  # noqa: E402
+import auxo_theme  # noqa: E402
+
+
+def target_users(args):
+    if getattr(args, "user", None):
+        return [args.user]
+    u = invoking_user()
+    return [u] if u else normal_users()
+
+
+# ── accent ────────────────────────────────────────────────────────────
+def cmd_accent(args):
+    if not args.name:
+        cur = auxo_theme.current()
+        for name, (a, _) in ACCENTS.items():
+            mark = "●" if name == cur else "○"
+            print(f"  {ansi(a)}{mark} {name:<8} {a}{RESET}")
+        return
+    require_root()
+    auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
+    for u in target_users(args):
+        auxo_theme.apply_user(u, args.name)
+    if not args.user and os.environ.get("SUDO_USER") and os.environ.get("DISPLAY", os.environ.get("WAYLAND_DISPLAY")):
+        run(["auxo-tweak", "session-apply", "--accent", args.name], check=False, user=os.environ["SUDO_USER"])
+
+
+# ── kernel ────────────────────────────────────────────────────────────
+def gpu_info():
+    """Return list of (vendor, device_id, description)."""
+    out = run(["lspci", "-nn"], capture=True, check=False) if have("lspci") else ""
+    gpus = []
+    for line in (out or "").splitlines():
+        if any(k in line for k in ("VGA compatible", "3D controller", "Display controller")):
+            import re
+            m = re.search(r"\[([0-9a-f]{4}):([0-9a-f]{4})\]", line)
+            if m:
+                gpus.append((m.group(1), m.group(2), line.split(": ", 1)[-1]))
+    return gpus
+
+
+def nvidia_status():
+    """None (no NVIDIA), 'open' (Turing+ → nvidia-open) or 'legacy' (Pascal and older)."""
+    for vendor, dev, _ in gpu_info():
+        if vendor == "10de":
+            return "open" if int(dev, 16) >= 0x1e00 else "legacy"
+    return None
+
+
+def installed_kernels():
+    return [k for k in KERNELS if installed(k)]
+
+
+def ensure_nvidia(kernels=None):
+    kernels = kernels or installed_kernels() or ["linux"]
+    if kernels == ["linux"]:
+        if installed("nvidia-open-dkms"):
+            pacman("-Rdd", "nvidia-open-dkms", needed=False)
+        pacman("-S", "nvidia-open", "nvidia-utils", "nvidia-settings", "lib32-nvidia-utils" if multilib_enabled() else "nvidia-utils")
+    else:
+        if installed("nvidia-open"):
+            pacman("-Rdd", "nvidia-open", needed=False)
+        pacman("-S", "nvidia-open-dkms", "nvidia-utils", "nvidia-settings", *[f"{k}-headers" for k in kernels])
+    write_file("/etc/modprobe.d/auxo-nvidia.conf",
+               "# written by auxo-tweak\noptions nvidia_drm modeset=1 fbdev=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\n")
+    for unit in ("nvidia-suspend.service", "nvidia-hibernate.service", "nvidia-resume.service"):
+        systemctl_enable(unit)
+
+
+def cmd_kernel(args):
+    require_root()
+    k = args.name
+    if k not in KERNELS:
+        raise AuxoError(f"unknown kernel {k}; choose {', '.join(KERNELS)}")
+    log(f"installing {k}")
+    pacman("-S", k, f"{k}-headers")
+    if nvidia_status() == "open":
+        ensure_nvidia(installed_kernels() if not DRY else ["linux", k])
+    set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", f"/boot/vmlinuz-{k}")
+    write_conf({"KERNEL": k})
+    if not args.no_grub:
+        run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], check=False)
+    log(f"{k} is now the default boot entry (other kernels stay under 'Advanced options').")
+
+
+# ── shell ─────────────────────────────────────────────────────────────
+ZSHRC = """# ~/.zshrc — Auxo defaults (safe to edit)
+HISTFILE=~/.zsh_history HISTSIZE=10000 SAVEHIST=10000
+setopt autocd extendedglob hist_ignore_dups share_history
+bindkey -e
+autoload -Uz compinit && compinit
+zstyle ':completion:*' menu select
+[[ -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
+[[ -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+source /usr/share/auxo/shell/prompt.zsh
+alias ls='ls --color=auto' ll='ls -lah' grep='grep --color=auto' update='auxo-update'
+"""
+FISHRC = """# ~/.config/fish/config.fish — Auxo defaults
+set -g fish_greeting
+source /usr/share/auxo/shell/prompt.fish
+alias ll 'ls -lah'
+alias update auxo-update
+"""
+
+
+def cmd_shell(args):
+    require_root()
+    path, pkgs = SHELLS[args.name]
+    if not all(installed(p) for p in pkgs) or DRY:
+        pacman("-S", *pkgs)
+    for u in target_users(args):
+        run(["chsh", "-s", path, u])
+        home = home_of(u)
+        if args.name == "zsh" and not os.path.exists(R(f"{home}/.zshrc")) or args.name == "zsh" and args.force:
+            write_file(f"{home}/.zshrc", ZSHRC, owner=u)
+        if args.name == "bash":
+            rc = R(f"{home}/.bashrc")
+            line = "[[ $- == *i* ]] && source /usr/share/auxo/shell/prompt.bash  # auxo prompt\n"
+            if not os.path.exists(rc) or "auxo/shell/prompt.bash" not in open(rc).read():
+                os.makedirs(os.path.dirname(rc), exist_ok=True)
+                with open(rc, "a") as f:
+                    f.write("\n" + line)
+                chown(f"{home}/.bashrc", u)
+        if args.name == "fish" and not os.path.exists(R(f"{home}/.config/fish/config.fish")):
+            write_file(f"{home}/.config/fish/config.fish", FISHRC, owner=u)
+        log(f"{u}: login shell → {path}")
+
+
+# ── desktop / rice ────────────────────────────────────────────────────
+def apply_rice(name, user):
+    src = R(f"{SHARE}/rices/{name}")
+    if not os.path.isdir(src):
+        raise AuxoError(f"no rice named {name}")
+    home = home_of(user)
+    dst = R(f"{home}/.config")
+    for base, _dirs, files in os.walk(src):
+        rel = os.path.relpath(base, src)
+        for f in files:
+            target = os.path.normpath(os.path.join(dst, rel, f))
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            if os.path.exists(target) and not os.path.exists(target + ".auxo-bak"):
+                shutil.copy2(target, target + ".auxo-bak")
+            shutil.copy2(os.path.join(base, f), target)
+    # scripts inside the rice must stay executable
+    for base, _dirs, files in os.walk(dst):
+        for f in files:
+            if f.endswith(".sh"):
+                os.chmod(os.path.join(base, f), 0o755)
+    auxo_theme.apply_user(user, auxo_theme.current())
+    chown(f"{home}/.config", user, recursive=True)
+    log(f"{user}: Auxo {name} rice applied (old files kept as *.auxo-bak)")
+
+
+def set_display_manager(dm):
+    for other in ("sddm", "gdm", "lightdm", "ly"):
+        if other != dm:
+            systemctl_disable(other)
+    if dm:
+        run(["systemctl", "enable", "-f", dm], check=False)
+        run(["systemctl", "set-default", "graphical.target"], check=False)
+    else:
+        run(["systemctl", "set-default", "multi-user.target"], check=False)
+
+
+def set_default_session(user, session):
+    """SDDM remembers the last session per user; seed it so first login lands in the chosen desktop."""
+    if not session:
+        return
+    wl = R(f"/usr/share/wayland-sessions/{session}.desktop")
+    kind = "wayland" if os.path.exists(wl) or session in ("plasma", "hyprland", "sway", "gnome") else "x11"
+    write_file("/var/lib/sddm/state.conf",
+               f"[Last]\nUser={user}\nSession=/usr/share/{'wayland-sessions' if kind == 'wayland' else 'xsessions'}/{session}.desktop\n")
+    run(["chown", "-R", "sddm:sddm", "/var/lib/sddm"], check=False)
+
+
+def cmd_desktop(args):
+    require_root()
+    d = DESKTOPS.get(args.name)
+    if not d:
+        raise AuxoError(f"unknown desktop {args.name}; choose {', '.join(DESKTOPS)}")
+    if d["packages"]:
+        if not online() and not all(installed(p) for p in d["packages"]):
+            raise AuxoError("no internet connection — connect first (nmtui) and try again")
+        log(f"installing {d['name']}")
+        pacman("-S", *d["packages"])
+    users = target_users(args)
+    if d.get("rice"):
+        for u in users:
+            apply_rice(d["rice"], u)
+    if args.replace and args.name != "plasma":
+        keep = set(d["packages"])
+        remove = [p for p in LIVE_PLASMA if p not in keep and (installed(p) or DRY)]
+        if remove:
+            log("removing the live Plasma desktop")
+            if run(["pacman", "--noconfirm", "-Rns", *remove], check=False) != 0:
+                for p in remove:  # something is still needed — remove what we can, one by one
+                    run(["pacman", "--noconfirm", "-Rns", p], check=False)
+    set_display_manager(d["dm"])
+    if d["dm"] == "sddm":
+        auxo_theme.apply_sddm(auxo_theme.current())
+    if d["dm"] == "sddm" and users:
+        set_default_session(users[0], d["session"])
+    write_conf({"DESKTOP": args.name})
+    log(f"desktop → {d['name']}. Reboot or log out to use it.")
+
+
+def cmd_rice(args):
+    require_root()
+    for u in target_users(args):
+        apply_rice(args.name, u)
+
+
+# ── snapshots ─────────────────────────────────────────────────────────
+SNAPPER_CFG = """# snapper config for / — written by auxo-tweak
+SUBVOLUME="/"
+FSTYPE="btrfs"
+QGROUP=""
+SPACE_LIMIT="0.5"
+FREE_LIMIT="0.2"
+ALLOW_USERS=""
+ALLOW_GROUPS="wheel"
+SYNC_ACL="yes"
+BACKGROUND_COMPARISON="yes"
+NUMBER_CLEANUP="yes"
+NUMBER_MIN_AGE="1800"
+NUMBER_LIMIT="12"
+NUMBER_LIMIT_IMPORTANT="6"
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="4"
+TIMELINE_LIMIT_DAILY="5"
+TIMELINE_LIMIT_WEEKLY="2"
+TIMELINE_LIMIT_MONTHLY="1"
+TIMELINE_LIMIT_YEARLY="0"
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"
+"""
+
+
+def root_fstype():
+    if DRY:
+        return os.environ.get("AUXO_TEST_FSTYPE", "btrfs")
+    return run(["findmnt", "-no", "FSTYPE", "/"], capture=True, check=False).strip()
+
+
+def cmd_snapshots(args):
+    if args.state == "status":
+        cfg = os.path.exists(R("/etc/snapper/configs/root"))
+        print(f"root filesystem : {root_fstype()}")
+        print(f"snapper         : {'configured' if cfg else 'off'}")
+        if cfg and have("snapper") and not DRY:
+            run(["snapper", "-c", "root", "list", "--columns", "number,date,description"], check=False)
+        return
+    require_root()
+    if args.state == "off":
+        for u in ("snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd.service"):
+            systemctl_disable(u, now=True)
+        write_conf({"SNAPSHOTS": "off"})
+        log("automatic snapshots disabled (existing ones are kept)")
+        return
+    if root_fstype() != "btrfs":
+        raise AuxoError("snapshots need a btrfs root filesystem (choose btrfs in the installer)")
+    pacman("-S", "snapper", "snap-pac", "grub-btrfs", "inotify-tools")
+    write_file("/etc/snapper/configs/root", SNAPPER_CFG, mode=0o640)
+    set_kv("/etc/conf.d/snapper", "SNAPPER_CONFIGS", "root")
+    os.makedirs(R("/.snapshots"), exist_ok=True)
+    if not DRY:
+        os.chmod(R("/.snapshots"), 0o750)
+        # the installer mounts @snapshots at /.snapshots; if not, make it a subvolume
+        if subprocess.run(["mountpoint", "-q", "/.snapshots"]).returncode != 0 and not os.listdir("/.snapshots"):
+            os.rmdir("/.snapshots")
+            run(["btrfs", "subvolume", "create", "/.snapshots"], check=False)
+    for u in ("snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd.service"):
+        systemctl_enable(u, now=not args.no_now)
+    run(["snapper", "--no-dbus", "-c", "root", "create", "-d", args.description or "auxo-tweak: snapshots enabled"], check=False)
+    write_conf({"SNAPSHOTS": "on"})
+    if not args.no_grub:
+        run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], check=False)
+    log("snapshots on: every pacman transaction is snapshotted, and snapshots are bootable from GRUB → 'Auxo snapshots'")
+
+
+# ── drivers / mirrors / misc ──────────────────────────────────────────
+def multilib_enabled():
+    try:
+        return any(l.strip() == "[multilib]" for l in open(R("/etc/pacman.conf")))
+    except FileNotFoundError:
+        return False
+
+
+def cmd_multilib(args):
+    require_root()
+    p = R("/etc/pacman.conf")
+    txt = open(p).read()
+    if multilib_enabled():
+        log("multilib already enabled")
+        return
+    txt = txt.replace("#[multilib]\n#Include = /etc/pacman.d/mirrorlist", "[multilib]\nInclude = /etc/pacman.d/mirrorlist")
+    if "[multilib]" not in txt.replace("#[multilib]", ""):
+        txt += "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n"
+    open(p, "w").write(txt)
+    pacman("-Sy", needed=False)
+    log("multilib enabled")
+
+
+def cmd_drivers(args):
+    require_root()
+    gpus = gpu_info()
+    if not gpus:
+        warn("no GPU found via lspci")
+    for vendor, dev, desc in gpus:
+        print(f"  {DIM}found{RESET} {desc}")
+    vendors = {v for v, _, _ in gpus}
+    ucode = "intel-ucode" if "GenuineIntel" in open("/proc/cpuinfo").read() else "amd-ucode"
+    pacman("-S", ucode, "mesa", "vulkan-icd-loader")
+    if "1002" in vendors:
+        pacman("-S", "vulkan-radeon", "libva-utils")
+    if "8086" in vendors:
+        pacman("-S", "vulkan-intel", "intel-media-driver")
+    st = nvidia_status()
+    if st == "open":
+        log("NVIDIA Turing or newer → nvidia-open")
+        ensure_nvidia()
+    elif st == "legacy":
+        warn("NVIDIA GPU older than Turing: nvidia-open does not support it. Staying on nouveau.\n"
+             "   For the proprietary legacy driver install nvidia-580xx-dkms from the AUR (paru -S nvidia-580xx-dkms).")
+    if args.prune:
+        # the live medium ships every driver; drop the ones this machine can't use
+        nv = [p for p in ("nvidia-open", "nvidia-settings", "nvidia-utils") if installed(p)]
+        if st != "open" and nv:
+            log("no supported NVIDIA GPU → removing NVIDIA packages")
+            run(["pacman", "--noconfirm", "-Rns", *nv], check=False)
+        if "1002" not in vendors and installed("vulkan-radeon"):
+            run(["pacman", "--noconfirm", "-Rns", "vulkan-radeon"], check=False)
+        if "8086" not in vendors:
+            gone = [p for p in ("vulkan-intel", "intel-media-driver") if installed(p)]
+            if gone:
+                run(["pacman", "--noconfirm", "-Rns", *gone], check=False)
+        other = "amd-ucode" if ucode == "intel-ucode" else "intel-ucode"
+        if installed(other):
+            run(["pacman", "--noconfirm", "-Rns", other], check=False)
+    if st == "open" and not args.no_initramfs:
+        run(["mkinitcpio", "-P"], check=False)
+    write_conf({"GPU": ",".join(sorted(vendors)) or "none"})
+    log("drivers done")
+
+
+def cmd_mirrors(args):
+    require_root()
+    pacman("-S", "reflector")
+    country = ["--country", args.country] if args.country else []
+    run(["reflector", "--protocol", "https", "--latest", "30", "--sort", "rate", "--age", "24",
+         *country, "--save", "/etc/pacman.d/mirrorlist"])
+    log("mirrorlist updated")
+
+
+def cmd_zram(args):
+    require_root()
+    if args.state == "on":
+        pacman("-S", "zram-generator")
+        write_file("/etc/systemd/zram-generator.conf",
+                   "[zram0]\nzram-size = min(ram / 2, 8192)\ncompression-algorithm = zstd\nswap-priority = 100\n")
+        write_file("/etc/sysctl.d/99-auxo-zram.conf",
+                   "vm.swappiness = 180\nvm.watermark_boost_factor = 0\nvm.watermark_scale_factor = 125\nvm.page-cluster = 0\n")
+    else:
+        for p in ("/etc/systemd/zram-generator.conf", "/etc/sysctl.d/99-auxo-zram.conf"):
+            if os.path.exists(R(p)):
+                os.remove(R(p))
+    write_conf({"ZRAM": args.state})
+    log(f"zram {args.state} (takes effect after reboot)")
+
+
+SERVICES = {
+    "bluetooth": (["bluez", "bluez-utils"], ["bluetooth.service"]),
+    "cups": (["cups", "cups-pdf", "system-config-printer"], ["cups.socket"]),
+    "sshd": (["openssh"], ["sshd.service"]),
+    "ufw": (["ufw"], ["ufw.service"]),
+    "power-profiles": (["power-profiles-daemon"], ["power-profiles-daemon.service"]),
+    "flatpak": (["flatpak"], []),
+}
+
+
+def cmd_service(args):
+    require_root()
+    pkgs, units = SERVICES[args.name]
+    if args.state == "on":
+        pacman("-S", *pkgs)
+        for u in units:
+            systemctl_enable(u, now=True)
+        if args.name == "ufw":
+            run(["ufw", "default", "deny", "incoming"], check=False)
+            run(["ufw", "--force", "enable"], check=False)
+    else:
+        for u in units:
+            systemctl_disable(u, now=True)
+    log(f"{args.name} {args.state}")
+
+
+def cmd_aur(args):
+    """Install the paru AUR helper (built as your user, never as root)."""
+    require_root()
+    users = target_users(args)
+    if not users:
+        raise AuxoError("run this with sudo from your normal user, or pass --user")
+    if installed("paru") or installed("paru-bin"):
+        log("paru is already installed")
+        return
+    pacman("-S", "base-devel", "git")
+    u = users[0]
+    d = "/tmp/auxo-paru-build"
+    run(["rm", "-rf", d])
+    run(["install", "-d", "-o", u, d])
+    run(["git", "clone", "--depth", "1", "https://aur.archlinux.org/paru-bin.git", f"{d}/paru-bin"], user=u)
+    run(["bash", "-c", f"cd {d}/paru-bin && makepkg --noconfirm"], user=u)
+    run(["bash", "-c", f"pacman --noconfirm -U {d}/paru-bin/*.pkg.tar.zst"])
+    log("paru installed — try: paru -S <aur-package>")
+
+
+def cmd_info(args):
+    c = read_conf()
+    acc = auxo_theme.current()
+    print(f"{BOLD}Auxo settings{RESET}")
+    for k in ("ACCENT", "DESKTOP", "KERNEL", "SNAPSHOTS", "ZRAM", "GPU"):
+        v = c.get(k, "-")
+        if k == "ACCENT":
+            v = f"{ansi(ACCENTS[acc][0])}{acc}{RESET}"
+        print(f"  {k.lower():<10} {v}")
+
+
+def cmd_session_apply(args):
+    auxo_theme.session_apply(args.accent, once=args.once)
+
+
+# ── interactive menu (whiptail) ───────────────────────────────────────
+def wt(*a):
+    r = subprocess.run(["whiptail", "--title", "auxo-tweak", *a], stderr=subprocess.PIPE, text=True)
+    return r.stderr.strip() if r.returncode == 0 else None
+
+
+def menu():
+    if not have("whiptail"):
+        print(__doc__)
+        return
+    me = [sys.executable, os.path.abspath(__file__)]
+    while True:
+        choice = wt("--menu", "Climb your own setup — pick something to change", "20", "70", "12",
+                    "accent", "Accent colour", "desktop", "Desktop / window manager", "kernel", "Kernel",
+                    "shell", "Login shell", "snapshots", "Btrfs snapshots", "drivers", "GPU drivers",
+                    "mirrors", "Fastest mirrors", "zram", "Compressed RAM swap", "services", "System services",
+                    "update", "Update everything (auxo-update)", "quit", "Exit")
+        if choice in (None, "quit"):
+            return
+        cmd = None
+        if choice == "accent":
+            v = wt("--menu", "Accent colour", "18", "50", "8", *sum([[n, a] for n, (a, _) in ACCENTS.items()], []))
+            cmd = ["accent", v] if v else None
+        elif choice == "desktop":
+            v = wt("--menu", "Desktop", "18", "60", "8", *sum([[k, d["name"]] for k, d in DESKTOPS.items()], []))
+            cmd = ["desktop", v] if v else None
+        elif choice == "kernel":
+            v = wt("--menu", "Kernel", "15", "70", "4", *sum([[k, d] for k, d in KERNELS.items()], []))
+            cmd = ["kernel", v] if v else None
+        elif choice == "shell":
+            v = wt("--menu", "Shell", "12", "40", "3", "zsh", "", "fish", "", "bash", "")
+            cmd = ["shell", v] if v else None
+        elif choice == "snapshots":
+            v = wt("--menu", "Snapshots", "12", "50", "3", "on", "enable", "off", "disable", "status", "show")
+            cmd = ["snapshots", v] if v else None
+        elif choice == "zram":
+            v = wt("--menu", "zram", "10", "40", "2", "on", "", "off", "")
+            cmd = ["zram", v] if v else None
+        elif choice == "services":
+            v = wt("--menu", "Service", "15", "50", "6", *sum([[k, ""] for k in SERVICES], []))
+            s = v and wt("--menu", v, "10", "40", "2", "on", "", "off", "")
+            cmd = ["service", v, s] if s else None
+        elif choice == "update":
+            subprocess.run(["auxo-update"])
+            continue
+        else:
+            cmd = [choice]
+        if cmd:
+            subprocess.run(["sudo", *me, *cmd] if os.geteuid() != 0 else [*me, *cmd])
+            input(f"\n{DIM}press Enter to go back{RESET}")
+
+
+def main():
+    p = argparse.ArgumentParser(prog="auxo-tweak", description="Change your Auxo system without reinstalling.")
+    sub = p.add_subparsers(dest="cmd")
+
+    s = sub.add_parser("accent"); s.add_argument("name", nargs="?", choices=list(ACCENTS))
+    s.add_argument("--user"); s.add_argument("--no-grub", action="store_true"); s.set_defaults(fn=cmd_accent)
+    s = sub.add_parser("kernel"); s.add_argument("name", choices=list(KERNELS))
+    s.add_argument("--no-grub", action="store_true"); s.set_defaults(fn=cmd_kernel)
+    s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
+    s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_shell)
+    s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
+    s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop"); s.set_defaults(fn=cmd_desktop)
+    s = sub.add_parser("rice"); s.add_argument("name", choices=["hyprland", "sway", "i3"]); s.add_argument("--user")
+    s.set_defaults(fn=cmd_rice)
+    s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status"])
+    s.add_argument("--no-grub", action="store_true"); s.add_argument("--no-now", action="store_true")
+    s.add_argument("--description"); s.set_defaults(fn=cmd_snapshots)
+    s = sub.add_parser("drivers"); s.add_argument("--no-initramfs", action="store_true")
+    s.add_argument("--prune", action="store_true", help="remove drivers for hardware that isn't present")
+    s.set_defaults(fn=cmd_drivers)
+    s = sub.add_parser("aur"); s.add_argument("--user"); s.set_defaults(fn=cmd_aur)
+    s = sub.add_parser("mirrors"); s.add_argument("--country"); s.set_defaults(fn=cmd_mirrors)
+    s = sub.add_parser("zram"); s.add_argument("state", choices=["on", "off"]); s.set_defaults(fn=cmd_zram)
+    s = sub.add_parser("multilib"); s.add_argument("state", choices=["on"]); s.set_defaults(fn=cmd_multilib)
+    s = sub.add_parser("service"); s.add_argument("name", choices=list(SERVICES)); s.add_argument("state", choices=["on", "off"])
+    s.set_defaults(fn=cmd_service)
+    s = sub.add_parser("info"); s.set_defaults(fn=cmd_info)
+    s = sub.add_parser("session-apply"); s.add_argument("--accent", choices=list(ACCENTS)); s.add_argument("--once", action="store_true")
+    s.set_defaults(fn=cmd_session_apply)
+
+    args = p.parse_args()
+    if not args.cmd:
+        menu()
+        return
+    try:
+        args.fn(args)
+    except AuxoError as e:
+        warn(str(e))
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(130)
+
+
+if __name__ == "__main__":
+    main()

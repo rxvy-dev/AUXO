@@ -1,0 +1,7 @@
+post_install() {
+  /usr/bin/auxo-branding
+  echo ">> Auxo tools installed. Try: auxo-fetch, auxo-tweak"
+}
+post_upgrade() {
+  /usr/bin/auxo-branding
+}

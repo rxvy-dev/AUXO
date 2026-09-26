@@ -1,0 +1,12 @@
+[Unit]
+Description=Auxo live session setup (accent, hostname, installer shortcut)
+Before=display-manager.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/auxo-live-setup
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# auxo-rollback — make a snapshot your live system again.
+#
+# Auxo uses a flat btrfs layout (@, @home, @log, @cache, @snapshots).
+# Rolling back = rename the current @ out of the way and replace it with a
+# writable copy of the chosen snapshot. /home is never touched.
+#
+#   auxo-rollback            pick a snapshot interactively
+#   auxo-rollback 42         roll back to snapshot 42
+#   auxo-rollback --list     list snapshots
+#
+# Tip: if the system won't boot, pick "Auxo snapshots" in the GRUB menu,
+# boot the snapshot (read-only), then run auxo-rollback from there.
+set -euo pipefail
+
+die() { printf '\e[31merror:\e[0m %s\n' "$*" >&2; exit 1; }
+[[ $EUID -eq 0 ]] || exec sudo "$0" "$@"
+[[ $(findmnt -no FSTYPE /) == btrfs ]] || die "root is not btrfs — snapshots are unavailable"
+[[ -f /etc/snapper/configs/root ]] || die "snapshots are off (enable with: auxo-tweak snapshots on)"
+
+list() { snapper -c root list --columns number,date,description | sed -n '3,$p'; }
+
+if [[ ${1:-} == --list ]]; then list; exit 0; fi
+
+num=${1:-}
+if [[ -z $num ]]; then
+  mapfile -t rows < <(list | awk -F'|' '$1+0>0 {gsub(/^ +| +$/,"",$1); gsub(/^ +| +$/,"",$2); gsub(/^ +| +$/,"",$3); print $1"\t"$2"  "$3}')
+  (( ${#rows[@]} )) || die "no snapshots yet"
+  args=()
+  for r in "${rows[@]}"; do args+=("${r%%$'\t'*}" "${r#*$'\t'}"); done
+  num=$(whiptail --title "auxo-rollback" --menu "Roll the system back to…  (/home is kept)" 22 90 14 "${args[@]}" 3>&1 1>&2 2>&3) || exit 1
+fi
+[[ $num =~ ^[0-9]+$ ]] || die "snapshot number expected"
+
+dev=$(findmnt -no SOURCE / | sed 's/\[.*\]//')
+top=$(mktemp -d /tmp/auxo-top.XXXX)
+mount -o subvolid=5 "$dev" "$top"
+trap 'umount "$top" 2>/dev/null; rmdir "$top"' EXIT
+
+snap="$top/@snapshots/$num/snapshot"
+[[ -d $snap ]] || die "snapshot $num not found at @snapshots/$num"
+
+desc=$(snapper -c root list --columns number,description | awk -F'|' -v n="$num" '$1+0==n {print $2}' | xargs)
+echo "Rolling back to #$num — ${desc:-no description}"
+read -rp "This replaces the current system (not /home). Continue? [y/N] " ans
+[[ ${ans,,} == y* ]] || exit 1
+
+stamp=$(date +%Y%m%d-%H%M%S)
+if [[ -d $top/@ ]]; then
+  mv "$top/@" "$top/@.before-rollback-$stamp"
+fi
+btrfs subvolume snapshot "$snap" "$top/@"
+
+echo
+echo "Done. The old system is kept as @.before-rollback-$stamp (delete it with"
+echo "  btrfs subvolume delete  once you're happy)."
+read -rp "Reboot now? [Y/n] " ans
+[[ ${ans,,} == n* ]] || systemctl reboot

@@ -1,0 +1,8 @@
+width=560
+height=380
+location=center
+show=drun
+prompt=climb to…
+allow_images=true
+image_size=28
+insensitive=true

@@ -1,0 +1,10 @@
+[global]
+font = Inter 10
+corner_radius = 10
+frame_width = 2
+offset = (14, 46)
+origin = top-right
+width = 340
+padding = 12
+horizontal_padding = 14
+# accent colours live in dunstrc.d/50-auxo.conf

@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""auxo-fetch — a fast system summary drawn in your Auxo accent colour."""
+import argparse
+import json
+import os
+import platform
+import re
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+from auxo_accents import ACCENTS, DEFAULT, hex_to_rgb  # noqa: E402
+
+LOGO = r"""
+         ●
+        /\
+       /  \
+      /    \
+     /  /\  \
+    /  /  \  \
+   /  / /\ \  \
+  /__/ /  \ \__\
+""".strip("\n").splitlines()
+
+SMALL = ["   ●  ", "  /\\  ", " /  \\ ", "/_/\\_\\"]
+
+
+def accent():
+    try:
+        for line in open("/etc/auxo/auxo.conf"):
+            if line.startswith("ACCENT="):
+                a = line.split("=", 1)[1].strip().strip('"')
+                if a in ACCENTS:
+                    return a
+    except OSError:
+        pass
+    return DEFAULT
+
+
+def rgb(h, bold=False):
+    r, g, b = hex_to_rgb(h)
+    return f"\033[{'1;' if bold else ''}38;2;{r};{g};{b}m"
+
+
+def lerp(a, b, t):
+    ra, rb = hex_to_rgb(a), hex_to_rgb(b)
+    return "#" + "".join(f"{int(x + (y - x) * t):02x}" for x, y in zip(ra, rb))
+
+
+def sh(cmd):
+    try:
+        return subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=3).stdout.strip()
+    except Exception:
+        return ""
+
+
+def os_name():
+    try:
+        d = dict(l.rstrip().split("=", 1) for l in open("/etc/os-release") if "=" in l)
+        return d.get("PRETTY_NAME", "Linux").strip('"')
+    except OSError:
+        return "Linux"
+
+
+def uptime():
+    try:
+        s = int(float(open("/proc/uptime").read().split()[0]))
+    except OSError:
+        return "?"
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m = s // 60
+    return " ".join(p for p in (f"{d}d" if d else "", f"{h}h" if h else "", f"{m}m") if p)
+
+
+def packages():
+    parts = []
+    local = "/var/lib/pacman/local"
+    if os.path.isdir(local):
+        parts.append(f"{len(os.listdir(local)) - 1} (pacman)")
+    if shutil.which("flatpak"):
+        n = len([l for l in sh(["flatpak", "list", "--app"]).splitlines() if l.strip()])
+        if n:
+            parts.append(f"{n} (flatpak)")
+    return ", ".join(parts) or "?"
+
+
+def cpu():
+    try:
+        for line in open("/proc/cpuinfo"):
+            if line.startswith("model name"):
+                name = re.sub(r"\s+", " ", line.split(":", 1)[1]).strip()
+                name = re.sub(r"\((R|TM)\)|CPU|@.*|\d+-Core Processor|Processor", "", name).strip()
+                return f"{name} ({os.cpu_count()})"
+    except OSError:
+        pass
+    return platform.processor() or "?"
+
+
+def gpus():
+    out = sh(["lspci"])
+    res = []
+    for line in out.splitlines():
+        if any(k in line for k in ("VGA", "3D controller", "Display controller")):
+            g = line.split(": ", 1)[-1]
+            m = re.search(r"\[(GeForce[^\]]*|Radeon[^\]]*|RTX[^\]]*|Arc[^\]]*)\]", g)
+            g = (("NVIDIA " if "NVIDIA" in g else "AMD " if "AMD" in g or "ATI" in g else "") + m.group(1)) if m else \
+                re.sub(r"Corporation|Integrated Graphics Controller|\(rev.*\)", "", g).strip()
+            res.append(g)
+    return res or ["?"]
+
+
+def memory():
+    try:
+        m = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/meminfo")}
+        total, avail = m["MemTotal"], m["MemAvailable"]
+        return (total - avail) / 1048576, total / 1048576
+    except Exception:
+        return 0, 0
+
+
+def disk():
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize / 1e9
+        used = total - st.f_bavail * st.f_frsize / 1e9
+        fs = sh(["findmnt", "-no", "FSTYPE", "/"]) or "?"
+        return used, total, fs
+    except OSError:
+        return 0, 0, "?"
+
+
+def bar(frac, width, a, b):
+    n = int(round(frac * width))
+    out = "".join(rgb(lerp(a, b, i / max(width - 1, 1))) + "━" for i in range(n))
+    return out + "\033[38;5;238m" + "━" * (width - n) + "\033[0m"
+
+
+def desktop():
+    de = os.environ.get("XDG_CURRENT_DESKTOP") or os.environ.get("DESKTOP_SESSION") or ""
+    sess = os.environ.get("XDG_SESSION_TYPE", "")
+    return f"{de} ({sess})" if de and sess else de or "tty"
+
+
+def collect():
+    mu, mt = memory()
+    du, dt, fs = disk()
+    return {
+        "user": f"{os.environ.get('USER', 'user')}@{platform.node()}",
+        "os": os_name(), "kernel": platform.release(), "uptime": uptime(), "packages": packages(),
+        "shell": os.path.basename(os.environ.get("SHELL", "?")), "desktop": desktop(),
+        "cpu": cpu(), "gpu": gpus(), "memory": [round(mu, 1), round(mt, 1)],
+        "disk": [round(du, 1), round(dt, 1), fs], "accent": accent(),
+    }
+
+
+def main():
+    p = argparse.ArgumentParser(prog="auxo-fetch")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--small", action="store_true")
+    p.add_argument("--no-logo", action="store_true")
+    p.add_argument("--accent", choices=list(ACCENTS))
+    a = p.parse_args()
+    info = collect()
+    if a.accent:
+        info["accent"] = a.accent
+    if a.json:
+        print(json.dumps(info, indent=2))
+        return
+    c1, c2 = ACCENTS[info["accent"]]
+    R, D = "\033[0m", "\033[38;5;245m"
+    mu, mt = info["memory"]
+    du, dt, fs = info["disk"]
+    lines = [
+        f"{rgb(c1, True)}{info['user']}{R}",
+        f"{D}{'─' * len(info['user'])}{R}",
+        f"{rgb(c1)}os{R}       {info['os']}",
+        f"{rgb(c1)}kernel{R}   {info['kernel']}",
+        f"{rgb(c1)}uptime{R}   {info['uptime']}",
+        f"{rgb(c1)}pkgs{R}     {info['packages']}",
+        f"{rgb(c1)}shell{R}    {info['shell']}",
+        f"{rgb(c1)}desktop{R}  {info['desktop']}",
+        f"{rgb(c1)}cpu{R}      {info['cpu']}",
+    ] + [f"{rgb(c1)}gpu{R}      {g}" for g in info["gpu"]] + [
+        f"{rgb(c1)}memory{R}   {bar(mu / mt if mt else 0, 14, c1, c2)} {mu:.1f}/{mt:.1f} GiB",
+        f"{rgb(c1)}disk /{R}   {bar(du / dt if dt else 0, 14, c1, c2)} {du:.0f}/{dt:.0f} GB {D}{fs}{R}",
+        f"{rgb(c1)}accent{R}   {rgb(c1)}●{R} {info['accent']}",
+        "",
+        "".join(rgb(lerp(c1, c2, i / 7)) + "███" for i in range(8)) + R,
+    ]
+    logo = [] if a.no_logo else (SMALL if a.small else LOGO)
+    if a.small:
+        lines = lines[:1] + lines[2:8]
+    w = max((len(l) for l in logo), default=0)
+    print()
+    for i in range(max(len(logo), len(lines))):
+        l = logo[i] if i < len(logo) else ""
+        col = rgb(lerp(c1, c2, i / max(len(logo) - 1, 1)), True) if l else ""
+        print(f"  {col}{l.ljust(w)}{R}   {lines[i] if i < len(lines) else ''}")
+    print()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,170 @@
+#!/usr/bin/env python3
+"""auxo-welcome — first-run hub. In the live session it launches the installer;
+on an installed system it offers accent, drivers, snapshots, updates."""
+import os
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+from auxo_accents import ACCENTS, DEFAULT  # noqa: E402
+
+from PyQt6.QtCore import Qt, QSize  # noqa: E402
+from PyQt6.QtGui import QIcon, QPixmap, QDesktopServices  # noqa: E402
+from PyQt6.QtCore import QUrl  # noqa: E402
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QHBoxLayout, QLabel, QMainWindow,  # noqa: E402
+                             QPushButton, QVBoxLayout, QWidget)
+
+LIVE = os.path.exists("/run/archiso") or os.environ.get("AUXO_WELCOME_LIVE") == "1"
+PIX = "/usr/share/pixmaps"
+
+
+def accent():
+    try:
+        for l in open("/etc/auxo/auxo.conf"):
+            if l.startswith("ACCENT="):
+                v = l.split("=", 1)[1].strip().strip('"')
+                return v if v in ACCENTS else DEFAULT
+    except OSError:
+        pass
+    return DEFAULT
+
+
+def terminal(cmd):
+    for t, flag in (("konsole", "-e"), ("kitty", "-e"), ("foot", ""), ("alacritty", "-e"),
+                    ("gnome-terminal", "--"), ("xfce4-terminal", "-x"), ("kgx", "--")):
+        if shutil.which(t):
+            args = [t] + ([flag] if flag else []) + ["bash", "-c", cmd + "; echo; read -rp 'Press Enter to close'"]
+            subprocess.Popen(args)
+            return
+    subprocess.Popen(["bash", "-c", cmd])
+
+
+class Welcome(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.acc = accent()
+        a, b = ACCENTS[self.acc]
+        self.setWindowTitle("Welcome to Auxo")
+        self.setWindowIcon(QIcon(f"{PIX}/auxo-logo.png"))
+        self.setMinimumSize(QSize(760, 520))
+        self.setStyleSheet(f"""
+            QWidget {{ background: #0b0b10; color: #e8e8f0; font-family: Inter, 'Noto Sans'; font-size: 14px; }}
+            QLabel#title {{ font-size: 30px; font-weight: 800; }}
+            QLabel#sub {{ color: #9a9aae; font-size: 15px; }}
+            QPushButton {{ background: #15151e; border: 1px solid #2a2a3a; border-radius: 12px; padding: 16px;
+                           text-align: left; font-size: 15px; }}
+            QPushButton:hover {{ border-color: {a}; }}
+            QPushButton#primary {{ background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 {a}, stop:1 {b});
+                                   color: #0b0b10; font-weight: 800; font-size: 17px; border: none; text-align: center; }}
+            QPushButton.swatch {{ padding: 0; border-radius: 16px; min-width: 32px; max-width: 32px; min-height: 32px; max-height: 32px; }}
+            QCheckBox {{ color: #9a9aae; }}
+        """)
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.setContentsMargins(36, 30, 36, 24)
+        v.setSpacing(14)
+
+        head = QHBoxLayout()
+        logo = QLabel()
+        logo.setPixmap(QPixmap(f"{PIX}/auxo-logo.png").scaled(72, 72, Qt.AspectRatioMode.KeepAspectRatio,
+                                                              Qt.TransformationMode.SmoothTransformation))
+        head.addWidget(logo)
+        tv = QVBoxLayout()
+        t = QLabel("Welcome to Auxo")
+        t.setObjectName("title")
+        s = QLabel("Try it live, then install." if LIVE else "Climb your own setup — everything here can be changed later with auxo-tweak.")
+        s.setObjectName("sub")
+        s.setWordWrap(True)
+        tv.addWidget(t)
+        tv.addWidget(s)
+        head.addLayout(tv, 1)
+        v.addLayout(head)
+
+        grid = QGridLayout()
+        grid.setSpacing(12)
+        if LIVE:
+            inst = QPushButton("  Install Auxo Linux")
+            inst.setObjectName("primary")
+            inst.setMinimumHeight(64)
+            inst.clicked.connect(lambda: subprocess.Popen(["auxo-install"]))
+            v.addWidget(inst)
+            items = [
+                ("📶  Connect to Wi-Fi / network", lambda: self.net()),
+                ("💽  Partition manager", lambda: subprocess.Popen(["partitionmanager"])),
+                ("🖥  Terminal", lambda: terminal("auxo-fetch; exec $SHELL")),
+                ("🌐  auxolinux.com", lambda: QDesktopServices.openUrl(QUrl("https://auxolinux.com"))),
+            ]
+        else:
+            items = [
+                ("⬆  Update everything", lambda: terminal("auxo-update")),
+                ("🎮  Install GPU drivers", lambda: terminal("sudo auxo-tweak drivers")),
+                ("🕰  Turn on snapshots", lambda: terminal("sudo auxo-tweak snapshots on")),
+                ("🧰  Open auxo-tweak", lambda: terminal("auxo-tweak")),
+                ("⚡  Fastest mirrors", lambda: terminal("sudo auxo-tweak mirrors")),
+                ("🌐  auxolinux.com", lambda: QDesktopServices.openUrl(QUrl("https://auxolinux.com"))),
+            ]
+        for i, (label, fn) in enumerate(items):
+            btn = QPushButton(label)
+            btn.clicked.connect(fn)
+            grid.addWidget(btn, i // 2, i % 2)
+        v.addLayout(grid)
+
+        if not LIVE:
+            row = QHBoxLayout()
+            row.addWidget(QLabel("Accent:"))
+            for name, (c, _) in ACCENTS.items():
+                sw = QPushButton()
+                sw.setProperty("class", "swatch")
+                sw.setToolTip(name)
+                sw.setStyleSheet(f"background: {c}; border: {'3px solid #fff' if name == self.acc else 'none'}; border-radius: 16px;"
+                                 "min-width:32px;max-width:32px;min-height:32px;max-height:32px;padding:0;")
+                sw.clicked.connect(lambda _=False, n=name: self.set_accent(n))
+                row.addWidget(sw)
+            row.addStretch(1)
+            v.addLayout(row)
+
+        v.addStretch(1)
+        foot = QHBoxLayout()
+        if not LIVE:
+            self.auto = QCheckBox("Show at login")
+            self.auto.setChecked(os.path.exists(os.path.expanduser("~/.config/autostart/auxo-welcome.desktop")))
+            self.auto.toggled.connect(self.toggle_autostart)
+            foot.addWidget(self.auto)
+        foot.addStretch(1)
+        foot.addWidget(QLabel("<span style='color:#6b6b80'>auxo-fetch · auxo-tweak · auxo-update · auxo-rollback</span>"))
+        v.addLayout(foot)
+        self.setCentralWidget(root)
+
+    def net(self):
+        if shutil.which("kcmshell6"):
+            subprocess.Popen(["kcmshell6", "kcm_networkmanagement"])
+        else:
+            terminal("nmtui")
+
+    def set_accent(self, name):
+        subprocess.Popen(["pkexec", "auxo-tweak", "accent", name, "--user", os.environ.get("USER", "")]).wait()
+        subprocess.Popen(["auxo-tweak", "session-apply", "--accent", name])
+        self.close()
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    def toggle_autostart(self, on):
+        p = os.path.expanduser("~/.config/autostart/auxo-welcome.desktop")
+        if on:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            shutil.copy("/usr/share/applications/auxo-welcome.desktop", p)
+        elif os.path.exists(p):
+            os.remove(p)
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("auxo-welcome")
+    app.setDesktopFileName("auxo-welcome")
+    w = Welcome()
+    w.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

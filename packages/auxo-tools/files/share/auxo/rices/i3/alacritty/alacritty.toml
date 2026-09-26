@@ -1,0 +1,10 @@
+[general]
+import = ["~/.config/auxo/colors-alacritty.toml"]
+
+[window]
+padding = { x = 12, y = 12 }
+opacity = 0.93
+
+[font]
+normal = { family = "JetBrains Mono" }
+size = 11

@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# auxo-update — safe, one-command system update.
+#   1. warns about Arch news that needs manual intervention
+#   2. takes a btrfs snapshot (if snapshots are on)
+#   3. updates repo packages, AUR (paru/yay) and Flatpak
+#   4. reports .pacnew files, orphans, and whether a reboot is needed
+set -uo pipefail
+
+ACC=$(sed -n 's/^ACCENT="\{0,1\}\([a-z]*\)"\{0,1\}/\1/p' /etc/auxo/auxo.conf 2>/dev/null)
+case "${ACC:-violet}" in
+  cyan) C='\e[38;2;34;211;238m' ;; emerald) C='\e[38;2;52;211;153m' ;; amber) C='\e[38;2;251;191;36m' ;;
+  rose) C='\e[38;2;251;113;133m' ;; blue) C='\e[38;2;96;165;250m' ;; mono) C='\e[38;2;229;231;235m' ;;
+  *) C='\e[38;2;167;139;250m' ;;
+esac
+R='\e[0m'; B='\e[1m'; Y='\e[33m'
+step() { printf "\n${C}${B}▲ %s${R}\n" "$*"; }
+note() { printf "  ${Y}!${R} %s\n" "$*"; }
+
+YES=0; NEWS=1
+for a in "$@"; do
+  case "$a" in
+    -y|--yes) YES=1 ;;
+    --no-news) NEWS=0 ;;
+    -h|--help) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; echo; echo "usage: auxo-update [-y] [--no-news]"; exit 0 ;;
+  esac
+done
+
+SUDO=""; [[ $EUID -ne 0 ]] && SUDO="sudo"
+STAMP="${XDG_STATE_HOME:-$HOME/.local/state}/auxo/last-update"
+
+if (( NEWS )) && command -v curl >/dev/null; then
+  step "Arch news since your last update"
+  since=0; [[ -f $STAMP ]] && since=$(cat "$STAMP")
+  feed=$(curl -fsSL --max-time 8 https://archlinux.org/feeds/news/ 2>/dev/null || true)
+  if [[ -n $feed ]]; then
+    found=0
+    while IFS='|' read -r title date; do
+      ts=$(date -d "$date" +%s 2>/dev/null || echo 0)
+      if (( ts > since )); then
+        found=1; printf "  • %s ${B}(%s)${R}\n" "$title" "$(date -d "$date" +%F)"
+      fi
+    done < <(printf '%s' "$feed" | python3 -c '
+import sys, xml.etree.ElementTree as ET
+root = ET.fromstring(sys.stdin.read())
+for it in root.iter("item"):
+    print(it.findtext("title","").replace("|","/") + "|" + it.findtext("pubDate",""))
+' 2>/dev/null | head -n 5)
+    (( found )) || echo "  nothing new"
+    if (( found && !YES )); then
+      read -rp "  Read the news above at https://archlinux.org/news — continue? [Y/n] " ans
+      [[ ${ans,,} == n* ]] && exit 1
+    fi
+  else
+    echo "  (offline or archlinux.org unreachable — skipping)"
+  fi
+fi
+
+if [[ -f /etc/snapper/configs/root ]] && command -v snapper >/dev/null; then
+  step "Snapshot before update"
+  $SUDO snapper -c root create -t single -c number -d "auxo-update $(date +%F\ %R)" && echo "  snapshot created — roll back any time with auxo-rollback"
+fi
+
+step "Repository packages"
+before=$(uname -r)
+if (( YES )); then $SUDO pacman -Syu --noconfirm; else $SUDO pacman -Syu; fi || { note "pacman failed"; exit 1; }
+
+aurflags=(); (( YES )) && aurflags=(--noconfirm)
+if command -v paru >/dev/null; then step "AUR (paru)"; paru -Sua "${aurflags[@]}";
+elif command -v yay >/dev/null; then step "AUR (yay)"; yay -Sua "${aurflags[@]}"; fi
+
+if command -v flatpak >/dev/null; then step "Flatpak"; flatpak update -y --noninteractive; fi
+
+step "Health check"
+pacnew=$(find /etc -name '*.pacnew' 2>/dev/null | wc -l)
+(( pacnew )) && note "$pacnew .pacnew file(s) in /etc — merge them with: sudo pacdiff"
+orphans=$(pacman -Qdtq 2>/dev/null | wc -l)
+(( orphans )) && note "$orphans orphaned package(s) — remove with: sudo pacman -Rns \$(pacman -Qdtq)"
+if [[ ! -d /usr/lib/modules/$before ]]; then
+  note "kernel was updated — reboot when convenient"
+fi
+(( pacnew + orphans == 0 )) && echo "  all good"
+
+mkdir -p "$(dirname "$STAMP")" && date +%s > "$STAMP"
+printf "\n${C}${B}✓ Auxo is up to date${R}\n"

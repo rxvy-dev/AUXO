@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Auxo live session bootstrap (runs once per boot, before SDDM).
+set -u
+if ! id liveuser &>/dev/null; then
+  useradd -m -u 1000 -G wheel,audio,video,input,network,storage,lp -s /usr/bin/zsh -c "Auxo Live" liveuser
+  passwd -d liveuser >/dev/null
+fi
+echo "auxo-live" > /etc/hostname
+hostname auxo-live 2>/dev/null || true
+
+H=/home/liveuser
+install -d -o liveuser -g liveuser "$H/Desktop" "$H/.config"
+install -m755 -o liveuser -g liveuser /usr/share/applications/auxo-install.desktop "$H/Desktop/auxo-install.desktop"
+
+# no screen locking / sleeping while trying Auxo
+cat > "$H/.config/kscreenlockerrc" <<'K'
+[Daemon]
+Autolock=false
+LockOnResume=false
+K
+cat > "$H/.config/powerdevilrc" <<'K'
+[AC][SuspendAndShutdown]
+AutoSuspendAction=0
+[AC][Display]
+TurnOffDisplayWhenIdle=false
+K
+
+AUXO_LIB=/usr/lib/auxo auxo-tweak accent violet --user liveuser --no-grub >/dev/null 2>&1 || true
+chown -R liveuser:liveuser "$H"
+exit 0

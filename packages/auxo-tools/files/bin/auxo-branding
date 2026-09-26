@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Re-applies Auxo's os-release/issue after the 'filesystem' package is updated.
+cat > /usr/lib/os-release <<'OS'
+NAME="Auxo Linux"
+PRETTY_NAME="Auxo Linux"
+ID=auxo
+ID_LIKE=arch
+BUILD_ID=rolling
+ANSI_COLOR="38;2;167;139;250"
+HOME_URL="https://auxolinux.com/"
+DOCUMENTATION_URL="https://auxolinux.com/#tools"
+SUPPORT_URL="https://auxolinux.com/"
+BUG_REPORT_URL="https://github.com/auxolinux/auxo/issues"
+PRIVACY_POLICY_URL="https://terms.archlinux.org/docs/privacy-policy/"
+LOGO=auxo-logo
+OS
+printf '\e[1mAuxo Linux\e[0m \\r (\\l)\n\n' > /etc/issue

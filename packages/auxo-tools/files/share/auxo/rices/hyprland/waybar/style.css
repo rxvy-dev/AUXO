@@ -1,0 +1,15 @@
+@import url("../auxo/colors.css");
+
+* { font-family: "Inter", "Font Awesome 6 Free", "JetBrains Mono"; font-size: 13px; min-height: 0; }
+window#waybar { background: alpha(@bg, 0.82); border: 1px solid alpha(@accent, 0.35); border-radius: 14px; color: @fg; }
+#custom-auxo { color: @accent; font-size: 17px; padding: 0 14px; }
+#workspaces button { color: @muted; padding: 0 8px; border-radius: 10px; margin: 5px 2px; }
+#workspaces button.active { background: @accent; color: @bg; }
+#workspaces button:hover { background: alpha(@accent, 0.25); color: @fg; }
+#window { color: @muted; padding-left: 10px; }
+#clock { font-weight: 700; }
+#pulseaudio, #network, #bluetooth, #cpu, #memory, #battery, #custom-update, #tray { padding: 0 10px; }
+#battery.warning { color: #fbbf24; }
+#battery.critical { color: @urgent; }
+#network.disconnected { color: @urgent; }
+#custom-update { color: @accent; }
