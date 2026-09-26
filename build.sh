@@ -55,7 +55,7 @@ if (( ! SKIP_PKGS )) || [[ ! -f $REPO/auxo.db.tar.gz ]]; then
   c "generating branding assets"
   python3 "$HERE/branding/gen-assets.py" >/dev/null 2>&1 || c "(asset generation skipped: using committed assets)"
 
-  PKGROOT=$(mktemp -d /tmp/auxo-pkgbuild.XXXX)   # outside $HOME so the build user can read it
+  PKGROOT=$(mktemp -d "${TMPDIR:-/tmp}/auxo-pkgbuild.XXXX")   # outside $HOME so the build user can read it
   chmod 755 "$PKGROOT"
   for pkg in calamares auxo-tools; do
     c "building package: $pkg"
