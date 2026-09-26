@@ -85,6 +85,9 @@ check "none → multi-user target"             "echo \"\$out\" | grep -q 'set-de
 echo "▲ shell / kernel / snapshots / zram / multilib"
 out=$("$T" shell fish --user alex 2>&1)
 check "fish installed + chsh"                "echo \"\$out\" | grep -q -- '-S fish' && echo \"\$out\" | grep -q 'chsh -s /usr/bin/fish alex'"
+printf '# grml stub\n' > "$ROOT/home/alex/.zshrc"
+"$T" shell zsh --user alex >/dev/null 2>&1
+check "zsh: Auxo zshrc replaces skel stub"   "grep -q auxo/shell/prompt.zsh $ROOT/home/alex/.zshrc && grep -q 'grml stub' $ROOT/home/alex/.zshrc.auxo-bak"
 check "fish config seeded"                   "grep -q prompt.fish $ROOT/home/alex/.config/fish/config.fish"
 out=$("$T" kernel linux-zen --no-grub 2>&1)
 check "kernel: zen + headers"                "echo \"\$out\" | grep -q -- '-S linux-zen linux-zen-headers'"

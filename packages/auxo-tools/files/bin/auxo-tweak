@@ -115,17 +115,7 @@ def cmd_kernel(args):
 
 
 # ── shell ─────────────────────────────────────────────────────────────
-ZSHRC = """# ~/.zshrc — Auxo defaults (safe to edit)
-HISTFILE=~/.zsh_history HISTSIZE=10000 SAVEHIST=10000
-setopt autocd extendedglob hist_ignore_dups share_history
-bindkey -e
-autoload -Uz compinit && compinit
-zstyle ':completion:*' menu select
-[[ -r /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh ]] && source /usr/share/zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh
-[[ -r /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]] && source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
-source /usr/share/auxo/shell/prompt.zsh
-alias ls='ls --color=auto' ll='ls -lah' grep='grep --color=auto' update='auxo-update'
-"""
+ZSHRC_TEMPLATE = "/usr/share/auxo/shell/zshrc"
 FISHRC = """# ~/.config/fish/config.fish — Auxo defaults
 set -g fish_greeting
 source /usr/share/auxo/shell/prompt.fish
@@ -142,8 +132,14 @@ def cmd_shell(args):
     for u in target_users(args):
         run(["chsh", "-s", path, u])
         home = home_of(u)
-        if args.name == "zsh" and not os.path.exists(R(f"{home}/.zshrc")) or args.name == "zsh" and args.force:
-            write_file(f"{home}/.zshrc", ZSHRC, owner=u)
+        if args.name == "zsh":
+            # /etc/skel/.zshrc belongs to grml-zsh-config, so the Auxo zshrc is written per user.
+            rc = R(f"{home}/.zshrc")
+            current = open(rc).read() if os.path.exists(rc) else ""
+            if args.force or "auxo/shell/prompt.zsh" not in current:
+                if current.strip() and not os.path.exists(rc + ".auxo-bak"):
+                    shutil.copy2(rc, rc + ".auxo-bak")
+                write_file(f"{home}/.zshrc", open(R(ZSHRC_TEMPLATE)).read(), owner=u)
         if args.name == "bash":
             rc = R(f"{home}/.bashrc")
             line = "[[ $- == *i* ]] && source /usr/share/auxo/shell/prompt.bash  # auxo prompt\n"

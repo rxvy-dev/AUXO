@@ -26,5 +26,6 @@ TurnOffDisplayWhenIdle=false
 K
 
 AUXO_LIB=/usr/lib/auxo auxo-tweak accent violet --user liveuser --no-grub >/dev/null 2>&1 || true
+auxo-tweak shell zsh --user liveuser >/dev/null 2>&1 || true
 chown -R liveuser:liveuser "$H"
 exit 0
