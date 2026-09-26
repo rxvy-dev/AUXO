@@ -105,8 +105,25 @@ def apply_grub(accent, mkconfig=True):
         set_kv("/etc/default/grub", "GRUB_GFXMODE", "auto")
         set_kv("/etc/default/grub", "GRUB_TERMINAL_OUTPUT", "gfxterm")
         set_kv("/etc/default/grub", "GRUB_DISTRIBUTOR", "Auxo")
-        if mkconfig and have("grub-mkconfig") and os.path.exists(R("/boot/grub")):
-            run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], check=False)
+        # GRUB reads theme.txt + background.png at every boot, so an accent change only
+        # needs a grub.cfg rebuild the first time the Auxo theme is wired in.
+        cfg = R("/boot/grub/grub.cfg")
+        wired = os.path.exists(cfg) and f"{GRUB_THEME}/theme.txt" in open(cfg, errors="ignore").read()
+        if mkconfig and not wired and have("grub-mkconfig") and os.path.exists(R("/boot/grub")):
+            grub_mkconfig()
+
+
+def grub_mkconfig():
+    """Rebuild grub.cfg safely: one run at a time (grub-btrfsd can start its own),
+    with a single retry if another run removed grub.cfg.new underneath us."""
+    cmd = ["flock", "-w", "120", "/run/lock/auxo-grub.lock", "grub-mkconfig", "-o", "/boot/grub/grub.cfg"]
+    if run(cmd, check=False) != 0:
+        import time
+        time.sleep(3)
+        if run(cmd, check=False) != 0:
+            log("grub-mkconfig failed — your old boot menu is untouched; run 'sudo grub-mkconfig -o /boot/grub/grub.cfg' to see why")
+            return False
+    return True
 
 
 def apply_sddm(accent):

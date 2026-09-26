@@ -56,6 +56,14 @@ check "session-apply autostart"              "test -f $ROOT/home/alex/.config/au
 check "accent switch keeps kdeglobals tidy"  "[ \$(grep -c AccentColor $ROOT/home/alex/.config/kdeglobals) = 1 ] && grep -q '52,211,153' $ROOT/home/alex/.config/kdeglobals"
 check "invalid accent rejected"              "! \"$T\" accent purple >/dev/null 2>&1"
 
+printf 'insmod gfxterm\nset theme=/usr/share/grub/themes/auxo/theme.txt\n' > "$ROOT/boot/grub/grub.cfg"
+out=$("$T" accent cyan --user alex 2>&1)
+check "accent change skips grub-mkconfig once theme is wired" "! echo \"\$out\" | grep -q grub-mkconfig"
+rm "$ROOT/boot/grub/grub.cfg"
+out=$("$T" accent cyan --user alex 2>&1)
+check "first theme setup rebuilds grub.cfg under a lock" "echo \"\$out\" | grep -q 'flock -w 120 /run/lock/auxo-grub.lock grub-mkconfig'"
+"$T" accent emerald --user alex --no-grub >/dev/null 2>&1
+
 echo "▲ desktop hyprland --replace"
 out=$("$T" desktop hyprland --user alex --replace 2>&1); echo "$out" | sed 's/^/    /' | head -12
 check "installs hyprland packages"           "echo \"\$out\" | grep -q 'pacman --noconfirm --needed -S hyprland'"

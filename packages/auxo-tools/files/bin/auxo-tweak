@@ -110,7 +110,7 @@ def cmd_kernel(args):
     set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", f"/boot/vmlinuz-{k}")
     write_conf({"KERNEL": k})
     if not args.no_grub:
-        run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], check=False)
+        auxo_theme.grub_mkconfig()
     log(f"{k} is now the default boot entry (other kernels stay under 'Advanced options').")
 
 
@@ -303,7 +303,7 @@ def cmd_snapshots(args):
     run(["snapper", "--no-dbus", "-c", "root", "create", "-d", args.description or "auxo-tweak: snapshots enabled"], check=False)
     write_conf({"SNAPSHOTS": "on"})
     if not args.no_grub:
-        run(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"], check=False)
+        auxo_theme.grub_mkconfig()
     log("snapshots on: every pacman transaction is snapshotted, and snapshots are bootable from GRUB → 'Auxo snapshots'")
 
 

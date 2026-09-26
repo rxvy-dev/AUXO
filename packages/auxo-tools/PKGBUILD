@@ -1,7 +1,7 @@
 # Maintainer: Auxo Linux <https://auxolinux.com>
 pkgname=auxo-tools
 pkgver=3.0.0
-pkgrel=2
+pkgrel=3
 pkgdesc="Auxo Linux tools: auxo-tweak, auxo-fetch, auxo-update, auxo-rollback, auxo-welcome, rices and branding"
 arch=('any')
 url="https://auxolinux.com"
