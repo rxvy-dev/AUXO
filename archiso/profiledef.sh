@@ -28,5 +28,6 @@ file_permissions=(
   ["/usr/local/bin/auxo-live-setup"]="0:0:755"
   ["/usr/local/bin/auxo-install"]="0:0:755"
   ["/usr/local/bin/auxo-netcheck"]="0:0:755"
+  ["/usr/local/bin/auxo-release-disk"]="0:0:755"
   ["/etc/calamares/scripts/"]="0:0:755"
 )

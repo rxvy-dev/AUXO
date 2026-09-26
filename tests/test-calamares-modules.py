@@ -76,6 +76,15 @@ check("multilib enabled", "\n[multilib]\nInclude" in pc)
 check("reflector ran", any(c[0] == "reflector" for c in calls))
 check("db synced", ["pacman", "-Sy", "--noconfirm"] in calls)
 
+check("DNS checked inside chroot", ["getent", "hosts", "archlinux.org"] in calls)
+
+print("▲ auxoprepare (online but DNS dead in chroot)")
+r = root_with_files()
+calls, _ = mock(GS(rootMountPoint=r, hasInternet=True), rc=lambda c: 2 if c[0] == "getent" else 0)
+res = load("auxoprepare").run()
+check("fails early with a readable message", isinstance(res, tuple) and "DNS" in res[0])
+check("pacman -Sy not attempted", ["pacman", "-Sy", "--noconfirm"] not in calls)
+
 print("▲ auxoprepare (offline)")
 r = root_with_files()
 calls, _ = mock(GS(rootMountPoint=r, hasInternet=False))

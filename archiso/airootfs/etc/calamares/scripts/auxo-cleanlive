@@ -23,7 +23,7 @@ rm -f  /etc/mkinitcpio.conf.d/archiso.conf \
        /etc/ssh/sshd_config.d/10-archiso.conf \
        /root/.automated_script.sh /root/.zlogin \
        /usr/local/bin/choose-mirror /usr/local/bin/livecd-sound \
-       /usr/local/bin/auxo-live-setup /usr/local/bin/auxo-install /usr/local/bin/auxo-netcheck \
+       /usr/local/bin/auxo-live-setup /usr/local/bin/auxo-install /usr/local/bin/auxo-netcheck /usr/local/bin/auxo-release-disk \
        /usr/share/applications/auxo-install.desktop
 rm -rf /usr/local/share/livecd-sound /etc/systemd/system/getty@tty1.service.d
 

@@ -13,5 +13,12 @@ if ! auxo-netcheck; then
     [[ ${a,,} == n* ]] || nmtui
   fi
 fi
+# A failed earlier attempt leaves its target mounted under /tmp/calamares-root-*
+# (with /dev,/proc,/sys,/run bound inside). Calamares' own unmount is not recursive,
+# so the disk would stay "busy" and partitioning fails. Clear it first.
+for t in $(findmnt -rno TARGET | grep '^/tmp/calamares-root-' | sort -r); do
+  sudo umount "$t" 2>/dev/null || sudo umount -l "$t"
+done
+
 command -v xhost >/dev/null && xhost +si:localuser:root >/dev/null 2>&1
 exec sudo -E QT_QPA_PLATFORM="wayland;xcb" calamares "$@"

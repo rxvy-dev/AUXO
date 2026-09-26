@@ -54,6 +54,12 @@ def run():
     libcalamares.job.setprogress(0.4)
     tweak_pacman_conf(root + "/etc/pacman.conf")
 
+    if online and _run(["getent", "hosts", "archlinux.org"], timeout=15) != 0:
+        return ("No DNS inside the installer",
+                "The live system is online, but name lookups fail inside the new system, so packages "
+                "can't be downloaded. Check that systemd-resolved is running (systemctl status "
+                "systemd-resolved), or go back and install offline.")
+
     if online:
         libcalamares.job.setprogress(0.6)
         rc = _run(["reflector", "--protocol", "https", "--latest", "20", "--age", "24", "--sort", "rate",
