@@ -16,6 +16,11 @@ fi
 # A failed earlier attempt leaves its target mounted under /tmp/calamares-root-*
 # (with /dev,/proc,/sys,/run bound inside). Calamares' own unmount is not recursive,
 # so the disk would stay "busy" and partitioning fails. Clear it first.
+# and kill anything still running inside a leftover target (gpg-agent from pacman-key)
+for p in /proc/[0-9]*; do
+  r=$(sudo readlink "$p/root" 2>/dev/null)
+  [[ -n $r && $r == /tmp/calamares-root-* ]] && sudo kill -9 "${p#/proc/}" 2>/dev/null
+done
 for t in $(findmnt -rno TARGET | grep '^/tmp/calamares-root-' | sort -r); do
   sudo umount "$t" 2>/dev/null || sudo umount -l "$t"
 done

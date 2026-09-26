@@ -50,6 +50,9 @@ def run():
     libcalamares.job.setprogress(0.1)
     _run(["pacman-key", "--init"])
     _run(["pacman-key", "--populate", "archlinux"])
+    # pacman-key leaves gpg-agent/keyboxd running *inside* the target; they keep the
+    # disk busy if the install later fails. Stop them (pacman restarts them on demand).
+    _run(["gpgconf", "--homedir", "/etc/pacman.d/gnupg", "--kill", "all"])
 
     libcalamares.job.setprogress(0.4)
     tweak_pacman_conf(root + "/etc/pacman.conf")
