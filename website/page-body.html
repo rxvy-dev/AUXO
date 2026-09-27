@@ -123,6 +123,16 @@ footer{border-top:1px solid var(--line);padding-block:36px 48px;margin-top:40px;
 footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:center}
 footer .brand{color:var(--fg);font-size:16px}
 
+/* download (top of page) */
+.dlsec{padding-block:8px 40px}
+.dlcard{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center;border:1px solid color-mix(in srgb,var(--a) 55%,var(--line));border-radius:18px;padding:30px 32px;background:linear-gradient(160deg,color-mix(in srgb,var(--a) 12%,var(--bg2)),var(--bg2) 60%)}
+.dlinfo{display:grid;gap:12px}
+.dlfile{font-size:14px;color:var(--dim);overflow-wrap:anywhere}
+.dlact{display:grid;gap:14px;justify-items:start}
+.btn.big{font-size:17px;padding:15px 26px}
+.dlhint{color:var(--dim);font-size:15px}
+@media (max-width:760px){.dlcard{grid-template-columns:1fr;padding:24px 20px}}
+
 @media (max-width:980px){
   .hero .wrap,.dl{grid-template-columns:1fr}
   .path{grid-template-columns:1fr 1fr}
@@ -165,7 +175,7 @@ footer .brand{color:var(--fg);font-size:16px}
       <h1 style="margin-top:18px">Climb your <span class="up">own</span> setup.</h1>
       <p class="lede">Auxo is Arch Linux with a graphical installer and a set of tools you can keep using after install. Pick your desktop, accent colour, kernel and shell when you install. Change any of them later without reinstalling.</p>
       <div class="cta">
-        <a class="btn primary" href="#download">Get Auxo 3.0</a>
+        <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso">Download Auxo 3.0</a>
         <a class="btn" href="#install">See the installer</a>
       </div>
       <div class="picker">
@@ -194,6 +204,35 @@ footer .brand{color:var(--fg);font-size:16px}
 </header>
 
 <main>
+<section id="download" class="dlsec">
+  <div class="wrap">
+    <div class="dlcard">
+      <div class="dlinfo">
+        <p class="label">Download · latest release</p>
+        <h2>Auxo Linux 3.0</h2>
+        <p class="dlfile mono">auxo-linux-2026.09.26-x86_64.iso</p>
+        <dl class="meta">
+          <dt>Live desktop</dt><dd>KDE Plasma 6 (Wayland)</dd>
+          <dt>Boot</dt><dd>UEFI (GRUB) + BIOS (syslinux)</dd>
+          <dt>Needs</dt><dd>2 GB RAM · 20 GB disk · 64-bit CPU</dd>
+          <dt>Hosted on</dt><dd>Internet Archive</dd>
+        </dl>
+      </div>
+      <div class="dlact">
+        <a class="btn primary big" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso">Download ISO</a>
+        <p class="dlhint">Write it to a USB stick with Ventoy, Fedora Media Writer or <code>dd</code>, then boot from it.</p>
+        <div class="legacy">
+          Earlier releases
+          <ul style="margin:6px 0 0;padding-left:18px">
+            <li>V2 · auxo-linux-2026.07.19-0048-x86_64</li>
+            <li>V1 · auxo-linux-2026.07.09-x86_64</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="install">
   <div class="wrap">
     <div class="head">
@@ -273,46 +312,6 @@ footer .brand{color:var(--fg);font-size:16px}
   </div>
 </section>
 
-<section id="download">
-  <div class="wrap">
-    <div class="head">
-      <p class="label">Download</p>
-      <h2>Get Auxo 3.0</h2>
-      <p>A fresh ISO is built every week by CI and boot-tested in a virtual machine before release. Write it to a USB stick with Ventoy, Fedora Media Writer or <code>dd</code>.</p>
-    </div>
-    <div class="dl">
-      <div class="card main">
-        <h3 style="font-family:var(--display);font-size:22px;font-weight:700">Auxo Linux 3.0 · x86_64</h3>
-        <dl class="meta">
-          <dt>Live desktop</dt><dd>KDE Plasma 6 (Wayland)</dd>
-          <dt>Boot</dt><dd>UEFI (GRUB) + BIOS (syslinux)</dd>
-          <dt>Needs</dt><dd>2 GB RAM · 20 GB disk · 64-bit CPU</dd>
-          <dt>Verify</dt><dd>sha256sum -c auxo-linux-*.iso.sha256</dd>
-        </dl>
-        <div class="cta" style="margin-top:4px">
-          <a class="btn primary" href="https://github.com/auxolinux/auxo/releases/latest">Download ISO</a>
-          <a class="btn" href="https://github.com/auxolinux/auxo">Source on GitHub</a>
-        </div>
-        <div class="legacy">
-          Earlier releases
-          <ul style="margin:6px 0 0;padding-left:18px">
-            <li>V2 · auxo-linux-2026.07.19-0048-x86_64</li>
-            <li>V1 · auxo-linux-2026.07.09-x86_64</li>
-          </ul>
-        </div>
-      </div>
-      <div class="card">
-        <h3 style="font-family:var(--display);font-size:20px;font-weight:700">Build it yourself</h3>
-        <p style="color:var(--dim);font-size:15.5px">On any Arch system. Other distros can use <code>scripts/build-in-docker.sh</code>.</p>
-        <div class="cmd"><button class="copy" id="copybtn" type="button">copy</button>
-<pre id="buildcmd">git clone https://github.com/auxolinux/auxo
-cd auxo
-sudo ./build.sh
-./scripts/test-vm.sh out/auxo-linux-*.iso</pre></div>
-      </div>
-    </div>
-  </div>
-</section>
 </main>
 
 <footer>
@@ -382,12 +381,6 @@ sudo ./build.sh
   }
   window.addEventListener("resize", drawRidges);
 
-  document.getElementById("copybtn").addEventListener("click", function(){
-    var btn = this, txt = document.getElementById("buildcmd").textContent;
-    function done(){ btn.textContent = "copied"; setTimeout(function(){ btn.textContent = "copy"; }, 1500); }
-    if (navigator.clipboard) navigator.clipboard.writeText(txt).then(done, sel); else sel();
-    function sel(){ var r = document.createRange(); r.selectNodeContents(document.getElementById("buildcmd")); var s = getSelection(); s.removeAllRanges(); s.addRange(r); btn.textContent = "press Ctrl+C"; }
-  });
 
   setAccent(current, false);
 })();
