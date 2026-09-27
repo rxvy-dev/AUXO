@@ -101,7 +101,7 @@ nav .links a:hover{color:var(--fg)} nav .links a:hover::after{transform:scaleX(1
 @keyframes linein{from{transform:translateX(-8px);filter:blur(3px)}}
 
 /* ── download strip ───────────────────────────────── */
-.dl{padding-block:20px 72px}
+.dl{padding-block:20px 16px}
 .dlrow{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;padding:22px 26px;border-radius:14px;position:relative;background:var(--bg2);border:1px solid var(--line2)}
 .dlrow .ver{font:700 22px var(--display);letter-spacing:-.02em}
 .dlrow .ver small{display:block;font:400 13px var(--mono);color:var(--mute);letter-spacing:0;margin-top:4px}
@@ -183,12 +183,15 @@ section.dl{border-top:0}
 .desk small{color:var(--mute);font-size:13.5px}
 .tag{justify-self:start;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);margin-top:3px}
 
- .join{display:grid;grid-template-columns:1fr auto;gap:28px;align-items:center}
-.join h2{margin-top:12px}
-.joinp{color:var(--dim);font-size:18px;margin-top:12px;max-width:34em}
-.btn.big{font-size:16px;padding:14px 24px}
+.comm{padding-block:0 72px;border-top:0}
+.join{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between;padding:20px 26px;border-radius:14px;border:1px solid var(--line2)}
+.jtext{display:grid;gap:2px}
+.jtext b{font:700 18px var(--display);letter-spacing:-.02em}
+.jtext span{color:var(--dim);font-size:15px}
+.btn.discord{background:#5865F2;border-color:transparent;color:#fff}
+.btn.discord:hover{filter:brightness(1.1)}
+.dlogo{width:22px;height:22px;display:block}
 .flink{color:var(--dim);text-decoration:none}.flink:hover{color:var(--fg)}
-@media (max-width:640px){.join{grid-template-columns:1fr}}
 footer{border-top:1px solid var(--line);padding-block:34px 44px;margin-top:40px;color:var(--mute);font-size:14px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:14px 32px;align-items:center}
 footer .brand{color:var(--fg);font-size:16px}
@@ -226,7 +229,7 @@ footer .brand{color:var(--fg);font-size:16px}
 <nav id="nav">
   <div class="wrap">
     <a class="brand" href="#top"><svg><use href="#mark"/></svg>auxo</a>
-    <div class="links"><a href="#download">Download</a><a href="#install">Installer</a><a href="#features">Features</a><a href="#tools">Tools</a><a href="#desktops">Desktops</a><a href="#community">Community</a></div>
+    <div class="links"><a href="#download">Download</a><a href="#community">Community</a><a href="#install">Installer</a><a href="#features">Features</a><a href="#tools">Tools</a><a href="#desktops">Desktops</a></div>
     <a class="btn primary" href="#download">Download</a>
   </div>
 </nav>
@@ -268,6 +271,18 @@ footer .brand{color:var(--fg);font-size:16px}
       <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download ISO</a>
     </div>
     <p class="legacy">Write it to a USB stick with Ventoy, Fedora Media Writer or dd. Earlier: V2 auxo-linux-2026.07.19-0048 · V1 auxo-linux-2026.07.09</p>
+  </div>
+</section>
+
+<section id="community" class="comm">
+  <div class="wrap">
+    <div class="join">
+      <div class="jtext">
+        <b>Join the Auxo Discord</b>
+        <span>Install help, rices, wallpapers and release news.</span>
+      </div>
+      <a class="btn discord" href="https://discord.gg/XbQ66dH5a7"><img class="dlogo" src="discord-logo.svg" alt="" width="22" height="22" onerror="this.remove()">Join the Discord</a>
+    </div>
   </div>
 </section>
 
@@ -336,18 +351,6 @@ footer .brand{color:var(--fg);font-size:16px}
   </div>
 </section>
 
-<section id="community">
-  <div class="wrap">
-    <div class="join reveal">
-      <div>
-        <p class="label">Community</p>
-        <h2>Join the Auxo Discord.</h2>
-        <p class="joinp">Get install help, share your rice, grab wallpapers and hear about new releases first.</p>
-      </div>
-      <a class="btn primary big" href="https://discord.gg/XbQ66dH5a7"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/></svg>Join the Discord</a>
-    </div>
-  </div>
-</section>
 </main>
 
 <footer>
