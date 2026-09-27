@@ -10,316 +10,330 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
+@property --a  { syntax: "<color>"; inherits: true; initial-value: #a78bfa; }
+@property --a2 { syntax: "<color>"; inherits: true; initial-value: #22d3ee; }
 :root{
   color-scheme: dark;
-  --bg:#0b0b10; --bg2:#12121a; --bg3:#191923; --line:#262634;
-  --fg:#ecebf3; --dim:#a4a3b8; --mute:#6c6b82;
+  --bg:#09090d; --bg2:#101017; --bg3:#17171f; --line:#1f1f29; --line2:#2a2a36;
+  --fg:#eeedf5; --dim:#a2a1b6; --mute:#6a6980;
   --a:#a78bfa; --a2:#22d3ee;
   --display:"Unbounded", "Arial Black", system-ui, sans-serif;
   --body:"Instrument Sans", "Segoe UI", system-ui, sans-serif;
   --mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", Menlo, monospace;
-  --w:1160px;
+  --ease: cubic-bezier(.16,1,.3,1);
+  transition: --a .9s var(--ease), --a2 .9s var(--ease);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 var(--body);-webkit-font-smoothing:antialiased;padding-inline:20px;overflow-x:hidden}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.65 var(--body);-webkit-font-smoothing:antialiased;padding-inline:20px;overflow-x:hidden}
 a{color:inherit}
-:focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:4px}
-.wrap{max-width:var(--w);margin-inline:auto}
-h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.08;letter-spacing:-.02em;text-wrap:balance;margin:0}
-h2{font-size:clamp(28px,4vw,44px)}
-h3{font-size:17px;font-weight:500;letter-spacing:0}
+::selection{background:var(--a);color:var(--bg)}
+:focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
+.wrap{max-width:1120px;margin-inline:auto}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.06;letter-spacing:-.025em;text-wrap:balance;margin:0}
+h2{font-size:clamp(28px,4vw,46px)}
 p{margin:0}
-.label{font:600 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--a)}
-.mono{font-family:var(--mono)}
-code{font:14px var(--mono);color:var(--fg);background:var(--bg3);border:1px solid var(--line);padding:2px 7px;border-radius:6px;white-space:nowrap}
+.label{font:600 12px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--a)}
+.acc{color:var(--a)}
+code{font:13.5px var(--mono);color:var(--fg);background:var(--bg3);padding:2px 7px;border-radius:6px;white-space:nowrap}
 
-/* nav */
-nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);margin-inline:-20px;padding-inline:20px}
-nav .wrap{display:flex;align-items:center;gap:28px;height:62px}
+/* ── nav ───────────────────────────────────────────── */
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;margin-inline:-20px;padding-inline:20px;transition:background .3s,border-color .3s;border-bottom:1px solid transparent}
+nav.scrolled{background:color-mix(in srgb,var(--bg) 78%,transparent);backdrop-filter:blur(14px) saturate(140%);border-color:var(--line)}
+nav .wrap{display:flex;align-items:center;gap:30px;height:64px}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font:700 19px var(--display);letter-spacing:-.03em}
-.brand svg{width:28px;height:28px}
-nav .links{display:flex;gap:24px;margin-left:auto;font-size:15px;color:var(--dim)}
-nav .links a{text-decoration:none}
-nav .links a:hover{color:var(--fg)}
-.btn{display:inline-flex;align-items:center;gap:8px;font:600 15px var(--body);text-decoration:none;border-radius:10px;padding:11px 18px;border:1px solid var(--line);background:var(--bg2);color:var(--fg);cursor:pointer;transition:border-color .2s,transform .2s}
-.btn:hover{border-color:var(--a)}
-.btn.primary{background:var(--a);border-color:var(--a);color:#0b0b10}
-.btn.primary:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.brand svg{width:26px;height:26px}
+nav .links{display:flex;gap:26px;margin-left:auto;font-size:15px;color:var(--dim)}
+nav .links a{text-decoration:none;position:relative;transition:color .2s}
+nav .links a::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1.5px;background:var(--a);transform:scaleX(0);transform-origin:left;transition:transform .35s var(--ease)}
+nav .links a:hover{color:var(--fg)} nav .links a:hover::after{transform:scaleX(1)}
 
-/* hero */
-.hero{position:relative;padding-block:72px 64px}
-#ridges{position:absolute;inset:0 -20px;width:calc(100% + 40px);height:100%;z-index:-1;pointer-events:none;opacity:.9}
+.btn{position:relative;display:inline-flex;align-items:center;gap:9px;font:600 15px var(--body);text-decoration:none;border-radius:999px;padding:11px 20px;border:1px solid var(--line2);color:var(--fg);background:transparent;cursor:pointer;transition:border-color .25s,transform .25s var(--ease),background .25s;overflow:hidden;isolation:isolate}
+.btn:hover{border-color:var(--a);transform:translateY(-1px)}
+.btn.primary{background:var(--a);border-color:transparent;color:#09090d}
+.btn.primary::before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-120%);transition:transform .8s var(--ease)}
+.btn.primary:hover::before{transform:translateX(120%)}
+.btn.primary:hover{box-shadow:0 10px 40px -10px var(--a)}
+.btn svg{width:17px;height:17px;transition:transform .35s var(--ease)}
+.btn:hover svg{transform:translateY(2px)}
+
+/* ── hero ──────────────────────────────────────────── */
+.hero{position:relative;padding-block:64px 36px}
+#ridges{position:absolute;left:-20px;right:-20px;top:-64px;bottom:0;width:calc(100% + 40px);height:calc(100% + 64px);z-index:-1;pointer-events:none}
+#spot{position:absolute;inset:-64px -20px 0;z-index:-1;pointer-events:none;background:radial-gradient(600px circle at var(--mx,70%) var(--my,30%),color-mix(in srgb,var(--a) 13%,transparent),transparent 60%)}
 .hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:56px;align-items:center}
-.hero h1{font-size:clamp(40px,6.4vw,76px)}
-.hero h1 .up{color:var(--a);transition:color .5s}
-.lede{font-size:19px;color:var(--dim);max-width:34em;margin-top:22px}
-.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
-.picker{margin-top:38px;display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.mark-big{width:58px;height:58px;margin-bottom:26px}
+.mark-big path,.mark-big polyline{fill:none;stroke:url(#lg);stroke-linecap:round;stroke-linejoin:round}
+.mark-big .peak{stroke-width:12;stroke-dasharray:230;stroke-dashoffset:0;animation:draw 1.4s var(--ease) both}
+.mark-big .trail{stroke-width:7.5;stroke-dasharray:80;stroke-dashoffset:0;animation:draw 1s .6s var(--ease) both}
+.mark-big .summit{fill:url(#lg);transform-origin:64px 9px;animation:pop .6s 1.25s var(--ease) both}
+@keyframes draw{from{stroke-dashoffset:230}}
+@keyframes pop{from{transform:scale(0)}60%{transform:scale(1.5)}}
+.hero h1{font-size:clamp(42px,6.6vw,80px)}
+.hero h1 .w{display:inline-block;animation:rise .9s var(--ease) both}
+.hero h1 .w:nth-child(2){animation-delay:.08s}.hero h1 .w:nth-child(3){animation-delay:.16s}.hero h1 .w:nth-child(4){animation-delay:.24s}
+@keyframes rise{from{transform:translateY(.45em);filter:blur(6px)}}
+.lede{font-size:18.5px;color:var(--dim);max-width:33em;margin-top:22px;animation:fadeup .9s .3s var(--ease) both}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px;animation:fadeup .9s .4s var(--ease) both}
+@keyframes fadeup{from{transform:translateY(14px)}}
+.picker{margin-top:34px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;animation:fadeup .9s .5s var(--ease) both}
 .picker span{font-size:14px;color:var(--mute)}
-.swatches{display:flex;gap:9px}
-.sw{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset 0 0 0 2px rgba(0,0,0,.25);transition:transform .15s}
-.sw:hover{transform:scale(1.12)}
-.sw[aria-pressed="true"]{border-color:var(--fg);transform:scale(1.12)}
+.swatches{display:flex;gap:8px}
+.sw{width:26px;height:26px;border-radius:50%;border:0;cursor:pointer;padding:0;position:relative;transition:transform .3s var(--ease)}
+.sw::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:1.5px solid var(--fg);opacity:0;transform:scale(.7);transition:all .35s var(--ease)}
+.sw:hover{transform:scale(1.15)}
+.sw[aria-pressed="true"]::after{opacity:1;transform:scale(1)}
 
 /* terminal */
-.term{background:#0e0e15;border:1px solid var(--line);border-radius:14px;box-shadow:0 30px 80px -30px color-mix(in srgb,var(--a) 40%,transparent);overflow:hidden;transition:box-shadow .5s}
-.term .bar{display:flex;align-items:center;gap:7px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--bg2)}
-.term .bar i{width:11px;height:11px;border-radius:50%;background:#34343f}
+.term{background:rgba(14,14,21,.82);backdrop-filter:blur(8px);border:1px solid var(--line2);border-radius:16px;overflow:hidden;box-shadow:0 40px 100px -40px color-mix(in srgb,var(--a) 55%,transparent),0 0 0 1px rgba(255,255,255,.02) inset;animation:float-in 1.1s .2s var(--ease) both}
+@keyframes float-in{from{transform:translateY(24px) scale(.98)}}
+.term .bar{display:flex;align-items:center;gap:7px;padding:12px 15px;border-bottom:1px solid var(--line)}
+.term .bar i{width:11px;height:11px;border-radius:50%;background:#2c2c38}
 .term .bar i:first-child{background:var(--a)}
 .term .bar b{margin-left:auto;font:400 12px var(--mono);color:var(--mute)}
-.term pre{margin:0;padding:20px 22px 22px;font:13.5px/1.62 var(--mono);color:var(--fg);overflow-x:auto}
+.term pre{margin:0;padding:20px 22px 22px;font:13.5px/1.65 var(--mono);color:var(--fg);overflow-x:auto;min-height:360px}
 .t-a{color:var(--a)} .t-a2{color:var(--a2)} .t-m{color:var(--mute)} .t-b{font-weight:600}
-.bars{display:inline-block;width:112px;height:7px;border-radius:4px;background:#2a2a36;vertical-align:middle;position:relative;overflow:hidden}
-.bars::after{content:"";position:absolute;inset:0;width:var(--p);background:linear-gradient(90deg,var(--a),var(--a2))}
-.chips{display:inline-flex;gap:0}
-.chips em{display:inline-block;width:22px;height:13px;vertical-align:middle}
+.caret{display:inline-block;width:.6em;height:1.1em;vertical-align:-.2em;background:var(--a);animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.bars{display:inline-block;width:112px;height:6px;border-radius:4px;background:#262631;vertical-align:middle;position:relative;overflow:hidden}
+.bars::after{content:"";position:absolute;inset:0;width:var(--p);background:linear-gradient(90deg,var(--a),var(--a2));animation:grow 1.2s var(--ease) both}
+@keyframes grow{from{width:0}}
+.ln{display:block}
+.typed .ln{animation:linein .45s var(--ease) both}
+@keyframes linein{from{transform:translateX(-8px);filter:blur(3px)}}
 
-section{padding-block:84px}
-.head{display:grid;gap:14px;max-width:44rem;margin-bottom:44px}
+/* ── download strip ───────────────────────────────── */
+.dl{padding-block:20px 72px}
+.dlrow{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;padding:24px 28px;border-radius:20px;position:relative;background:var(--bg2)}
+.dlrow::before{content:"";position:absolute;inset:0;border-radius:20px;padding:1px;background:conic-gradient(from var(--ang,0deg),var(--a),transparent 30%,transparent 60%,var(--a2),var(--a));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:spin 8s linear infinite;pointer-events:none}
+@property --ang{syntax:"<angle>";inherits:false;initial-value:0deg}
+@keyframes spin{to{--ang:360deg}}
+.dlrow .ver{font:700 22px var(--display);letter-spacing:-.02em}
+.dlrow .ver small{display:block;font:400 13px var(--mono);color:var(--mute);letter-spacing:0;margin-top:4px}
+.specs{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:14px;color:var(--dim)}
+.specs b{color:var(--fg);font-weight:500}
+.legacy{margin-top:14px;font-size:13px;color:var(--mute);font-family:var(--mono)}
+
+/* ── sections ─────────────────────────────────────── */
+section{padding-block:80px}
+.head{display:grid;gap:14px;max-width:44rem;margin-bottom:48px}
 .head p{color:var(--dim);font-size:18px}
+.reveal{animation:reveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%}
+@keyframes reveal{from{transform:translateY(36px) scale(.985)}}
 
-/* install path */
-.path{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--bg2)}
-.step{padding:26px 22px 28px;border-right:1px solid var(--line);display:grid;gap:10px;align-content:start}
-.step:last-child{border-right:0}
-.step .n{font:600 12px var(--mono);color:var(--mute)}
-.step h3{font-family:var(--display);font-weight:700;font-size:20px}
-.step p{color:var(--dim);font-size:15px}
-.opts{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-.opts span{font:12px var(--mono);padding:4px 8px;border-radius:6px;background:var(--bg3);color:var(--dim);border:1px solid var(--line)}
-.opts span.on{color:#0b0b10;background:var(--a);border-color:var(--a)}
+/* installer: a real 5-step sequence */
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:0;position:relative}
+.steps::before{content:"";position:absolute;left:0;right:0;top:17px;height:1px;background:var(--line2)}
+.steps .prog{position:absolute;left:0;top:17px;height:1px;width:0;background:linear-gradient(90deg,var(--a),var(--a2));transition:width 2.2s var(--ease)}
+.steps.on .prog{width:100%}
+.step{position:relative;padding-right:22px;display:grid;gap:10px;align-content:start}
+.dot{width:35px;height:35px;border-radius:50%;background:var(--bg);border:1px solid var(--line2);display:grid;place-items:center;font:600 12px var(--mono);color:var(--mute);transition:all .5s var(--ease);position:relative;z-index:1}
+.steps.on .dot{border-color:var(--a);color:var(--a);box-shadow:0 0 0 5px var(--bg),0 0 24px -4px var(--a)}
+.steps.on .step:nth-child(3) .dot{transition-delay:.35s}.steps.on .step:nth-child(4) .dot{transition-delay:.7s}.steps.on .step:nth-child(5) .dot{transition-delay:1.05s}.steps.on .step:nth-child(6) .dot{transition-delay:1.4s}
+.step h3{font-size:19px;margin-top:8px}
+.step p{color:var(--dim);font-size:14.5px}
+.opts{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.opts span{font:12px var(--mono);padding:3px 8px;border-radius:99px;color:var(--dim);background:var(--bg3);transition:all .3s}
+.opts span.on{color:#09090d;background:var(--a)}
 
-/* features */
-.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-.f{background:var(--bg);padding:28px 26px 30px;display:grid;gap:10px;align-content:start}
-.f svg{width:26px;height:26px;stroke:var(--a);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.f p{color:var(--dim);font-size:15.5px}
+/* features: clean two-column list */
+.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:44px 40px}
+.f{display:grid;grid-template-columns:34px 1fr;gap:4px 16px;align-content:start}
+.f svg{grid-row:span 2;width:30px;height:30px;stroke:var(--a);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.f svg *{stroke-dasharray:120;stroke-dashoffset:0}
+.feat.on .f svg *{animation:draw2 1.6s var(--ease) both}
+@keyframes draw2{from{stroke-dashoffset:120}}
+.f h3{font:600 17px var(--body);letter-spacing:0}
+.f p{color:var(--dim);font-size:15px}
 
-/* tools */
-.tools{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
-.tool{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:24px;display:grid;gap:12px;align-content:start}
-.tool h3{font:600 18px var(--mono);color:var(--a)}
-.tool p{color:var(--dim);font-size:15.5px}
-.tool pre{margin:0;font:13px/1.7 var(--mono);color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto}
-.tool pre b{color:var(--fg);font-weight:400}
+/* tools: tabbed terminal */
+.tools{display:grid;grid-template-columns:.8fr 1.2fr;gap:36px;align-items:start}
+.tabs{display:grid;gap:4px}
+.tab{all:unset;cursor:pointer;display:grid;gap:4px;padding:16px 18px;border-radius:14px;transition:background .3s;position:relative}
+.tab b{font:600 16px var(--mono);color:var(--dim);transition:color .3s}
+.tab span{font-size:14.5px;color:var(--mute);line-height:1.5}
+.tab:hover{background:var(--bg2)}
+.tab[aria-selected="true"]{background:var(--bg2)}
+.tab[aria-selected="true"] b{color:var(--a)}
+.tab[aria-selected="true"]::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:2px;border-radius:2px;background:var(--a)}
+.tab .tprog{position:absolute;left:18px;right:18px;bottom:6px;height:2px;border-radius:2px;background:var(--line);overflow:hidden;opacity:0}
+.tab[aria-selected="true"] .tprog{opacity:1}
+.tab .tprog i{display:block;height:100%;width:0;background:var(--a)}
+.tab[aria-selected="true"] .tprog i{animation:fill var(--dur,7s) linear both}
+@keyframes fill{to{width:100%}}
+.tools .term{animation:none}
+.tools .term pre{min-height:300px}
 
 /* desktops */
-.desks{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.desk{border:1px solid var(--line);border-radius:14px;padding:18px 18px 20px;background:var(--bg2);display:grid;gap:6px}
-.desk .mini{height:86px;border-radius:9px;background:var(--bg);border:1px solid var(--line);margin-bottom:8px;position:relative;overflow:hidden}
-.desk b{font-family:var(--display);font-size:16px}
+.desks{display:grid;grid-template-columns:repeat(4,1fr);gap:28px 22px}
+.desk{display:grid;gap:4px}
+.mini{height:108px;border-radius:12px;background:var(--bg2);position:relative;overflow:hidden;margin-bottom:10px;transition:transform .5s var(--ease),box-shadow .5s}
+.desk:hover .mini{transform:translateY(-4px);box-shadow:0 20px 40px -20px var(--a)}
+.mini i{position:absolute;border-radius:6px;border:1px solid var(--line2);background:var(--bg3)}
+.mini i.fx{border-color:var(--a)}
+.tile i{animation:tile 6s var(--ease) infinite}
+.tile i:nth-child(1){left:8px;top:20px;bottom:8px;width:calc(50% - 12px)}
+.tile i:nth-child(2){right:8px;top:20px;height:calc(50% - 18px);width:calc(50% - 12px);animation-delay:.25s}
+.tile i:nth-child(3){right:8px;bottom:8px;height:calc(50% - 18px);width:calc(50% - 12px);animation-delay:.5s}
+.tile i:nth-child(4){left:8px;right:8px;top:6px;height:8px;border:0;border-radius:3px;animation:none}
+@keyframes tile{0%,8%{transform:scale(.6);opacity:0}18%,85%{transform:none;opacity:1}100%{transform:scale(.9);opacity:0}}
+.float i:nth-child(1){left:14%;top:14px;width:52%;height:52px;animation:bob 5s ease-in-out infinite}
+.float i:nth-child(2){right:10%;top:34px;width:44%;height:48px;animation:bob 5s -2.5s ease-in-out infinite}
+.float i:nth-child(3){left:30%;right:30%;bottom:6px;height:10px;border:0;border-radius:5px}
+.float.panel i:nth-child(3){left:0;right:0;bottom:0;border-radius:0}
+@keyframes bob{50%{transform:translateY(-5px)}}
+.tty span{position:absolute;left:12px;top:12px;font:12px var(--mono);color:var(--a)}
+.desk b{font:700 16px var(--display);letter-spacing:-.02em}
 .desk small{color:var(--mute);font-size:13.5px}
-.tag{justify-self:start;font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--a);border:1px solid color-mix(in srgb,var(--a) 50%,transparent);border-radius:99px;padding:3px 8px;margin-top:4px}
+.tag{justify-self:start;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);margin-top:3px}
 
-/* download */
-.dl{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}
-.card{background:var(--bg2);border:1px solid var(--line);border-radius:16px;padding:30px;display:grid;gap:16px;align-content:start}
-.card.main{border-color:color-mix(in srgb,var(--a) 55%,var(--line));background:linear-gradient(160deg,color-mix(in srgb,var(--a) 12%,var(--bg2)),var(--bg2) 60%)}
-.meta{display:grid;grid-template-columns:auto 1fr;gap:6px 18px;font-size:14.5px}
-.meta dt{color:var(--mute)} .meta dd{margin:0;font-family:var(--mono);font-size:13.5px;overflow-wrap:anywhere}
-.cmd{position:relative}
-.cmd pre{margin:0;font:13px/1.75 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;color:var(--fg)}
-.copy{position:absolute;top:8px;right:8px;font:12px var(--mono);background:var(--bg3);color:var(--dim);border:1px solid var(--line);border-radius:6px;padding:4px 9px;cursor:pointer}
-.copy:hover{color:var(--fg)}
-.legacy{font-size:14px;color:var(--mute)}
-.legacy li{font-family:var(--mono);font-size:13px}
-
-footer{border-top:1px solid var(--line);padding-block:36px 48px;margin-top:40px;color:var(--mute);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:center}
+footer{border-top:1px solid var(--line);padding-block:34px 44px;margin-top:40px;color:var(--mute);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:14px 32px;align-items:center}
 footer .brand{color:var(--fg);font-size:16px}
 
-/* download (top of page) */
-.dlsec{padding-block:8px 40px}
-.dlcard{display:grid;grid-template-columns:1.2fr 1fr;gap:32px;align-items:center;border:1px solid color-mix(in srgb,var(--a) 55%,var(--line));border-radius:18px;padding:30px 32px;background:linear-gradient(160deg,color-mix(in srgb,var(--a) 12%,var(--bg2)),var(--bg2) 60%)}
-.dlinfo{display:grid;gap:12px}
-.dlfile{font-size:14px;color:var(--dim);overflow-wrap:anywhere}
-.dlact{display:grid;gap:14px;justify-items:start}
-.btn.big{font-size:17px;padding:15px 26px}
-.dlhint{color:var(--dim);font-size:15px}
-@media (max-width:760px){.dlcard{grid-template-columns:1fr;padding:24px 20px}}
-
 @media (max-width:980px){
-  .hero .wrap,.dl{grid-template-columns:1fr}
-  .path{grid-template-columns:1fr 1fr}
-  .step{border-bottom:1px solid var(--line)}
+  .hero .wrap,.tools{grid-template-columns:1fr}
+  .steps{grid-template-columns:1fr 1fr;gap:32px 0}
+  .steps::before,.steps .prog{display:none}
   .feat{grid-template-columns:1fr 1fr}
   .desks{grid-template-columns:1fr 1fr}
+  .dlrow{grid-template-columns:1fr}
 }
 @media (max-width:640px){
   nav .links{display:none}
   nav .btn{margin-left:auto}
-  .hero{padding-block:44px 40px}
-  .path,.feat,.tools,.desks{grid-template-columns:1fr}
-  .step{border-right:0}
-  section{padding-block:60px}
-  .term pre{font-size:12px;padding:16px}
+  .hero{padding-block:36px 24px}
+  .feat,.desks,.steps{grid-template-columns:1fr}
+  section{padding-block:56px}
+  .term pre{font-size:12px;padding:16px;min-height:0}
 }
-@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+  .steps .prog{width:100%}
+}
 </style>
 </head>
 <body>
-
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
-    <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="var(--a)" style="stop-color:var(--a)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient>
+    <linearGradient id="lg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" style="stop-color:var(--a)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient>
     <symbol id="mark" viewBox="0 0 128 128"><g fill="none" stroke="url(#lg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#lg)" stroke="none"/></g></symbol>
   </defs>
 </svg>
 
-<nav>
+<nav id="nav">
   <div class="wrap">
     <a class="brand" href="#top"><svg><use href="#mark"/></svg>auxo</a>
-    <div class="links"><a href="#install">Installer</a><a href="#features">Features</a><a href="#tools">Tools</a><a href="#desktops">Desktops</a></div>
+    <div class="links"><a href="#download">Download</a><a href="#install">Installer</a><a href="#features">Features</a><a href="#tools">Tools</a><a href="#desktops">Desktops</a></div>
     <a class="btn primary" href="#download">Download</a>
   </div>
 </nav>
 
 <header class="hero" id="top">
   <canvas id="ridges" aria-hidden="true"></canvas>
+  <div id="spot" aria-hidden="true"></div>
   <div class="wrap">
     <div>
-      <p class="label">Arch-based · rolling · v3.0</p>
-      <h1 style="margin-top:18px">Climb your <span class="up">own</span> setup.</h1>
-      <p class="lede">Auxo is Arch Linux with a graphical installer and a set of tools you can keep using after install. Pick your desktop, accent colour, kernel and shell when you install. Change any of them later without reinstalling.</p>
+      <svg class="mark-big" viewBox="0 0 128 128" aria-hidden="true"><path class="peak" d="M16 112 L64 22 L112 112"/><polyline class="trail" points="40,96 56,78 68,90 86,68"/><circle class="summit" cx="64" cy="9" r="6.5"/></svg>
+      <h1><span class="w">Climb</span> <span class="w">your</span> <span class="w acc">own</span> <span class="w">setup.</span></h1>
+      <p class="lede">Arch Linux with a graphical installer and tools you keep using after install. Pick your desktop, accent colour, kernel and shell when you install. Change any of them later without reinstalling.</p>
       <div class="cta">
-        <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso">Download Auxo 3.0</a>
+        <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download Auxo 3.0</a>
         <a class="btn" href="#install">See the installer</a>
       </div>
       <div class="picker">
-        <span>The accent you pick colours everything. Try one:</span>
+        <span>One accent colours everything. Try one:</span>
         <div class="swatches" id="swatches" role="group" aria-label="Accent colour"></div>
       </div>
     </div>
     <div class="term" aria-label="auxo-fetch output">
       <div class="bar"><i></i><i></i><i></i><b>~ zsh</b></div>
-<pre><span class="t-a">▲</span> <span class="t-b">~</span> <span class="t-a">❯</span> auxo-fetch
-
-<span class="t-a t-b">         ●        </span>  <span class="t-a t-b">you@auxo</span>
-<span class="t-a t-b">        /\        </span>  <span class="t-m">────────</span>
-<span class="t-a t-b">       /  \       </span>  <span class="t-a">os</span>       Auxo Linux
-<span class="t-a t-b">      /    \      </span>  <span class="t-a">kernel</span>   6.16-zen
-<span class="t-a2 t-b">     /  /\  \     </span>  <span class="t-a">desktop</span>  Hyprland (wayland)
-<span class="t-a2 t-b">    /  /  \  \    </span>  <span class="t-a">shell</span>    zsh
-<span class="t-a2 t-b">   /  / /\ \  \   </span>  <span class="t-a">gpu</span>      NVIDIA RTX 5080
-<span class="t-a2 t-b">  /__/ /  \ \__\  </span>  <span class="t-a">memory</span>   <span class="bars" style="--p:38%"></span> 12.1/31.2 GiB
-                    <span class="t-a">disk /</span>   <span class="bars" style="--p:22%"></span> 402/1863 GB <span class="t-m">btrfs</span>
-                    <span class="t-a">accent</span>   <span class="t-a">●</span> <span id="accname">violet</span>
-                    <span class="t-a">snaps</span>    14 <span class="t-m">(bootable from GRUB)</span>
-</pre>
+      <pre id="hero-term"></pre>
     </div>
   </div>
 </header>
 
 <main>
-<section id="download" class="dlsec">
+<section id="download" class="dl">
   <div class="wrap">
-    <div class="dlcard">
-      <div class="dlinfo">
-        <p class="label">Download · latest release</p>
-        <h2>Auxo Linux 3.0</h2>
-        <p class="dlfile mono">auxo-linux-2026.09.26-x86_64.iso</p>
-        <dl class="meta">
-          <dt>Live desktop</dt><dd>KDE Plasma 6 (Wayland)</dd>
-          <dt>Boot</dt><dd>UEFI (GRUB) + BIOS (syslinux)</dd>
-          <dt>Needs</dt><dd>2 GB RAM · 20 GB disk · 64-bit CPU</dd>
-          <dt>Hosted on</dt><dd>Internet Archive</dd>
-        </dl>
+    <div class="dlrow">
+      <div class="ver">Auxo Linux 3.0<small>auxo-linux-2026.09.26-x86_64.iso</small></div>
+      <div class="specs">
+        <span><b>Live desktop</b> KDE Plasma 6</span>
+        <span><b>Boot</b> UEFI + BIOS</span>
+        <span><b>Needs</b> 2 GB RAM · 20 GB disk</span>
+        <span><b>Hosted on</b> Internet Archive</span>
       </div>
-      <div class="dlact">
-        <a class="btn primary big" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso">Download ISO</a>
-        <p class="dlhint">Write it to a USB stick with Ventoy, Fedora Media Writer or <code>dd</code>, then boot from it.</p>
-        <div class="legacy">
-          Earlier releases
-          <ul style="margin:6px 0 0;padding-left:18px">
-            <li>V2 · auxo-linux-2026.07.19-0048-x86_64</li>
-            <li>V1 · auxo-linux-2026.07.09-x86_64</li>
-          </ul>
-        </div>
-      </div>
+      <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download ISO</a>
     </div>
+    <p class="legacy">Write it to a USB stick with Ventoy, Fedora Media Writer or dd. Earlier: V2 auxo-linux-2026.07.19-0048 · V1 auxo-linux-2026.07.09</p>
   </div>
 </section>
 
 <section id="install">
   <div class="wrap">
-    <div class="head">
+    <div class="head reveal">
       <p class="label">The installer</p>
-      <h2>Five choices, one guided installer.</h2>
-      <p>Auxo uses Calamares with its own pages for each choice below. Partitioning handles dual boot by detecting other systems and reusing your existing EFI partition. With no internet, you still get a complete Plasma desktop.</p>
+      <h2>Five choices, one guided install.</h2>
+      <p>Calamares with Auxo's own pages. It detects other systems for dual boot, and with no internet you still get a complete Plasma desktop.</p>
     </div>
-    <div class="path">
-      <div class="step"><span class="n">step 1</span><h3>Desktop</h3><p>Plasma installs offline. The tiling window managers come already configured.</p>
-        <div class="opts"><span class="on">Plasma</span><span>Hyprland</span><span>GNOME</span><span>Sway</span><span>i3</span><span>Xfce</span><span>Cinnamon</span><span>TTY</span></div></div>
-      <div class="step"><span class="n">step 2</span><h3>Accent</h3><p>Colours the boot menu, login screen, prompt, terminal, bars and notifications.</p>
+    <div class="steps" id="steps">
+      <div class="prog"></div>
+      <div class="step"><span class="dot">1</span><h3>Desktop</h3><p>Plasma installs offline. Tiling window managers come pre-riced.</p>
+        <div class="opts"><span class="on">Plasma</span><span>Hyprland</span><span>GNOME</span><span>Sway</span><span>i3</span><span>Xfce</span><span>Cinnamon</span></div></div>
+      <div class="step"><span class="dot">2</span><h3>Accent</h3><p>Boot menu, login screen, prompt, terminal and bars.</p>
         <div class="opts" id="accopts"></div></div>
-      <div class="step"><span class="n">step 3</span><h3>Kernel</h3><p>The one you pick boots by default. The stable kernel stays in GRUB as a fallback.</p>
+      <div class="step"><span class="dot">3</span><h3>Kernel</h3><p>Your pick boots by default, stable stays as a fallback.</p>
         <div class="opts"><span class="on">linux</span><span>zen</span><span>lts</span><span>hardened</span></div></div>
-      <div class="step"><span class="n">step 4</span><h3>Shell</h3><p>Every option gets the Auxo prompt, git-aware and in your accent.</p>
+      <div class="step"><span class="dot">4</span><h3>Shell</h3><p>The Auxo prompt, git-aware and in your accent.</p>
         <div class="opts"><span class="on">zsh</span><span>fish</span><span>bash</span></div></div>
-      <div class="step"><span class="n">step 5</span><h3>Software</h3><p>Optional groups, downloaded during install.</p>
-        <div class="opts"><span>Gaming</span><span>Dev</span><span>Creative</span><span>Office</span><span>VMs</span></div></div>
+      <div class="step"><span class="dot">5</span><h3>Software</h3><p>Optional groups, downloaded during install.</p>
+        <div class="opts"><span>Gaming</span><span>Dev</span><span>Creative</span><span>Office</span></div></div>
     </div>
   </div>
 </section>
 
 <section id="features">
   <div class="wrap">
-    <div class="head">
+    <div class="head reveal">
       <p class="label">What's inside</p>
-      <h2>The parts of an Arch install people usually do by hand.</h2>
+      <h2>The parts of an Arch install people do by hand.</h2>
     </div>
-    <div class="feat">
-      <div class="f"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg><h3>Bootable snapshots</h3><p>Btrfs with snapper and snap-pac takes a snapshot on every pacman run. If an update breaks something, boot an older snapshot from GRUB, then run <code>auxo-rollback</code> to keep it.</p></div>
-      <div class="f"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4v4H7zM15 10h2M15 14h2"/></svg><h3>GPU detected at install</h3><p>NVIDIA RTX cards get <code>nvidia-open</code> with modesetting. On zen and lts kernels it switches to the DKMS build automatically. AMD and Intel get Vulkan and video acceleration. Unused drivers are removed.</p></div>
-      <div class="f"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg><h3>Safe dual boot</h3><p>os-prober is on, and Calamares can install alongside Windows or another Linux. The live menu includes NVIDIA and safe-graphics entries.</p></div>
-      <div class="f"><svg viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><h3>Offline-aware</h3><p>With no connection the installer finishes with Plasma and the stable kernel. It tells you which choices were skipped and the one command that adds them later.</p></div>
-      <div class="f"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg><h3>zram, not a swap partition</h3><p>Compressed RAM swap with tuned sysctls, set up automatically.</p></div>
-      <div class="f"><svg viewBox="0 0 24 24"><path d="M6 11h4M8 9v4"/><circle cx="15.5" cy="10" r=".8"/><circle cx="17.5" cy="12.5" r=".8"/><path d="M7 5h10a5 5 0 0 1 5 5v2a5 5 0 0 1-9 3h-2a5 5 0 0 1-9-3v-2a5 5 0 0 1 5-5z"/></svg><h3>Ready for games and code</h3><p>multilib is enabled. Steam, Lutris, MangoHud and Prism Launcher are one checkbox, and so are compilers, SDL2/SDL3 and Docker.</p></div>
+    <div class="feat" id="feat">
+      <div class="f reveal"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg><h3>Bootable snapshots</h3><p>Every update takes a btrfs snapshot. Boot an older one from GRUB, then keep it with <code>auxo-rollback</code>.</p></div>
+      <div class="f reveal"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4v4H7zM15 10h2M15 14h2"/></svg><h3>GPU detected at install</h3><p>RTX cards get nvidia-open with modesetting. AMD and Intel get Vulkan and video acceleration.</p></div>
+      <div class="f reveal"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg><h3>Safe dual boot</h3><p>os-prober on, install alongside Windows or another Linux, existing EFI partition reused.</p></div>
+      <div class="f reveal"><svg viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg><h3>Works offline</h3><p>No connection still gets you Plasma and the stable kernel. You're told what was skipped.</p></div>
+      <div class="f reveal"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg><h3>zram swap</h3><p>Compressed RAM swap with tuned settings instead of a swap partition.</p></div>
+      <div class="f reveal"><svg viewBox="0 0 24 24"><path d="M6 11h4M8 9v4"/><path d="M7 5h10a5 5 0 0 1 5 5v2a5 5 0 0 1-9 3h-2a5 5 0 0 1-9-3v-2a5 5 0 0 1 5-5z"/></svg><h3>Ready for games and code</h3><p>multilib on. Steam, Lutris, MangoHud, compilers, SDL2/SDL3 and Docker are one checkbox away.</p></div>
     </div>
   </div>
 </section>
 
 <section id="tools">
   <div class="wrap">
-    <div class="head">
+    <div class="head reveal">
       <p class="label">After install</p>
-      <h2>Change it later without reinstalling.</h2>
+      <h2>Change it later. No reinstall.</h2>
       <p>The installer runs these same commands, so installing and changing things later give the same result.</p>
     </div>
     <div class="tools">
-      <div class="tool"><h3>auxo-tweak</h3><p>An interactive menu, or one command per change. Desktops, kernels, drivers, mirrors, zram, services and the paru AUR helper.</p>
-<pre><b>auxo-tweak accent rose</b>
-<b>auxo-tweak desktop hyprland</b>   # riced, SDDM set
-<b>auxo-tweak kernel linux-zen</b>
-<b>auxo-tweak snapshots on</b></pre></div>
-      <div class="tool"><h3>auxo-update</h3><p>Shows Arch news since your last update, takes a snapshot, updates repo packages, AUR and Flatpak, then flags .pacnew files, orphans and whether you need to reboot.</p>
-<pre><b>auxo-update</b>
-▲ Snapshot before update
-▲ Repository packages
-▲ Health check  <span class="t-m">— all good</span></pre></div>
-      <div class="tool"><h3>auxo-rollback</h3><p>Choose a snapshot and it becomes your system again on the next boot. <code>/home</code> is never touched, and the old system is kept until you delete it.</p>
-<pre><b>auxo-rollback</b>          # pick from a list
-<b>auxo-rollback 42</b>       # or by number</pre></div>
-      <div class="tool"><h3>auxo-fetch</h3><p>A fast system summary drawn in your accent colour. Includes <code>--json</code> for scripts and <code>--small</code> for your shell greeting.</p>
-<pre><b>auxo-fetch --small</b>
-<span class="t-a">   ●</span>   you@auxo · Auxo Linux
-<span class="t-a">  /\</span>   6.16-zen · Hyprland</pre></div>
+      <div class="tabs" role="tablist" id="tabs"></div>
+      <div class="term reveal"><div class="bar"><i></i><i></i><i></i><b id="tool-title">auxo-tweak</b></div><pre id="tool-term"></pre></div>
     </div>
   </div>
 </section>
 
 <section id="desktops">
   <div class="wrap">
-    <div class="head">
+    <div class="head reveal">
       <p class="label">Desktops</p>
-      <h2>Three rices, four classic desktops.</h2>
-      <p>The Hyprland, Sway and i3 setups come with a bar, launcher, notifications, lock screen and screenshots already wired up. Your old dotfiles are kept as <code>*.auxo-bak</code>.</p>
+      <h2>Three rices, four classics.</h2>
+      <p>Hyprland, Sway and i3 come with bar, launcher, notifications, lock screen and screenshots wired up. Your old dotfiles are kept as <code>*.auxo-bak</code>.</p>
     </div>
     <div class="desks" id="desks"></div>
   </div>
 </section>
-
 </main>
 
 <footer>
@@ -333,62 +347,166 @@ footer .brand{color:var(--fg);font-size:16px}
 <script>
 (function(){
   var ACC = {violet:["#a78bfa","#22d3ee"],cyan:["#22d3ee","#818cf8"],emerald:["#34d399","#a3e635"],amber:["#fbbf24","#fb7185"],rose:["#fb7185","#c084fc"],blue:["#60a5fa","#34d399"],mono:["#e5e7eb","#9ca3af"]};
-  var root = document.documentElement, sw = document.getElementById("swatches"), opts = document.getElementById("accopts");
-  var current = "violet";
+  var REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var root = document.documentElement, current = "violet";
   try { var s = localStorage.getItem("auxo-accent"); if (s && ACC[s]) current = s; } catch(e){}
+  function esc(t){ return t.replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 
+  /* ── accent picker (colours blend via @property transitions) ── */
+  var sw = document.getElementById("swatches"), opts = document.getElementById("accopts");
   Object.keys(ACC).forEach(function(n){
     var b = document.createElement("button");
     b.className = "sw"; b.type = "button"; b.title = n; b.setAttribute("aria-label", n);
-    b.style.background = ACC[n][0]; b.dataset.n = n;
+    b.style.background = "linear-gradient(135deg," + ACC[n][0] + "," + ACC[n][1] + ")"; b.dataset.n = n;
     b.addEventListener("click", function(){ setAccent(n, true); });
     sw.appendChild(b);
     var o = document.createElement("span"); o.textContent = n; o.dataset.n = n; opts.appendChild(o);
   });
-
   function setAccent(n, save){
     current = n;
     root.style.setProperty("--a", ACC[n][0]); root.style.setProperty("--a2", ACC[n][1]);
-    document.getElementById("accname").textContent = n;
     sw.querySelectorAll(".sw").forEach(function(b){ b.setAttribute("aria-pressed", b.dataset.n === n); });
     opts.querySelectorAll("span").forEach(function(o){ o.classList.toggle("on", o.dataset.n === n); });
+    var an = document.getElementById("accname"); if (an) an.textContent = n;
     if (save) { try { localStorage.setItem("auxo-accent", n); } catch(e){} }
-    drawRidges();
   }
 
-  // desktops
-  var D = [["Plasma","Default · installs offline","dock",0],["Hyprland","Animated tiling · waybar, wofi, hyprlock","tile",1],["Sway","i3 on Wayland · waybar, foot, mako","tile",1],["i3","X11 tiling · polybar, rofi, picom","tile",1],["GNOME","Gestures · accent mapped","dock",0],["Xfce","Light and classic","panel",0],["Cinnamon","Familiar layout","panel",0],["No desktop","TTY only · add one later","tty",0]];
+  /* ── hero terminal: types the command, then output cascades ── */
+  var FETCH = [
+    ['<span class="t-a t-b">         ●        </span>  <span class="t-a t-b">you@auxo</span>'],
+    ['<span class="t-a t-b">        /\\        </span>  <span class="t-m">────────</span>'],
+    ['<span class="t-a t-b">       /  \\       </span>  <span class="t-a">os</span>       Auxo Linux'],
+    ['<span class="t-a t-b">      /    \\      </span>  <span class="t-a">kernel</span>   6.16-zen'],
+    ['<span class="t-a2 t-b">     /  /\\  \\     </span>  <span class="t-a">desktop</span>  Hyprland (wayland)'],
+    ['<span class="t-a2 t-b">    /  /  \\  \\    </span>  <span class="t-a">shell</span>    zsh'],
+    ['<span class="t-a2 t-b">   /  / /\\ \\  \\   </span>  <span class="t-a">gpu</span>      NVIDIA RTX 5080'],
+    ['<span class="t-a2 t-b">  /__/ /  \\ \\__\\  </span>  <span class="t-a">memory</span>   <span class="bars" style="--p:38%"></span> 12.1/31.2 GiB'],
+    ['                    <span class="t-a">disk /</span>   <span class="bars" style="--p:22%"></span> 402/1863 GB <span class="t-m">btrfs</span>'],
+    ['                    <span class="t-a">accent</span>   <span class="t-a">●</span> <span id="accname">' + current + '</span>'],
+    ['                    <span class="t-a">snaps</span>    14 <span class="t-m">(bootable from GRUB)</span>']
+  ];
+  var PROMPT = '<span class="t-a">▲</span> <span class="t-b">~</span> <span class="t-a">❯</span> ';
+  function typeInto(el, cmd, lines, done){
+    var i = 0;
+    el.classList.remove("typed");
+    if (REDUCED) { el.innerHTML = PROMPT + esc(cmd) + "\n\n" + lines.map(function(l){ return '<span class="ln">' + l + '</span>'; }).join(""); done && done(); return; }
+    (function tick(){
+      el.innerHTML = PROMPT + esc(cmd.slice(0, i)) + '<span class="caret"></span>';
+      if (i++ < cmd.length) return setTimeout(tick, 38 + Math.random() * 45);
+      setTimeout(function(){
+        el.classList.add("typed");
+        el.innerHTML = PROMPT + esc(cmd) + "\n\n" + lines.map(function(l, k){ return '<span class="ln" style="animation-delay:' + (k * 55) + 'ms">' + l + '</span>'; }).join("") + '\n' + PROMPT + '<span class="caret"></span>';
+        done && done();
+      }, 280);
+    })();
+  }
+  var heroTerm = document.getElementById("hero-term");
+  // resting state first (complete at load), then replay with typing
+  heroTerm.innerHTML = PROMPT + "auxo-fetch\n\n" + FETCH.map(function(l){ return '<span class="ln">' + l[0] + '</span>'; }).join("");
+  setTimeout(function(){ typeInto(heroTerm, "auxo-fetch", FETCH.map(function(l){ return l[0]; })); }, 700);
+
+  /* ── tools: tabbed terminal that replays each command ── */
+  var TOOLS = [
+    { n:"auxo-tweak", d:"Accent, desktop, kernel, shell, drivers, snapshots, mirrors.", cmd:"auxo-tweak desktop hyprland",
+      out:[':: installing Hyprland (Auxo rice)', '<span class="t-m">   hyprland · waybar · wofi · mako · hyprlock · kitty</span>', ':: you: accent → <span class="t-a">' , ':: you: Auxo hyprland rice applied <span class="t-m">(old files kept as *.auxo-bak)</span>', ':: removing the live Plasma desktop', '<span class="t-a">✓</span> desktop → Hyprland. Log out to use it.'] },
+    { n:"auxo-update", d:"Reads Arch news, snapshots, then updates repo, AUR and Flatpak.", cmd:"auxo-update",
+      out:['<span class="t-a t-b">▲ Arch news since your last update</span>', '  nothing new', '<span class="t-a t-b">▲ Snapshot before update</span>', '  snapshot created — roll back any time with auxo-rollback', '<span class="t-a t-b">▲ Repository packages</span>', '  :: Starting full system upgrade…  <span class="t-m">37 packages</span>', '<span class="t-a t-b">▲ Health check</span>', '  all good', '', '<span class="t-a t-b">✓ Auxo is up to date</span>'] },
+    { n:"auxo-rollback", d:"Make any snapshot your system again. /home is never touched.", cmd:"auxo-rollback 14",
+      out:['Rolling back to #14 — pre: pacman -Syu', 'This replaces the current system (not /home). Continue? [y/N] y', '<span class="t-m">Create a snapshot of \'@snapshots/14/snapshot\' in \'@\'</span>', '', 'Done. The old system is kept as <span class="t-a">@.before-rollback-20260926</span>', 'Reboot now? [Y/n]'] },
+    { n:"auxo-fetch", d:"A fast system summary in your accent. --json for scripts.", cmd:"auxo-fetch --small",
+      out:['<span class="t-a t-b">   ●  </span>  <span class="t-a t-b">you@auxo</span>', '<span class="t-a t-b">  /\\  </span>  <span class="t-a">os</span>      Auxo Linux', '<span class="t-a2 t-b"> /  \\ </span>  <span class="t-a">kernel</span>  6.16-zen', '<span class="t-a2 t-b">/_/\\_\\</span>  <span class="t-a">shell</span>   zsh'] }
+  ];
+  var tabs = document.getElementById("tabs"), toolTerm = document.getElementById("tool-term"), toolTitle = document.getElementById("tool-title");
+  var active = 0, timer = null, userPicked = false;
+  TOOLS.forEach(function(t, i){
+    var b = document.createElement("button");
+    b.className = "tab"; b.setAttribute("role", "tab"); b.id = "tab-" + i;
+    b.innerHTML = "<b>" + t.n + "</b><span>" + t.d + '</span><div class="tprog"><i></i></div>';
+    b.addEventListener("click", function(){ userPicked = true; show(i); });
+    tabs.appendChild(b);
+  });
+  function show(i){
+    active = i; clearTimeout(timer);
+    tabs.querySelectorAll(".tab").forEach(function(b, k){ b.setAttribute("aria-selected", k === i); });
+    var t = TOOLS[i]; toolTitle.textContent = t.n;
+    var out = t.out.map(function(l){ return l.slice(-2) === '">' ? l + current + "</span>" : l; });
+    typeInto(toolTerm, t.cmd, out);
+    if (!userPicked && !REDUCED) timer = setTimeout(function(){ show((active + 1) % TOOLS.length); }, 7000);
+  }
+  // resting state for tools, animated once visible
+  tabs.firstChild.setAttribute("aria-selected", "true");
+  toolTerm.innerHTML = PROMPT + TOOLS[0].cmd + "\n\n" + TOOLS[0].out.map(function(l){ return '<span class="ln">' + (l.slice(-2) === '">' ? l + current + "</span>" : l) + '</span>'; }).join("");
+
+  /* ── desktops with animated previews ── */
+  var D = [["Plasma","Default · installs offline","float",0],["Hyprland","Animated tiling · waybar, wofi, hyprlock","tile",1],["Sway","i3 on Wayland · waybar, foot, mako","tile",1],["i3","X11 tiling · polybar, rofi, picom","tile",1],["GNOME","Gestures · accent mapped","float",0],["Xfce","Light and classic","float panel",0],["Cinnamon","Familiar layout","float panel",0],["No desktop","TTY only · add one later","tty",0]];
   var dk = document.getElementById("desks");
-  D.forEach(function(d){
-    var el = document.createElement("div"); el.className = "desk";
-    var mini = '<div class="mini">';
-    if (d[2]==="tile") mini += '<div style="position:absolute;left:8px;top:18px;width:46%;bottom:8px;border:1.5px solid var(--a);border-radius:6px"></div><div style="position:absolute;right:8px;top:18px;width:44%;height:26px;border:1px solid var(--line);border-radius:6px"></div><div style="position:absolute;right:8px;bottom:8px;width:44%;height:26px;border:1px solid var(--line);border-radius:6px"></div><div style="position:absolute;left:8px;right:8px;top:5px;height:8px;border-radius:3px;background:var(--bg3)"></div>';
-    else if (d[2]==="tty") mini += '<div style="position:absolute;left:10px;top:12px;font:11px var(--mono);color:var(--a)">auxo login: _</div>';
-    else mini += '<div style="position:absolute;left:14%;top:16px;width:50%;height:44px;border:1px solid var(--line);border-radius:6px;background:var(--bg3)"></div><div style="position:absolute;right:12%;top:30px;width:42%;height:40px;border:1px solid var(--a);border-radius:6px;background:var(--bg2)"></div>' + (d[2]==="dock" ? '<div style="position:absolute;left:30%;right:30%;bottom:5px;height:9px;border-radius:4px;background:var(--bg3)"></div>' : '<div style="position:absolute;left:0;right:0;bottom:0;height:9px;background:var(--bg3)"></div>');
-    mini += '</div>';
-    el.innerHTML = mini + '<b>'+d[0]+'</b><small>'+d[1]+'</small>' + (d[3] ? '<span class="tag">Auxo rice</span>' : '');
+  D.forEach(function(d, k){
+    var el = document.createElement("div"); el.className = "desk reveal";
+    var inner = d[2] === "tty" ? '<span>auxo login: _</span>' : d[2].indexOf("tile") === 0 ? '<i class="fx"></i><i></i><i></i><i></i>' : '<i></i><i class="fx"></i><i></i>';
+    el.innerHTML = '<div class="mini ' + d[2] + '" style="--k:' + k + '">' + inner + '</div><b>' + d[0] + '</b><small>' + d[1] + '</small>' + (d[3] ? '<span class="tag">Auxo rice</span>' : '');
+    el.querySelectorAll(".tile i").forEach(function(i, j){ i.style.animationDelay = (j * .25 + k * .4) + "s"; });
     dk.appendChild(el);
   });
 
-  // topographic ridges behind the hero, in the current accent
-  var cv = document.getElementById("ridges"), ctx = cv.getContext("2d");
-  function drawRidges(){
-    var r = cv.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio||1, 2);
-    cv.width = r.width*dpr; cv.height = r.height*dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
-    var w = r.width, h = r.height, a = ACC[current][0];
-    ctx.clearRect(0,0,w,h);
-    var seed = 7; function rnd(){ seed = (seed*9301+49297)%233280; return seed/233280; }
-    for (var L = 0; L < 7; L++){
-      var base = h*(0.58 + L*0.065), amp = h*(0.22 - L*0.022), pts = [], n = 9 + L*2;
-      for (var i = 0; i <= n; i++) pts.push([w*i/n, base - (i%2 ? rnd()*amp : rnd()*amp*0.35)]);
-      ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-      for (var j = 1; j < pts.length; j++) ctx.lineTo(pts[j][0], pts[j][1]);
-      ctx.strokeStyle = a; ctx.globalAlpha = 0.07 + L*0.035; ctx.lineWidth = 1.2; ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+  /* ── in-view triggers (content is already visible; these only add motion) ── */
+  if ("IntersectionObserver" in window && !REDUCED) {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if (!e.isIntersecting) return;
+        e.target.classList.add("on");
+        if (e.target.id === "tools") show(0);
+        io.unobserve(e.target);
+      });
+    }, { threshold: .35 });
+    ["steps","feat","tools"].forEach(function(id){ io.observe(document.getElementById(id)); });
+  } else {
+    document.getElementById("steps").classList.add("on");
   }
-  window.addEventListener("resize", drawRidges);
 
+  /* ── nav background on scroll ── */
+  var nav = document.getElementById("nav");
+  function onScroll(){ nav.classList.toggle("scrolled", scrollY > 8); }
+  addEventListener("scroll", onScroll, { passive: true }); onScroll();
+
+  /* ── spotlight follows the pointer in the hero ── */
+  var hero = document.getElementById("top"), spot = document.getElementById("spot");
+  hero.addEventListener("pointermove", function(e){
+    var r = hero.getBoundingClientRect();
+    spot.style.setProperty("--mx", (e.clientX - r.left) + "px");
+    spot.style.setProperty("--my", (e.clientY - r.top + 64) + "px");
+  });
+
+  /* ── drifting mountain ridges, tinted with the live accent ── */
+  var cv = document.getElementById("ridges"), ctx = cv.getContext("2d"), W = 0, H = 0, layers = [];
+  function build(){
+    var r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
+    W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var seed = 11; function rnd(){ seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    layers = [];
+    for (var L = 0; L < 6; L++) {
+      var pts = [], n = 16 + L * 3;
+      for (var i = 0; i < n; i++) pts.push(rnd());   // one period, repeated seamlessly
+      layers.push({ pts: pts, n: n, base: .55 + L * .075, amp: .24 - L * .026, speed: 4 + L * 5 });
+    }
+  }
+  function accentRGB(){ return getComputedStyle(root).getPropertyValue("--a").trim() || "#a78bfa"; }
+  function frame(t){
+    ctx.clearRect(0, 0, W, H);
+    var a = accentRGB();
+    layers.forEach(function(ly, L){
+      var step = W / ly.n, off = REDUCED ? 0 : (t / 1000 * ly.speed) % (step * ly.n);
+      ctx.beginPath();
+      for (var i = 0; i <= ly.n * 2; i++) {
+        var v = ly.pts[i % ly.n], x = i * step - off, y = H * ly.base - (i % 2 ? v * H * ly.amp : v * H * ly.amp * .3);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.strokeStyle = a; ctx.globalAlpha = .05 + L * .04; ctx.lineWidth = 1.2; ctx.stroke();
+    });
+    ctx.globalAlpha = 1;
+    if (!REDUCED) requestAnimationFrame(frame);
+  }
+  build(); requestAnimationFrame(frame);
+  addEventListener("resize", function(){ build(); if (REDUCED) frame(0); });
 
   setAccent(current, false);
 })();
