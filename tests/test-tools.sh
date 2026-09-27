@@ -70,13 +70,14 @@ check "installs hyprland packages"           "echo \"\$out\" | grep -q 'pacman -
 check "skips already-installed sddm"         "! echo \"\$out\" | grep -E 'pacman .*-S .* sddm( |$)' >/dev/null"
 check "removes live Plasma"                  "echo \"\$out\" | grep -q 'pacman --noconfirm -Rns plasma-desktop'"
 check "enables sddm"                         "echo \"\$out\" | grep -q 'systemctl enable -f sddm'"
-check "rice copied: hyprland.conf"           "grep -q 'source = ~/.config/auxo/colors-hyprland.conf' $ROOT/home/alex/.config/hypr/hyprland.conf"
+check "rice copied: hyprland.lua"            "grep -q 'require, \"hypr_colors\"' $ROOT/home/alex/.config/hypr/hyprland.lua"
+check "hypr_colors.lua has current accent"   "grep -q 'accent = \"rgb(34d399)\"' $ROOT/home/alex/.config/auxo/hypr_colors.lua"
 check "rice copied: waybar imports colours"  "grep -q 'auxo/colors.css' $ROOT/home/alex/.config/waybar/style.css"
 check "SDDM seeded with hyprland session"    "grep -q 'Session=/usr/share/wayland-sessions/hyprland.desktop' $ROOT/var/lib/sddm/state.conf"
 check "SDDM falls back to X11 greeter w/o KWin" "grep -q 'DisplayServer=x11' $ROOT/etc/sddm.conf.d/10-auxo.conf"
 check "auxo.conf DESKTOP=hyprland"           "grep -q 'DESKTOP=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
 "$T" rice hyprland --user alex >/dev/null 2>&1
-check "re-applying keeps a backup"           "test -f $ROOT/home/alex/.config/hypr/hyprland.conf.auxo-bak"
+check "re-applying keeps a backup"           "test -f $ROOT/home/alex/.config/hypr/hyprland.lua.auxo-bak"
 
 echo "▲ desktop i3 / sway"
 "$T" desktop i3 --user alex >/dev/null 2>&1

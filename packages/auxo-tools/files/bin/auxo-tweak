@@ -160,6 +160,11 @@ def apply_rice(name, user):
         raise AuxoError(f"no rice named {name}")
     home = home_of(user)
     dst = R(f"{home}/.config")
+    if name == "hyprland":
+        # Hyprland 0.56+ reads hyprland.lua first; park an old Auxo hyprland.conf so it can't confuse anyone
+        old = R(f"{home}/.config/hypr/hyprland.conf")
+        if os.path.exists(old) and "Auxo Hyprland rice" in open(old, errors="ignore").read():
+            os.replace(old, old + ".auxo-bak")
     for base, _dirs, files in os.walk(src):
         rel = os.path.relpath(base, src)
         for f in files:
