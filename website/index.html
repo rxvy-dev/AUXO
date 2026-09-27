@@ -101,7 +101,7 @@ nav .links a:hover{color:var(--fg)} nav .links a:hover::after{transform:scaleX(1
 @keyframes linein{from{transform:translateX(-8px);filter:blur(3px)}}
 
 /* ── download strip ───────────────────────────────── */
-.dl{padding-block:20px 16px}
+.dl{padding-block:20px 72px}
 .dlrow{display:grid;grid-template-columns:auto 1fr auto;gap:28px;align-items:center;padding:22px 26px;border-radius:14px;position:relative;background:var(--bg2);border:1px solid var(--line2)}
 .dlrow .ver{font:700 22px var(--display);letter-spacing:-.02em}
 .dlrow .ver small{display:block;font:400 13px var(--mono);color:var(--mute);letter-spacing:0;margin-top:4px}
@@ -183,14 +183,13 @@ section.dl{border-top:0}
 .desk small{color:var(--mute);font-size:13.5px}
 .tag{justify-self:start;font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--a);margin-top:3px}
 
-.comm{padding-block:0 72px;border-top:0}
-.join{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:center;justify-content:space-between;padding:20px 26px;border-radius:14px;border:1px solid var(--line2)}
-.jtext{display:grid;gap:2px}
-.jtext b{font:700 18px var(--display);letter-spacing:-.02em}
-.jtext span{color:var(--dim);font-size:15px}
-.btn.discord{background:#5865F2;border-color:transparent;color:#fff}
-.btn.discord:hover{filter:brightness(1.1)}
-.dlogo{width:22px;height:22px;display:block}
+.topbar{display:flex;align-items:center;justify-content:center;gap:10px;margin-inline:-20px;padding:9px 20px;padding-top:calc(9px + env(safe-area-inset-top,0px));background:#5865F2;color:#fff;text-decoration:none;font-size:14.5px;line-height:1.3;text-align:center;transition:filter .2s}
+.topbar:hover{filter:brightness(1.08)}
+.topbar b{font-weight:600}
+.topbar em{font-style:normal;opacity:.85}
+.dsym{width:18px;height:18px;flex:none;filter:invert(1)}
+.tb-cta{flex:none;font-weight:600;padding:3px 10px;border-radius:6px;background:rgba(255,255,255,.18)}
+@media (max-width:640px){.topbar em{display:none}}
 .flink{color:var(--dim);text-decoration:none}.flink:hover{color:var(--fg)}
 footer{border-top:1px solid var(--line);padding-block:34px 44px;margin-top:40px;color:var(--mute);font-size:14px}
 footer .wrap{display:flex;flex-wrap:wrap;gap:14px 32px;align-items:center}
@@ -225,6 +224,12 @@ footer .brand{color:var(--fg);font-size:16px}
     <symbol id="mark" viewBox="0 0 128 128"><g fill="none" stroke="url(#lg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#lg)" stroke="none"/></g></symbol>
   </defs>
 </svg>
+
+<a class="topbar" id="community" href="https://discord.gg/XbQ66dH5a7">
+  <img class="dsym" src="https://cdn.jsdelivr.net/npm/simple-icons@16.32.0/icons/discord.svg" alt="" width="18" height="18" onerror="this.remove()">
+  <span><b>Join the Auxo Discord</b><em> · install help, rices, wallpapers and release news</em></span>
+  <span class="tb-cta">Join →</span>
+</a>
 
 <nav id="nav">
   <div class="wrap">
@@ -271,18 +276,6 @@ footer .brand{color:var(--fg);font-size:16px}
       <a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.26-x86_64/auxo-linux-2026.09.26-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download ISO</a>
     </div>
     <p class="legacy">Write it to a USB stick with Ventoy, Fedora Media Writer or dd. Earlier: V2 auxo-linux-2026.07.19-0048 · V1 auxo-linux-2026.07.09</p>
-  </div>
-</section>
-
-<section id="community" class="comm">
-  <div class="wrap">
-    <div class="join">
-      <div class="jtext">
-        <b>Join the Auxo Discord</b>
-        <span>Install help, rices, wallpapers and release news.</span>
-      </div>
-      <a class="btn discord" href="https://discord.gg/XbQ66dH5a7"><img class="dlogo" src="discord-logo.svg" alt="" width="22" height="22" onerror="this.remove()">Join the Discord</a>
-    </div>
   </div>
 </section>
 
