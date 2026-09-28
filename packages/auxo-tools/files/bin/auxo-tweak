@@ -7,7 +7,7 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak kernel NAME            linux | linux-lts | linux-zen | linux-hardened
   auxo-tweak shell NAME             zsh | fish | bash
   auxo-tweak desktop NAME           plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
-  auxo-tweak rice NAME              (re)apply the Auxo dotfiles for hyprland | sway | i3
+  auxo-tweak rice NAME              (re)apply the Auxo dotfiles for hyprland | sway | i3 | gnome (extensions + defaults)
   auxo-tweak snapshots on|off|status  btrfs time-travel: snapper + bootable snapshots in GRUB
   auxo-tweak drivers                detect GPU and install the right driver (NVIDIA / AMD / Intel)
   auxo-tweak mirrors                rank the fastest mirrors with reflector
@@ -33,6 +33,7 @@ from auxo_core import (R, DRY, AuxoError, del_kv, log, warn, run, have, pacman, 
                        invoking_user, systemctl_enable, systemctl_disable, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS  # noqa: E402
 import auxo_theme  # noqa: E402
+import auxo_gnome  # noqa: E402
 
 
 def target_users(args):
@@ -55,10 +56,16 @@ def cmd_accent(args):
     if splash_changed and read_conf().get("SPLASH") == "on" and not args.no_initramfs:
         log("boot splash colour changed → rebuilding initramfs")
         run(["mkinitcpio", "-P"], check=False)
-    for u in target_users(args):
+    users = target_users(args)
+    for u in users:
         auxo_theme.apply_user(u, args.name)
-    if not args.user and os.environ.get("SUDO_USER") and os.environ.get("DISPLAY", os.environ.get("WAYLAND_DISPLAY")):
-        run(["auxo-tweak", "session-apply", "--accent", args.name], check=False, user=os.environ["SUDO_USER"])
+    # change the wallpaper/colours right now in any desktop the user is logged into.
+    # sudo drops the session variables, so they're rebuilt from the user's running session.
+    if not args.user:
+        for u in users:
+            env = auxo_theme.session_env(u)
+            if env:
+                run(["auxo-tweak", "session-apply", "--accent", args.name], check=False, user=u, env=env)
 
 
 # ── kernel ────────────────────────────────────────────────────────────
@@ -264,6 +271,8 @@ def cmd_desktop(args):
     if d.get("rice"):
         for u in users:
             apply_rice(d["rice"], u)
+    if args.name == "gnome":
+        auxo_gnome.setup(auxo_theme.current())
     if args.replace and args.name != "plasma":
         keep = set(d["packages"])
         remove = [p for p in LIVE_PLASMA if p not in keep and (installed(p) or DRY)]
@@ -283,6 +292,9 @@ def cmd_desktop(args):
 
 def cmd_rice(args):
     require_root()
+    if args.name == "gnome":
+        auxo_gnome.setup(auxo_theme.current())
+        return
     for u in target_users(args):
         apply_rice(args.name, u)
 
@@ -723,7 +735,7 @@ def main():
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_shell)
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
     s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop"); s.set_defaults(fn=cmd_desktop)
-    s = sub.add_parser("rice"); s.add_argument("name", choices=["hyprland", "sway", "i3"]); s.add_argument("--user")
+    s = sub.add_parser("rice"); s.add_argument("name", choices=["hyprland", "sway", "i3", "gnome"]); s.add_argument("--user")
     s.set_defaults(fn=cmd_rice)
     s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status"])
     s.add_argument("--no-grub", action="store_true"); s.add_argument("--no-now", action="store_true")

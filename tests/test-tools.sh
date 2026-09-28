@@ -97,6 +97,32 @@ echo "▲ desktop none"
 out=$("$T" desktop none --user alex 2>&1)
 check "none → multi-user target"             "echo \"\$out\" | grep -q 'set-default multi-user.target'"
 
+echo "▲ GNOME extensions + defaults"
+out=$("$T" desktop gnome --user alex 2>&1)
+D="$ROOT/etc/dconf/db/local.d/00-auxo"
+check "repo extensions installed"            "echo \"\$out\" | grep -q -- 'gnome-shell-extension-appindicator' && echo \"\$out\" | grep -q -- 'gnome-shell-extension-caffeine'"
+check "dock + blur fetched for GNOME 50"     "echo \"\$out\" | grep -q 'fetch dash-to-dock@micxgx.gmail.com for GNOME 50' && echo \"\$out\" | grep -q 'fetch blur-my-shell@aunetx'"
+check "dconf profile + defaults written"     "grep -q 'system-db:local' $ROOT/etc/dconf/profile/user && grep -q \"enabled-extensions=\\['appindicatorsupport\" \"\$D\""
+check "dock dots use the accent"             "grep -q \"custom-theme-running-dots-color='#\" \"\$D\""
+check "dconf update ran"                     "echo \"\$out\" | grep -q 'dconf update'"
+"$T" accent rose --no-grub --no-initramfs --user alex >/dev/null 2>&1
+check "accent change updates GNOME defaults" "grep -q \"accent-color='pink'\" \"\$D\" && grep -q 'auxo-rose.png' \"\$D\""
+out=$("$T" rice gnome 2>&1)
+check "rice gnome re-applies"                "echo \"\$out\" | grep -q 'GNOME: dock'"
+"$T" desktop none --user alex >/dev/null 2>&1   # back to the state the later checks expect
+
+echo "▲ live wallpaper change per desktop"
+FB="$ROOT/fakebin"; mkdir -p "$FB"
+for b in hyprctl hyprpaper swaymsg feh i3-msg gsettings plasma-apply-wallpaperimage plasma-apply-colorscheme xfconf-query makoctl; do printf '#!/bin/sh\n' > "$FB/$b"; chmod +x "$FB/$b"; done
+sa() { XDG_CURRENT_DESKTOP="$1" PATH="$FB:$PATH" "$T" session-apply --accent emerald 2>&1; }
+check "KDE: plasma wallpaper"                "sa KDE | grep -q 'plasma-apply-wallpaperimage /usr/share/wallpapers/auxo-emerald.png'"
+check "GNOME: gsettings picture-uri"         "sa GNOME | grep -q 'org.gnome.desktop.background picture-uri file:///usr/share/wallpapers/auxo-emerald.png'"
+check "Cinnamon: picture-uri"                "sa X-Cinnamon | grep -q 'org.cinnamon.desktop.background picture-uri'"
+check "Xfce: last-image"                     "sa XFCE | grep -q 'last-image --create -t string -s /usr/share/wallpapers/auxo-emerald.png'"
+check "Hyprland: hyprpaper restarted"        "sa Hyprland | grep -q 'hyprctl dispatch exec hyprpaper'"
+check "Sway: output bg"                      "sa sway | grep -q \"swaymsg output '\\*' bg /usr/share/wallpapers/auxo-emerald.png fill\""
+check "i3: feh"                              "sa i3 | grep -q 'feh --no-fehbg --bg-fill /usr/share/wallpapers/auxo-emerald.png'"
+
 echo "▲ shell / kernel / snapshots / zram / multilib"
 out=$("$T" shell fish --user alex 2>&1)
 check "fish installed + chsh"                "echo \"\$out\" | grep -q -- '-S fish' && echo \"\$out\" | grep -q 'chsh -s /usr/bin/fish alex'"

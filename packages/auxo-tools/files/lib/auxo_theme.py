@@ -214,6 +214,11 @@ def apply_system(accent, mkconfig=True):
     apply_login(accent)
     write_file("/etc/motd", motd(accent))
     splash_changed = apply_splash(accent)
+    try:
+        import auxo_gnome
+        auxo_gnome.refresh_accent(accent)
+    except Exception as e:  # never let GNOME defaults block an accent change
+        log(f"GNOME defaults not updated: {e}")
     log(f"system accent → {accent} ({ACCENTS[accent][0]})")
     return splash_changed
 
@@ -306,36 +311,110 @@ def _ini_set(path, section, key, value):
         f.write("\n".join(out).lstrip("\n") + "\n")
 
 
+# process name → XDG_CURRENT_DESKTOP, in detection order
+SESSION_PROCS = [("plasmashell", "KDE"), ("gnome-shell", "GNOME"), ("cinnamon", "X-Cinnamon"),
+                 ("xfce4-session", "XFCE"), ("Hyprland", "Hyprland"), ("sway", "sway"), ("i3", "i3")]
+
+
+def session_env(user):
+    """Environment for talking to `user`'s running graphical session (or None).
+    Built from /run/user/<uid> and the running processes, because sudo strips
+    DISPLAY / WAYLAND_DISPLAY / DBUS_SESSION_BUS_ADDRESS."""
+    import glob
+    import pwd
+    if DRY:
+        return None
+    try:
+        pw = pwd.getpwnam(user)
+    except KeyError:
+        return None
+    rt = f"/run/user/{pw.pw_uid}"
+    if not os.path.isdir(rt):
+        return None
+    procs = set((run(["ps", "-u", str(pw.pw_uid), "-o", "comm="], capture=True, check=False) or "").split())
+    desk = next((d for p, d in SESSION_PROCS if p in procs), None)
+    if not desk:
+        return None
+    env = {"XDG_RUNTIME_DIR": rt, "HOME": pw.pw_dir, "USER": user, "LOGNAME": user,
+           "XDG_CURRENT_DESKTOP": desk}
+    if os.path.exists(f"{rt}/bus"):
+        env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={rt}/bus"
+    way = sorted(p for p in glob.glob(f"{rt}/wayland-*") if not p.endswith(".lock"))
+    if way:
+        env["WAYLAND_DISPLAY"] = os.path.basename(way[0])
+    xs = sorted(glob.glob("/tmp/.X11-unix/X*"))
+    if xs:
+        env["DISPLAY"] = ":" + xs[0].rsplit("X", 1)[1]
+        xa = os.path.join(pw.pw_dir, ".Xauthority")
+        if os.path.exists(xa):
+            env["XAUTHORITY"] = xa
+    hy = sorted(glob.glob(f"{rt}/hypr/*/.socket.sock"), key=os.path.getmtime)
+    if hy:
+        env["HYPRLAND_INSTANCE_SIGNATURE"] = os.path.basename(os.path.dirname(hy[-1]))
+    sw = sorted(glob.glob(f"{rt}/sway-ipc.*.sock"), key=os.path.getmtime)
+    if sw:
+        env["SWAYSOCK"] = sw[-1]
+    return env
+
+
+def _spawn(cmd):
+    """Start a long-running helper (wallpaper daemon) detached from us."""
+    import subprocess
+    if DRY:
+        print("[dry-run] " + " ".join(cmd) + " &", flush=True)
+        return
+    try:
+        subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    except OSError:
+        pass
+
+
 def session_apply(accent=None, once=False):
     """Run inside a graphical session: push accent + wallpaper to the live desktop."""
     accent = accent or current()
     wall = f"{WALLDIR}/auxo-{accent}.png"
     a = ACCENTS[accent][0]
     de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-    if "kde" in de and have("plasma-apply-colorscheme"):
-        run(["plasma-apply-colorscheme", "--accent-color", a, "BreezeDark"], check=False)
-        run(["plasma-apply-wallpaperimage", wall], check=False)
+    if "kde" in de:
+        if have("plasma-apply-colorscheme"):
+            run(["plasma-apply-colorscheme", "--accent-color", a, "BreezeDark"], check=False)
+        if have("plasma-apply-wallpaperimage"):
+            run(["plasma-apply-wallpaperimage", wall], check=False)
     elif "gnome" in de and have("gsettings"):
         for key in ("picture-uri", "picture-uri-dark"):
             run(["gsettings", "set", "org.gnome.desktop.background", key, f"file://{wall}"], check=False)
+        run(["gsettings", "set", "org.gnome.desktop.background", "picture-options", "zoom"], check=False)
+        run(["gsettings", "set", "org.gnome.desktop.screensaver", "picture-uri", f"file://{wall}"], check=False)
         run(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", "prefer-dark"], check=False)
         run(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", GNOME_ACCENT[accent]], check=False)
     elif "cinnamon" in de and have("gsettings"):
         run(["gsettings", "set", "org.cinnamon.desktop.background", "picture-uri", f"file://{wall}"], check=False)
+        run(["gsettings", "set", "org.cinnamon.desktop.background", "picture-options", "zoom"], check=False)
     elif "xfce" in de and have("xfconf-query"):
-        props = run(["xfconf-query", "-c", "xfce4-desktop", "-l"], capture=True, check=False) or ""
-        for p in props.split():
-            if p.endswith("/last-image"):
-                run(["xfconf-query", "-c", "xfce4-desktop", "-p", p, "-s", wall], check=False)
-    elif "hyprland" in de and have("hyprctl"):
-        run(["hyprctl", "reload"], check=False)
+        props = [p for p in (run(["xfconf-query", "-c", "xfce4-desktop", "-l"], capture=True, check=False) or "").split()
+                 if p.endswith("/last-image")]
+        for p in props or ["/backdrop/screen0/monitor0/workspace0/last-image"]:
+            run(["xfconf-query", "-c", "xfce4-desktop", "-p", p, "--create", "-t", "string", "-s", wall], check=False)
+    elif "hyprland" in de:
+        # hyprpaper keeps the old image in memory: restart it on the new wallpaper
+        run(["pkill", "-x", "hyprpaper"], check=False)
+        # let Hyprland start it (so it lives in the session); detach it ourselves as a fallback
+        if have("hyprpaper") and not (have("hyprctl") and run(["hyprctl", "dispatch", "exec", "hyprpaper"], check=False) == 0):
+            _spawn(["hyprpaper"])
+        if have("hyprctl"):
+            run(["hyprctl", "reload"], check=False)
         run(["pkill", "-SIGUSR2", "waybar"], check=False)
         run(["makoctl", "reload"], check=False)
     elif "sway" in de and have("swaymsg"):
         run(["swaymsg", "reload"], check=False)
+        run(["swaymsg", "output", "*", "bg", wall, "fill"], check=False)
         run(["makoctl", "reload"], check=False)
-    elif "i3" in de and have("i3-msg"):
-        run(["i3-msg", "restart"], check=False)
+    elif "i3" in de:
+        if have("feh"):
+            run(["feh", "--no-fehbg", "--bg-fill", wall], check=False)
+        if have("i3-msg"):
+            run(["i3-msg", "restart"], check=False)
     if once:
         p = os.path.expanduser("~/.config/autostart/auxo-session-apply.desktop")
         if os.path.exists(p) and not DRY:

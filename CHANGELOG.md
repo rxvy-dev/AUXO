@@ -1,6 +1,15 @@
 # Changelog
 
 ## 3.0.4
+- New: GNOME comes customised. Installing GNOME (in the installer or with
+  `auxo-tweak desktop gnome`) adds Dash to Dock, Blur my Shell, AppIndicator (tray
+  icons) and Caffeine, plus dark mode, your accent on the dock, minimise/maximise
+  buttons, Super+Enter for a terminal, Super+T for auxo-tweak and Super+Q to close.
+  These are defaults, so your own changes always win. `auxo-tweak rice gnome`
+  re-applies them.
+- `auxo-tweak accent` now changes the wallpaper straight away on every desktop:
+  KDE Plasma, GNOME, Cinnamon, Xfce, Hyprland (hyprpaper is restarted), Sway and
+  i3. Before, it only changed after logging out, or not at all under sudo.
 - Fixed: installs could fail at the GRUB step when a kernel other than linux-zen
   or a shell other than zsh was picked. The installer now:
   - only makes your kernel the default boot entry if its image is really in `/boot`
