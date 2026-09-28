@@ -277,6 +277,8 @@ def cmd_desktop(args):
             apply_rice(d["rice"], u)
     if args.name == "gnome":
         auxo_gnome.setup(auxo_theme.current())
+        for u in users:  # the installer already asked language/keyboard/user: skip GNOME's first-login wizard
+            write_file(f"{home_of(u)}/.config/gnome-initial-setup-done", "yes", owner=u)
     if args.replace and args.name != "plasma":
         keep = set(d["packages"])
         remove = [p for p in LIVE_PLASMA if p not in keep and (installed(p) or DRY)]

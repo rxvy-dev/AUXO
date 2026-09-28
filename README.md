@@ -50,7 +50,7 @@ auxo-rollback --list            # list snapshots
 | **GUI installer** | Calamares with Auxo branding and its own Desktop, Accent, Kernel, Shell and Software pages, each with a preview image. |
 | **8 desktop choices** | KDE Plasma 6 (the live desktop, installs offline), Hyprland, Sway and i3 with **Auxo rices** (bar, launcher, notifications, lock screen and screenshots wired up), plus GNOME, Xfce, Cinnamon, or no desktop. |
 | **One accent, everywhere** | 7 accents (violet, cyan, emerald, amber, rose, blue, mono), applied to the GRUB theme, the boot splash, the login screen, the MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst and the KDE/GNOME accent. |
-| **Text login screen** | greetd + tuigreet in your accent colour. It works the same on every desktop, GPU and VM. F3 switches session. |
+| **Text login screen** | greetd + tuigreet in your accent colour, the same on every desktop, GPU and VM. F3 switches session. GNOME uses its own login screen (GDM), which it needs to start. |
 | **Boot splash** | An animated Plymouth theme: the Auxo mark in your accent with a climber running up the trail. `auxo-tweak splash on\|off\|status` |
 | **Time-travel snapshots** | Flat btrfs layout (`@ @home @log @cache @snapshots`). snapper + snap-pac snapshot every pacman run, grub-btrfs makes them bootable, and `auxo-rollback` turns one back into your live system. `/home` is never touched. |
 | **Hardware autodetect** | NVIDIA Turing and newer get `nvidia-open` (`-dkms` on zen/lts) with modesetting. AMD and Intel get Vulkan and VA-API. `auxo-tweak drivers --prune` removes drivers and VM guest tools you don't need. |

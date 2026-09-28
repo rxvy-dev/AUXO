@@ -1,6 +1,11 @@
 # Changelog
 
 ## 3.0.4
+- Fixed: GNOME showed "Oh no! Something has gone wrong" / failed to start after
+  install. GNOME is Wayland-only now and has to be started by its own login screen
+  (GDM); the text login started it in a plain terminal session it can't use.
+  GNOME installs now use GDM, remember your session, and skip GNOME's first-login
+  wizard (the installer already asked those questions).
 - New: GNOME comes customised. Installing GNOME (in the installer or with
   `auxo-tweak desktop gnome`) adds Dash to Dock, Blur my Shell, AppIndicator (tray
   icons) and Caffeine, plus dark mode, your accent on the dock, minimise/maximise
