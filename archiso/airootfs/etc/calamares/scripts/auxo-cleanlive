@@ -2,6 +2,21 @@
 # Runs inside the target chroot (Calamares shellprocess@cleanlive).
 set -u
 
+# 0. /boot must not be btrfs-compressed. GRUB can fail to read zstd-compressed
+#    kernels/initramfs on btrfs ("premature end of file ... vmlinuz-linux").
+#    New files inherit the no-compress flag, so set it first, then rewrite
+#    anything unpackfs already put there (microcode images, grub files).
+if [[ $(stat -f -c %T /boot 2>/dev/null) == btrfs ]]; then
+  mkdir -p /boot
+  chattr +m /boot 2>/dev/null || true
+  btrfs property set /boot compression none 2>/dev/null || true
+  find /boot -xdev -type d -exec chattr +m {} + 2>/dev/null || true
+  while IFS= read -r -d '' f; do
+    cp -a -- "$f" "$f.auxo-tmp" && mv -f -- "$f.auxo-tmp" "$f"
+  done < <(find /boot -xdev -type f -print0)
+  echo "disabled btrfs compression on /boot"
+fi
+
 # 1. kernels: copy vmlinuz for every installed kernel (same as the kernel's pacman hook)
 for dir in /usr/lib/modules/*/; do
   [[ -f $dir/pkgbase && -f $dir/vmlinuz ]] || continue
@@ -41,4 +56,5 @@ chmod 700 /root
 sed -i 's#^root:x:0:0:root:/root:/usr/bin/zsh#root:x:0:0:root:/root:/bin/bash#' /etc/passwd
 mkdir -p /etc/auxo
 rm -rf /etc/calamares /usr/share/auxo/calamares-modules
+sync
 exit 0

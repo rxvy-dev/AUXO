@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Auxo
+Description=Auxo Linux boot splash: the Auxo mark in your accent colour, with a climber running up the trail
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/auxo
+ScriptFile=/usr/share/plymouth/themes/auxo/auxo.script

@@ -99,7 +99,8 @@ gs = GS(rootMountPoint=r, hasInternet=True, username="alex", packagechooser_desk
 calls, warns = mock(gs)
 check("returns success", load("auxodesktop").run() is None)
 flat = [" ".join(c) for c in calls]
-check("accent applied first", flat[0] == "auxo-tweak accent rose --no-grub --user alex")
+check("accent applied first", flat[0] == "auxo-tweak accent rose --no-grub --no-initramfs --user alex")
+check("boot splash enabled right after accent", flat[1] == "auxo-tweak splash on --no-initramfs --no-grub")
 check("fish shell", "auxo-tweak shell fish --user alex" in flat)
 check("zen kernel", "auxo-tweak kernel linux-zen --no-grub" in flat)
 check("hyprland replaces plasma", "auxo-tweak desktop hyprland --replace --user alex" in flat)
@@ -138,17 +139,17 @@ r = root_with_files()
 calls, _ = mock(GS(rootMountPoint=r, hasInternet=True, username="alex"))
 load("auxodesktop").run()
 flat = [" ".join(c) for c in calls]
-check("defaults: violet / zsh / plasma", "auxo-tweak accent violet --no-grub --user alex" in flat
+check("defaults: violet / zsh / plasma", "auxo-tweak accent violet --no-grub --no-initramfs --user alex" in flat
       and "auxo-tweak shell zsh --user alex" in flat and "auxo-tweak desktop plasma --user alex" in flat)
 
 print("▲ auxosnap")
 calls, _ = mock(GS(partitions=[{"mountPoint": "/", "fs": "btrfs"}, {"mountPoint": "/boot/efi", "fs": "fat32"}]))
 load("auxosnap").run()
-check("btrfs → snapshots on + grub-mkconfig", calls and calls[0][:3] == ["auxo-tweak", "snapshots", "on"]
+check("btrfs → splash check, snapshots on + grub-mkconfig", calls and calls[0] == ["auxo-tweak", "splash", "on"] and calls[1][:3] == ["auxo-tweak", "snapshots", "on"]
       and ["grub-mkconfig", "-o", "/boot/grub/grub.cfg"] in calls)
 calls, _ = mock(GS(partitions=[{"mountPoint": "/", "fs": "ext4"}]))
 load("auxosnap").run()
-check("ext4 → skipped", calls == [])
+check("ext4 → no snapshots (splash check + disk flush only)", calls == [["auxo-tweak", "splash", "on"], ["sync"]])
 
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

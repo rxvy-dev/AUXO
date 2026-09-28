@@ -35,7 +35,7 @@ auxo/
 |---|---|
 | **GUI installer** | Calamares with Auxo branding. It has pages for Desktop, Accent, Kernel, Shell and Software, each with a preview image. |
 | **8 desktop choices** | KDE Plasma (live desktop, installs offline), plus Hyprland, Sway and i3 with **Auxo rices** (waybar/polybar, wofi/rofi, mako/dunst, hyprlock…), and GNOME, Xfce, Cinnamon, or no desktop. |
-| **One accent, everywhere** | 7 accents. The one you pick is applied to the GRUB theme, SDDM background, MOTD, zsh/fish/bash prompt, kitty/foot/alacritty, waybar/polybar, mako/dunst, and the KDE/GNOME accent. `auxo-tweak accent rose` |
+| **One accent, everywhere** | 7 accents. The one you pick is applied to the GRUB theme, text login screen, MOTD, zsh/fish/bash prompt, kitty/foot/alacritty, waybar/polybar, mako/dunst, and the KDE/GNOME accent. `auxo-tweak accent rose` |
 | **Time-travel snapshots** | btrfs uses a flat layout (`@ @home @log @cache @snapshots`). snapper + snap-pac take a snapshot on every pacman run. grub-btrfs makes snapshots bootable. `auxo-rollback` turns one back into your live system. |
 | **Hardware autodetect** | NVIDIA Turing and newer (RTX 20–50) get `nvidia-open` with modesetting and suspend services. `nvidia-open-dkms` is used automatically on zen/lts kernels. AMD and Intel get Vulkan and VA-API. Drivers for hardware you don't have are removed. |
 | **NVIDIA-safe live boot** | The boot menu has an "NVIDIA GPU" entry. The default entry doesn't touch nvidia. There is also a safe-graphics (nomodeset) entry. |

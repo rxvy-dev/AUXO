@@ -70,7 +70,10 @@ def run():
 
     # accent first: the rices read ~/.config/auxo/*
     libcalamares.job.setprogress(0.05)
-    tweak("accent", accent, "--no-grub", *u)
+    tweak("accent", accent, "--no-grub", "--no-initramfs", *u)
+    # animated boot splash in the chosen accent; the initcpio + grubcfg jobs that
+    # run after this pick up the plymouth hook and the "splash" kernel option
+    tweak("splash", "on", "--no-initramfs", "--no-grub")
 
     libcalamares.job.setprogress(0.15)
     if shell != "zsh" and shell != "bash" and not online:

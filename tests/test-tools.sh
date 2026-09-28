@@ -14,7 +14,7 @@ bad()  { printf '  \e[31m✗\e[0m %s\n' "$1"; fail=$((fail+1)); }
 check() { if eval "$2"; then ok "$1"; else bad "$1"; fi; }
 
 # ── fake system ──
-mkdir -p "$ROOT"/etc/default "$ROOT"/usr/share/{wallpapers,auxo,sddm/themes/breeze} "$ROOT"/boot/grub "$ROOT"/var/lib/pacman/local "$ROOT"/home/alex
+mkdir -p "$ROOT"/etc/default "$ROOT"/etc/greetd "$ROOT"/usr/bin "$ROOT"/usr/share/{wallpapers,auxo,sddm/themes/breeze} "$ROOT"/boot/grub "$ROOT"/var/lib/pacman/local "$ROOT"/home/alex
 cp "$PKG"/share/wallpapers/* "$ROOT/usr/share/wallpapers/"
 cp -r "$PKG"/share/auxo/. "$ROOT/usr/share/auxo/"
 install -Dm644 "$PKG/etc/auxo/auxo.conf" "$ROOT/etc/auxo/auxo.conf"
@@ -36,6 +36,7 @@ Include = /etc/pacman.d/mirrorlist
 #[multilib]
 #Include = /etc/pacman.d/mirrorlist
 EOF
+touch "$ROOT/usr/bin/sddm" "$ROOT/usr/share/sddm/themes/breeze/metadata.desktop"
 for p in linux plasma-desktop konsole dolphin kate sddm nvidia-open nvidia-utils zsh; do mkdir -p "$ROOT/var/lib/pacman/local/$p-1.0-1"; done
 
 echo "▲ accent"
@@ -46,7 +47,9 @@ check "GRUB background copied"               "cmp -s $ROOT/usr/share/grub/themes
 check "GRUB selection pixmaps are PNGs"      "file $ROOT/usr/share/grub/themes/auxo/select_c.png | grep -q 'PNG image'"
 check "/etc/default/grub → GRUB_THEME"       "grep -q '^GRUB_THEME=\"/usr/share/grub/themes/auxo/theme.txt\"' $ROOT/etc/default/grub"
 check "/etc/default/grub → gfxterm"          "grep -q '^GRUB_TERMINAL_OUTPUT=\"gfxterm\"' $ROOT/etc/default/grub && [ \$(grep -c GRUB_TERMINAL_OUTPUT $ROOT/etc/default/grub) = 1 ]"
-check "SDDM background = rose wallpaper"     "grep -q auxo-rose.png $ROOT/usr/share/sddm/themes/breeze/theme.conf.user"
+check "live SDDM background = rose wallpaper" "grep -q auxo-rose.png $ROOT/usr/share/sddm/themes/breeze/theme.conf.user && grep -q 'Current=breeze' $ROOT/etc/sddm.conf.d/10-auxo.conf"
+check "text login (tuigreet) in rose accent"  "grep -q 'tuigreet' $ROOT/etc/greetd/config.toml && grep -q 'border=red' $ROOT/etc/greetd/config.toml && grep -q '^user = \"greeter\"' $ROOT/etc/greetd/config.toml"
+check "greetd config is valid TOML"          "python3 -c 'import tomllib,sys; tomllib.load(open(sys.argv[1],\"rb\"))' $ROOT/etc/greetd/config.toml"
 check "MOTD has truecolor accent"            "grep -q '38;2;251;113;133' $ROOT/etc/motd"
 check "user colour files"                    "test -f $ROOT/home/alex/.config/auxo/colors-hyprland.conf && grep -q 'rgb(fb7185)' $ROOT/home/alex/.config/auxo/colors-hyprland.conf"
 check "user wallpaper symlink"               "[ \$(readlink $ROOT/home/alex/.config/auxo/wallpaper.png) = /usr/share/wallpapers/auxo-rose.png ]"
@@ -69,12 +72,15 @@ out=$("$T" desktop hyprland --user alex --replace 2>&1); echo "$out" | sed 's/^/
 check "installs hyprland packages"           "echo \"\$out\" | grep -q 'pacman --noconfirm --needed -S hyprland'"
 check "skips already-installed sddm"         "! echo \"\$out\" | grep -E 'pacman .*-S .* sddm( |$)' >/dev/null"
 check "removes live Plasma"                  "echo \"\$out\" | grep -q 'pacman --noconfirm -Rns plasma-desktop'"
-check "enables sddm"                         "echo \"\$out\" | grep -q 'systemctl enable -f sddm'"
+check "enables greetd (text login)"          "echo \"\$out\" | grep -q 'systemctl enable -f greetd'"
+check "disables sddm"                        "echo \"\$out\" | grep -q 'systemctl disable sddm'"
 check "rice copied: hyprland.lua"            "grep -q 'require, \"hypr_colors\"' $ROOT/home/alex/.config/hypr/hyprland.lua"
 check "hypr_colors.lua has current accent"   "grep -q 'accent = \"rgb(34d399)\"' $ROOT/home/alex/.config/auxo/hypr_colors.lua"
 check "rice copied: waybar imports colours"  "grep -q 'auxo/colors.css' $ROOT/home/alex/.config/waybar/style.css"
-check "SDDM seeded with hyprland session"    "grep -q 'Session=/usr/share/wayland-sessions/hyprland.desktop' $ROOT/var/lib/sddm/state.conf"
-check "SDDM falls back to X11 greeter w/o KWin" "grep -q 'DisplayServer=x11' $ROOT/etc/sddm.conf.d/10-auxo.conf"
+check "login starts Hyprland by default"     "grep -q \"\\-\\-cmd 'Hyprland'\" $ROOT/etc/greetd/config.toml"
+check "username pre-filled"                  "grep -q '^alex$' $ROOT/var/cache/tuigreet/lastuser"
+rm -f "$ROOT/usr/share/sddm/themes/breeze/metadata.desktop"; "$T" accent emerald --user alex --no-grub --no-initramfs >/dev/null 2>&1
+check "no Breeze theme → SDDM not pointed at it (black-screen bug)" "grep -q '^Current=$' $ROOT/etc/sddm.conf.d/10-auxo.conf && ! grep -q breeze_cursors $ROOT/etc/sddm.conf.d/10-auxo.conf"
 check "auxo.conf DESKTOP=hyprland"           "grep -q 'DESKTOP=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
 "$T" rice hyprland --user alex >/dev/null 2>&1
 check "re-applying keeps a backup"           "test -f $ROOT/home/alex/.config/hypr/hyprland.lua.auxo-bak"
@@ -82,7 +88,7 @@ check "re-applying keeps a backup"           "test -f $ROOT/home/alex/.config/hy
 echo "▲ desktop i3 / sway"
 "$T" desktop i3 --user alex >/dev/null 2>&1
 check "i3 config + polybar launch exec"      "test -x $ROOT/home/alex/.config/polybar/launch.sh && grep -q colors-i3 $ROOT/home/alex/.config/i3/config"
-check "i3 session is x11"                    "grep -q 'xsessions/i3.desktop' $ROOT/var/lib/sddm/state.conf"
+check "i3 starts through startx"             "grep -q \"\\-\\-cmd 'startx /usr/bin/i3'\" $ROOT/etc/greetd/config.toml"
 "$T" desktop sway --user alex >/dev/null 2>&1
 check "sway config"                          "grep -q colors-sway $ROOT/home/alex/.config/sway/config && grep -q 'sway/workspaces' $ROOT/home/alex/.config/waybar/config.jsonc"
 check "mako config generated w/ accent"      "grep -q 'border-color=#34d399' $ROOT/home/alex/.config/mako/config"
@@ -117,6 +123,36 @@ check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop 
 
 out=$("$T" shell bash --user alex 2>&1); "$T" shell bash --user alex >/dev/null 2>&1
 check "bash prompt sourced once"             "[ \$(grep -c prompt.bash $ROOT/home/alex/.bashrc) = 1 ]"
+
+echo "▲ splash"
+printf 'MODULES=()\nHOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)\n' > "$ROOT/etc/mkinitcpio.conf"
+out=$("$T" splash on 2>&1); echo "$out" | sed 's/^/    /'
+check "installs plymouth"                    "echo \"\$out\" | grep -q 'pacman --noconfirm --needed -S plymouth'"
+check "plymouth hook right after udev"       "grep -q '^HOOKS=(base udev plymouth autodetect' $ROOT/etc/mkinitcpio.conf"
+check "kernel cmdline has splash"            "grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=\".*quiet.*splash' $ROOT/etc/default/grub"
+check "plymouthd.conf Theme=auxo"            "grep -q '^Theme=auxo' $ROOT/etc/plymouth/plymouthd.conf"
+check "theme script + accent images copied"  "test -f $ROOT/usr/share/plymouth/themes/auxo/auxo.script && cmp -s $ROOT/usr/share/plymouth/themes/auxo/logo.png $ROOT/usr/share/auxo/plymouth/accents/\$(sed -n 's/^ACCENT=\"\\(.*\\)\"/\\1/p' $ROOT/etc/auxo/auxo.conf)/logo.png"
+check "initramfs rebuilt after hook change"  "echo \"\$out\" | grep -q 'mkinitcpio -P'"
+out=$("$T" splash on 2>&1)
+check "second run is a no-op"                "! echo \"\$out\" | grep -q 'mkinitcpio -P' && [ \$(grep -o plymouth $ROOT/etc/mkinitcpio.conf | wc -l) = 1 ] && [ \$(grep -o splash $ROOT/etc/default/grub | wc -l) = 1 ]"
+out=$("$T" accent amber --user alex --no-grub 2>&1)
+check "accent change recolours the splash"   "cmp -s $ROOT/usr/share/plymouth/themes/auxo/logo.png $ROOT/usr/share/auxo/plymouth/accents/amber/logo.png && echo \"\$out\" | grep -q 'mkinitcpio -P'"
+out=$("$T" accent amber --user alex --no-grub --no-initramfs 2>&1)
+check "--no-initramfs skips the rebuild"     "! echo \"\$out\" | grep -q 'mkinitcpio -P'"
+"$T" splash off >/dev/null 2>&1
+check "splash off removes hook + option"     "! grep -q plymouth $ROOT/etc/mkinitcpio.conf && ! grep -q splash $ROOT/etc/default/grub && grep -q 'SPLASH=\"off\"' $ROOT/etc/auxo/auxo.conf"
+
+echo "▲ gaming"
+out=$("$T" gaming on --user alex 2>&1); echo "$out" | sed 's/^/    /'
+check "installs gaming stack + steam"        "echo \"\$out\" | grep -q 'pacman --noconfirm --needed -S gamemode lib32-gamemode mangohud lib32-mangohud gamescope steam'"
+check "sysctl tweaks written"                "grep -q 'vm.max_map_count = 2147483642' $ROOT/etc/sysctl.d/80-auxo-gaming.conf && grep -q 'split_lock_mitigate = 0' $ROOT/etc/sysctl.d/80-auxo-gaming.conf"
+check "ntsync loaded at boot"                "grep -q '^ntsync' $ROOT/etc/modules-load.d/auxo-gaming.conf"
+check "user added to gamemode group"         "echo \"\$out\" | grep -q 'usermod -aG gamemode alex'"
+check "auxo.conf GAMING=on"                  "grep -q 'GAMING=\"on\"' $ROOT/etc/auxo/auxo.conf"
+out=$("$T" gaming on --no-steam --user alex 2>&1)
+check "--no-steam leaves Steam out"          "! echo \"\$out\" | grep -q ' steam'"
+out=$("$T" gaming off --purge 2>&1)
+check "gaming off removes tweaks"            "! test -f $ROOT/etc/sysctl.d/80-auxo-gaming.conf && ! test -f $ROOT/etc/modules-load.d/auxo-gaming.conf && grep -q 'GAMING=\"off\"' $ROOT/etc/auxo/auxo.conf"
 
 echo "▲ auxo-fetch"
 out=$(AUXO_ROOT=/ "$PKG/bin/auxo-fetch" --accent amber 2>&1); echo "$out" | head -20

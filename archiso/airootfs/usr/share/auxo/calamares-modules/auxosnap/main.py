@@ -3,6 +3,7 @@
 # On btrfs: configure snapper for /, enable snap-pac (pre/post snapshot on every
 # pacman run) and grub-btrfs (snapshots appear in the GRUB menu), then take the
 # first snapshot "Fresh Auxo install".
+import os
 import libcalamares
 from libcalamares.utils import target_env_call, debug, warning
 
@@ -18,7 +19,28 @@ def root_fs(gs):
     return ""
 
 
+def _flush():
+    """Make sure kernels, initramfs and grub.cfg are really on disk before the
+    installer unmounts and the user reboots (a half-written vmlinuz makes GRUB
+    stop with "premature end of file")."""
+    target_env_call(["sync"])
+    try:
+        os.sync()
+    except Exception:
+        pass
+
+
 def run():
+    try:
+        # last check that the boot splash survived the initcpio/grubcfg jobs: only
+        # rebuilds the initramfs / grub.cfg if the hook or "splash" option went missing
+        target_env_call(["auxo-tweak", "splash", "on"])
+        return _run()
+    finally:
+        _flush()
+
+
+def _run():
     gs = libcalamares.globalstorage
     fs = root_fs(gs)
     if fs != "btrfs":

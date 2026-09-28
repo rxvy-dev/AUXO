@@ -145,3 +145,9 @@ spice-vdagent
 open-vm-tools
 virtualbox-guest-utils
 hyperv
+# boot splash (auxo-tweak splash)
+plymouth
+# text login on installed systems (auxo-tweak desktop)
+greetd
+greetd-tuigreet
+xorg-xinit

@@ -3,7 +3,7 @@
 
 Run with no arguments for the interactive menu, or use a sub-command:
 
-  auxo-tweak accent [NAME]          system + user accent colour (GRUB, SDDM, MOTD, terminals, bars)
+  auxo-tweak accent [NAME]          system + user accent colour (GRUB, login screen, MOTD, terminals, bars)
   auxo-tweak kernel NAME            linux | linux-lts | linux-zen | linux-hardened
   auxo-tweak shell NAME             zsh | fish | bash
   auxo-tweak desktop NAME           plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
@@ -13,6 +13,8 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak mirrors                rank the fastest mirrors with reflector
   auxo-tweak zram on|off            compressed RAM swap
   auxo-tweak multilib on            enable 32-bit repo (Steam, Wine)
+  auxo-tweak splash on|off|status   animated Auxo boot splash (Plymouth) in your accent colour
+  auxo-tweak gaming on|off|status   Steam, GameMode, MangoHud, gamescope + low-latency tweaks
   auxo-tweak aur                    install the paru AUR helper
   auxo-tweak service NAME on|off    bluetooth | cups | sshd | ufw | power-profiles
   auxo-tweak info                   show current Auxo settings
@@ -49,7 +51,10 @@ def cmd_accent(args):
             print(f"  {ansi(a)}{mark} {name:<8} {a}{RESET}")
         return
     require_root()
-    auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
+    splash_changed = auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
+    if splash_changed and read_conf().get("SPLASH") == "on" and not args.no_initramfs:
+        log("boot splash colour changed → rebuilding initramfs")
+        run(["mkinitcpio", "-P"], check=False)
     for u in target_users(args):
         auxo_theme.apply_user(u, args.name)
     if not args.user and os.environ.get("SUDO_USER") and os.environ.get("DISPLAY", os.environ.get("WAYLAND_DISPLAY")):
@@ -184,7 +189,7 @@ def apply_rice(name, user):
 
 
 def set_display_manager(dm):
-    for other in ("sddm", "gdm", "lightdm", "ly"):
+    for other in ("sddm", "gdm", "lightdm", "ly", "greetd"):
         if other != dm:
             systemctl_disable(other)
     if dm:
@@ -195,14 +200,11 @@ def set_display_manager(dm):
 
 
 def set_default_session(user, session):
-    """SDDM remembers the last session per user; seed it so first login lands in the chosen desktop."""
-    if not session:
+    """tuigreet: pre-fill the username; the desktop itself comes from --cmd in greetd's config."""
+    if not user:
         return
-    wl = R(f"/usr/share/wayland-sessions/{session}.desktop")
-    kind = "wayland" if os.path.exists(wl) or session in ("plasma", "hyprland", "sway", "gnome") else "x11"
-    write_file("/var/lib/sddm/state.conf",
-               f"[Last]\nUser={user}\nSession=/usr/share/{'wayland-sessions' if kind == 'wayland' else 'xsessions'}/{session}.desktop\n")
-    run(["chown", "-R", "sddm:sddm", "/var/lib/sddm"], check=False)
+    write_file("/var/cache/tuigreet/lastuser", user + "\n")
+    run(["chown", "-R", "greeter:greeter", "/var/cache/tuigreet"], check=False)
 
 
 def cmd_desktop(args):
@@ -227,12 +229,12 @@ def cmd_desktop(args):
             if run(["pacman", "--noconfirm", "-Rns", *remove], check=False) != 0:
                 for p in remove:  # something is still needed — remove what we can, one by one
                     run(["pacman", "--noconfirm", "-Rns", p], check=False)
-    set_display_manager(d["dm"])
-    if d["dm"] == "sddm":
-        auxo_theme.apply_sddm(auxo_theme.current())
-    if d["dm"] == "sddm" and users:
-        set_default_session(users[0], d["session"])
     write_conf({"DESKTOP": args.name})
+    set_display_manager(d["dm"])
+    if d["dm"] == "greetd":
+        auxo_theme.apply_login(auxo_theme.current())
+        if users:
+            set_default_session(users[0], d["session"])
     log(f"desktop → {d['name']}. Reboot or log out to use it.")
 
 
@@ -371,6 +373,18 @@ def cmd_drivers(args):
         other = "amd-ucode" if ucode == "intel-ucode" else "intel-ucode"
         if installed(other):
             run(["pacman", "--noconfirm", "-Rns", other], check=False)
+        # VM guest tools: keep only the ones for the hypervisor we're running on
+        virt = (run(["systemd-detect-virt", "--vm"], check=False, capture=True) or "").strip()
+        if virt:
+            keep = {"oracle": {"virtualbox-guest-utils"},
+                    "kvm": {"qemu-guest-agent", "spice-vdagent"},
+                    "qemu": {"qemu-guest-agent", "spice-vdagent"},
+                    "vmware": {"open-vm-tools"}}.get(virt, set())
+            tools = ("virtualbox-guest-utils", "qemu-guest-agent", "spice-vdagent", "open-vm-tools")
+            drop = [p for p in tools if p not in keep and installed(p)]
+            if drop:
+                log(f"virtualization: {virt} → removing unused guest tools: {' '.join(drop)}")
+                run(["pacman", "--noconfirm", "-Rns", *drop], check=False)
     if st == "open" and not args.no_initramfs:
         run(["mkinitcpio", "-P"], check=False)
     write_conf({"GPU": ",".join(sorted(vendors)) or "none"})
@@ -463,6 +477,138 @@ def cmd_session_apply(args):
     auxo_theme.session_apply(args.accent, once=args.once)
 
 
+# ── boot splash (Plymouth) ────────────────────────────────────────────
+MKINITCPIO = "/etc/mkinitcpio.conf"
+
+
+def _hooks_line():
+    import re
+    try:
+        txt = open(R(MKINITCPIO)).read()
+    except FileNotFoundError:
+        return None, None
+    m = re.search(r"^HOOKS=\((.*?)\)", txt, re.M)
+    return txt, (m.group(1).split() if m else None)
+
+
+def _set_hooks(hooks):
+    import re
+    txt, _ = _hooks_line()
+    txt = re.sub(r"^HOOKS=\(.*?\)", "HOOKS=(" + " ".join(hooks) + ")", txt, count=1, flags=re.M)
+    write_file(MKINITCPIO, txt)
+
+
+def _cmdline(add=(), remove=()):
+    """Edit GRUB_CMDLINE_LINUX_DEFAULT; returns True if it changed."""
+    if not os.path.exists(R("/etc/default/grub")):
+        return False
+    from auxo_core import get_kv
+    old = get_kv("/etc/default/grub", "GRUB_CMDLINE_LINUX_DEFAULT", "")
+    words = [w for w in old.split() if w not in remove]
+    words += [w for w in add if w not in words]
+    new = " ".join(words)
+    if new != old:
+        set_kv("/etc/default/grub", "GRUB_CMDLINE_LINUX_DEFAULT", new)
+        return True
+    return False
+
+
+def cmd_splash(args):
+    conf = read_conf()
+    if args.state == "status":
+        _, hooks = _hooks_line()
+        print(f"  splash      {conf.get('SPLASH', 'off')}")
+        print(f"  plymouth    {'installed' if installed('plymouth') else 'not installed'}")
+        print(f"  initramfs   {'plymouth hook present' if hooks and 'plymouth' in hooks else 'no plymouth hook'}")
+        return
+    require_root()
+    rebuild = regrub = False
+    if args.state == "on":
+        pacman("-S", "plymouth")
+        rebuild |= auxo_theme.apply_splash(auxo_theme.current())
+        write_file("/etc/plymouth/plymouthd.conf",
+                   "# written by auxo-tweak splash\n[Daemon]\nTheme=auxo\nShowDelay=0\nDeviceTimeout=8\n")
+        _, hooks = _hooks_line()
+        if hooks is not None and "plymouth" not in hooks:
+            # right after udev/systemd, before any encrypt hook, so the passphrase prompt is themed
+            anchor = next((i for i, h in enumerate(hooks) if h in ("systemd", "udev")), 0)
+            hooks.insert(anchor + 1, "plymouth")
+            _set_hooks(hooks)
+            rebuild = True
+        regrub |= _cmdline(add=("quiet", "splash"))
+    else:
+        _, hooks = _hooks_line()
+        if hooks and "plymouth" in hooks:
+            _set_hooks([h for h in hooks if h != "plymouth"])
+            rebuild = True
+        regrub |= _cmdline(remove=("splash",))
+    write_conf({"SPLASH": args.state})
+    if rebuild and not args.no_initramfs:
+        run(["mkinitcpio", "-P"], check=False)
+    if regrub and not args.no_grub and have("grub-mkconfig") and os.path.exists(R("/boot/grub")):
+        auxo_theme.grub_mkconfig()
+    log(f"boot splash {args.state}" + (" (takes effect on next boot)" if args.state == "on" else ""))
+
+
+# ── gaming ────────────────────────────────────────────────────────────
+GAMING_SYSCTL = "/etc/sysctl.d/80-auxo-gaming.conf"
+GAMING_MODULES = "/etc/modules-load.d/auxo-gaming.conf"
+GAMING_PKGS = ["gamemode", "lib32-gamemode", "mangohud", "lib32-mangohud", "gamescope"]
+
+
+def cmd_gaming(args):
+    conf = read_conf()
+    if args.state == "status":
+        print(f"  gaming      {conf.get('GAMING', 'off')}")
+        for p in GAMING_PKGS + ["steam"]:
+            print(f"  {p:<14}{'installed' if installed(p) else '-'}")
+        print(f"  tweaks      {'on' if os.path.exists(R(GAMING_SYSCTL)) else 'off'}")
+        return
+    require_root()
+    if args.state == "on":
+        if not multilib_enabled():
+            cmd_multilib(argparse.Namespace(state="on"))
+        pkgs = list(GAMING_PKGS) + ([] if args.no_steam else ["steam"])
+        vendors = {v for v, _, _ in gpu_info()}
+        if "1002" in vendors:
+            pkgs += ["vulkan-radeon", "lib32-vulkan-radeon"]
+        if "8086" in vendors:
+            pkgs += ["vulkan-intel", "lib32-vulkan-intel"]
+        if "10de" in vendors and nvidia_status() == "open":
+            pkgs += ["lib32-nvidia-utils"]
+        pacman("-S", *pkgs)
+        write_file(GAMING_SYSCTL,
+                   "# written by auxo-tweak gaming — remove with: auxo-tweak gaming off\n"
+                   "# more memory maps for games that need them (same value as SteamOS)\n"
+                   "vm.max_map_count = 2147483642\n"
+                   "# don't slow down games that trigger split-lock detection\n"
+                   "kernel.split_lock_mitigate = 0\n")
+        # ntsync: kernel-side Windows sync primitives, used by Wine / Proton for smoother frame pacing
+        write_file(GAMING_MODULES, "# written by auxo-tweak gaming\nntsync\n")
+        run(["sysctl", "--system"], check=False)
+        run(["modprobe", "ntsync"], check=False)
+        for u in target_users(args):
+            run(["usermod", "-aG", "gamemode", u], check=False)
+        write_conf({"GAMING": "on"})
+        log("gaming on")
+        print(f"   {DIM}Steam launch options:{RESET}  gamemoderun mangohud %command%")
+        print(f"   {DIM}Proton-GE:{RESET}             auxo-tweak aur && paru -S protonup-qt")
+        if not any(installed(k) for k in ("linux-zen",)):
+            print(f"   {DIM}Lower latency kernel:{RESET}  auxo-tweak kernel linux-zen")
+        print(f"   {DIM}Log out and back in so GameMode can adjust priorities.{RESET}")
+    else:
+        for p in (GAMING_SYSCTL, GAMING_MODULES):
+            if os.path.exists(R(p)):
+                os.remove(R(p))
+        run(["sysctl", "--system"], check=False)
+        if args.purge:
+            gone = [p for p in GAMING_PKGS if installed(p)]
+            if gone:
+                run(["pacman", "--noconfirm", "-Rns", *gone], check=False)
+        write_conf({"GAMING": "off"})
+        log("gaming off" + ("" if args.purge else " (tweaks removed; games and tools kept — use --purge to remove GameMode/MangoHud/gamescope)"))
+
+
 # ── interactive menu (whiptail) ───────────────────────────────────────
 def wt(*a):
     r = subprocess.run(["whiptail", "--title", "auxo-tweak", *a], stderr=subprocess.PIPE, text=True)
@@ -475,10 +621,11 @@ def menu():
         return
     me = [sys.executable, os.path.abspath(__file__)]
     while True:
-        choice = wt("--menu", "Climb your own setup — pick something to change", "20", "70", "12",
+        choice = wt("--menu", "Climb your own setup — pick something to change", "22", "70", "14",
                     "accent", "Accent colour", "desktop", "Desktop / window manager", "kernel", "Kernel",
                     "shell", "Login shell", "snapshots", "Btrfs snapshots", "drivers", "GPU drivers",
                     "mirrors", "Fastest mirrors", "zram", "Compressed RAM swap", "services", "System services",
+                    "splash", "Boot splash", "gaming", "Gaming mode",
                     "update", "Update everything (auxo-update)", "quit", "Exit")
         if choice in (None, "quit"):
             return
@@ -501,6 +648,10 @@ def menu():
         elif choice == "zram":
             v = wt("--menu", "zram", "10", "40", "2", "on", "", "off", "")
             cmd = ["zram", v] if v else None
+        elif choice in ("splash", "gaming"):
+            v = wt("--menu", "Boot splash" if choice == "splash" else "Gaming mode", "12", "40", "3",
+                   "on", "", "off", "", "status", "")
+            cmd = [choice, v] if v else None
         elif choice == "services":
             v = wt("--menu", "Service", "15", "50", "6", *sum([[k, ""] for k in SERVICES], []))
             s = v and wt("--menu", v, "10", "40", "2", "on", "", "off", "")
@@ -520,7 +671,8 @@ def main():
     sub = p.add_subparsers(dest="cmd")
 
     s = sub.add_parser("accent"); s.add_argument("name", nargs="?", choices=list(ACCENTS))
-    s.add_argument("--user"); s.add_argument("--no-grub", action="store_true"); s.set_defaults(fn=cmd_accent)
+    s.add_argument("--user"); s.add_argument("--no-grub", action="store_true")
+    s.add_argument("--no-initramfs", action="store_true"); s.set_defaults(fn=cmd_accent)
     s = sub.add_parser("kernel"); s.add_argument("name", choices=list(KERNELS))
     s.add_argument("--no-grub", action="store_true"); s.set_defaults(fn=cmd_kernel)
     s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
@@ -539,6 +691,12 @@ def main():
     s = sub.add_parser("mirrors"); s.add_argument("--country"); s.set_defaults(fn=cmd_mirrors)
     s = sub.add_parser("zram"); s.add_argument("state", choices=["on", "off"]); s.set_defaults(fn=cmd_zram)
     s = sub.add_parser("multilib"); s.add_argument("state", choices=["on"]); s.set_defaults(fn=cmd_multilib)
+    s = sub.add_parser("splash"); s.add_argument("state", choices=["on", "off", "status"])
+    s.add_argument("--no-initramfs", action="store_true"); s.add_argument("--no-grub", action="store_true")
+    s.set_defaults(fn=cmd_splash)
+    s = sub.add_parser("gaming"); s.add_argument("state", choices=["on", "off", "status"]); s.add_argument("--user")
+    s.add_argument("--no-steam", action="store_true"); s.add_argument("--purge", action="store_true")
+    s.set_defaults(fn=cmd_gaming)
     s = sub.add_parser("service"); s.add_argument("name", choices=list(SERVICES)); s.add_argument("state", choices=["on", "off"])
     s.set_defaults(fn=cmd_service)
     s = sub.add_parser("info"); s.set_defaults(fn=cmd_info)

@@ -10,6 +10,8 @@ from auxo_desktops import GNOME_ACCENT
 
 WALLDIR = "/usr/share/wallpapers"
 GRUB_THEME = "/usr/share/grub/themes/auxo"
+SPLASH_SRC = "/usr/share/auxo/plymouth"
+SPLASH_THEME = "/usr/share/plymouth/themes/auxo"
 
 
 def current():
@@ -126,16 +128,51 @@ def grub_mkconfig():
     return True
 
 
+# nearest terminal colour for each accent (tuigreet draws with the 16 ANSI colours)
+TUI_COLOR = {"violet": "magenta", "cyan": "cyan", "emerald": "green", "amber": "yellow",
+             "rose": "red", "blue": "blue", "mono": "white"}
+
+
+def greetd_config(accent, cmd=None):
+    c = TUI_COLOR.get(accent, "magenta")
+    theme = f"border={c};title={c};greet=white;prompt={c};input=white;action={c};button={c};time=darkgray;text=gray"
+    args = ["tuigreet", "--time", "--remember", "--remember-user-session",
+            "--greeting 'Auxo Linux — climb your own setup'", f"--theme '{theme}'",
+            "--sessions /usr/share/wayland-sessions", "--xsessions /usr/share/xsessions",
+            "--xsession-wrapper 'startx /usr/bin/env'"]
+    if cmd:
+        args.append(f"--cmd '{cmd}'")
+    command = " ".join(args).replace('"', '\\"')
+    return ("# written by auxo-tweak — text login (greetd + tuigreet)\n"
+            "[terminal]\nvt = 1\n\n"
+            f'[default_session]\ncommand = "{command}"\nuser = "greeter"\n')
+
+
+def apply_login(accent):
+    """Text login screen (greetd + tuigreet) in the accent colour, starting the chosen desktop."""
+    if not (os.path.isdir(R("/etc/greetd")) or os.path.exists(R("/usr/bin/tuigreet"))):
+        return
+    from auxo_desktops import DESKTOPS
+    d = DESKTOPS.get(read_conf().get("DESKTOP", ""), {})
+    write_file("/etc/greetd/config.toml", greetd_config(accent, d.get("cmd")))
+
+
 def apply_sddm(accent):
+    """Only used by the live ISO now (installed systems use greetd).
+    Never point SDDM at a theme that isn't really installed: a Breeze folder without
+    metadata.desktop makes SDDM try the Qt5 greeter, which Arch doesn't ship → black screen."""
+    if not os.path.exists(R("/usr/bin/sddm")):
+        return
     wall = f"{WALLDIR}/auxo-{accent}.png"
     if os.path.exists(R("/usr/bin/kwin_wayland")):
-        # Plasma present: Wayland greeter running on KWin
         server = ("[General]\nDisplayServer=wayland\nGreeterEnvironment=QT_WAYLAND_SHELL_INTEGRATION=layer-shell\nInputMethod=\n\n"
                   "[Wayland]\nCompositorCommand=kwin_wayland --drm --no-lockscreen --no-global-shortcuts --locale1\n\n")
     else:
         server = "[General]\nDisplayServer=x11\nInputMethod=\n\n"
-    write_file("/etc/sddm.conf.d/10-auxo.conf", server + "[Theme]\nCurrent=breeze\nCursorTheme=breeze_cursors\n")
-    if os.path.isdir(R("/usr/share/sddm/themes/breeze")):
+    breeze = R("/usr/share/sddm/themes/breeze/metadata.desktop")
+    theme = "[Theme]\nCurrent=breeze\nCursorTheme=breeze_cursors\n" if os.path.exists(breeze) else "[Theme]\nCurrent=\n"
+    write_file("/etc/sddm.conf.d/10-auxo.conf", server + theme)
+    if os.path.exists(breeze):
         write_file("/usr/share/sddm/themes/breeze/theme.conf.user", f"[General]\nbackground={wall}\ntype=image\n")
 
 
@@ -149,14 +186,36 @@ def motd(accent):
             f"{c2}   /_/  \\_\\    {rs}  auxo-fetch   system summary\n\n")
 
 
+def apply_splash(accent):
+    """Copy the Plymouth theme + this accent's images into place.
+    Returns True when anything changed (the initramfs then needs a rebuild)."""
+    import filecmp
+    src_theme, src_acc = R(f"{SPLASH_SRC}/theme"), R(f"{SPLASH_SRC}/accents/{accent}")
+    if not os.path.isdir(src_theme) or not os.path.isdir(src_acc):
+        return False
+    dst = R(SPLASH_THEME)
+    os.makedirs(dst, exist_ok=True)
+    changed = False
+    for d in (src_theme, src_acc):
+        for f in sorted(os.listdir(d)):
+            a, b = os.path.join(d, f), os.path.join(dst, f)
+            if not os.path.exists(b) or not filecmp.cmp(a, b, shallow=False):
+                shutil.copyfile(a, b)
+                changed = True
+    return changed
+
+
 def apply_system(accent, mkconfig=True):
     if accent not in ACCENTS:
         raise ValueError(f"unknown accent '{accent}'. choose: {', '.join(ACCENTS)}")
     write_conf({"ACCENT": accent})
     apply_grub(accent, mkconfig)
     apply_sddm(accent)
+    apply_login(accent)
     write_file("/etc/motd", motd(accent))
+    splash_changed = apply_splash(accent)
     log(f"system accent → {accent} ({ACCENTS[accent][0]})")
+    return splash_changed
 
 
 # ── per-user ──────────────────────────────────────────────────────────

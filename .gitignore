@@ -3,3 +3,6 @@ out/
 branding/out/
 __pycache__/
 *.pkg.tar.zst
+
+# website build output
+website/preview/
