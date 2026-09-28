@@ -493,6 +493,8 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 
 .relline{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-size:14px;color:var(--dim);max-width:560px}
 .relline b{color:var(--tx)}
+.qrec{font-size:13.5px;color:var(--mut);padding:10px 12px;border:1px solid color-mix(in srgb,var(--a) 35%,transparent);border-radius:7px;background:color-mix(in srgb,var(--a) 6%,transparent)}
+.qrec b{color:var(--tx)}
 /* download v8 */
 .pgrid{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center}
 .pgrid>*{min-width:0}
@@ -638,6 +640,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
     <div class="qtop"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg><div><b>Auxo Linux 3.0</b><span>x86_64 · 2.8 GB · 2026-09-27</span></div></div>
     <a class="btn primary lg" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download for PC</a>
     <a class="btn lg" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64_202609/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download for virtual machines</a>
+    <p class="qrec">Installing? We recommend the <b>linux-zen</b> kernel and <b>zsh</b> shell.</p>
     <p class="qlinks"><a href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64_archive.torrent">Torrent</a><a href="https://archive.org/details/auxo-linux-2026.09.27-x86_64">Checksums</a><a href="#choose">Which one do I need?</a></p>
   </div>
 </div></div>
@@ -759,10 +762,11 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
         <li><span>Choose <b>Auxo Linux</b> in the boot menu. The live KDE Plasma desktop starts.</span></li>
         <li><span>Connect to Wi-Fi from the welcome app if you want the extra software.</span></li>
         <li><span>Click <b>Install Auxo Linux</b>. Pick your language, keyboard and disk (erase, or install alongside another OS).</span></li>
-        <li><span>Choose your desktop, accent, kernel, shell and any extra software, then create your user.</span></li>
+        <li><span>Choose your desktop and accent, then pick <b>linux-zen</b> as the kernel and <b>zsh</b> as the shell (recommended). Add any extra software and create your user.</span></li>
         <li><span>Check the summary and click <b>Install</b>. It takes a few minutes.</span></li>
         <li><span>When it says <b>All done</b>, restart and remove the USB stick. In a VM, choose <b>Boot existing OS</b>.</span></li>
-      </ol></div>
+      </ol>
+      <div class="note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span><b>Recommended:</b> in the installer, pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell. They're the best-tested combination, and some users have hit errors with the other options.</span></div></div>
     <div class="card rv" id="verify"><h3>Verify your download</h3><p>Make sure the image downloaded completely before you write it. Compare the result with the SHA-1 on the file's <b>Checksums</b> page.</p>
       <div class="code"><span class="tm"># Linux</span>
 <span class="tm">$ </span>sha1sum auxo-linux-2026.09.27-x86_64.iso

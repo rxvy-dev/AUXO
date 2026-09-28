@@ -508,6 +508,8 @@ SOFTRULES
 
 .relline{margin-top:18px;padding-top:18px;border-top:1px solid var(--line);font-size:14px;color:var(--dim);max-width:560px}
 .relline b{color:var(--tx)}
+.qrec{font-size:13.5px;color:var(--mut);padding:10px 12px;border:1px solid color-mix(in srgb,var(--a) 35%,transparent);border-radius:7px;background:color-mix(in srgb,var(--a) 6%,transparent)}
+.qrec b{color:var(--tx)}
 /* download v8 */
 .pgrid{display:grid;grid-template-columns:1.2fr .8fr;gap:56px;align-items:center}
 .pgrid>*{min-width:0}
@@ -756,6 +758,7 @@ def checks(items):
 def shot(src, alt, title="Auxo 3.0"):
     return f'<div class="shot rv"><div class="bar mute"><i></i><i></i><i></i><b>{title}</b></div><img src="{src}" alt="{alt}" loading="lazy"></div>'
 
+REC_LONG = "<b>Recommended:</b> in the installer, pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell. They're the best-tested combination, and some users have hit errors with the other options."
 # ================= HOME =================
 swatches = "".join(
     f'<input class="vh" type="radio" name="acc" id="acc-{n}"{" checked" if n == "amber" else ""} aria-label="{n} accent">'
@@ -919,7 +922,7 @@ home = head("Auxo Linux — Arch, set up the way you want it",
 <section id="how"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">03</span> How it works</p><h2>Install once. Change anything. Undo mistakes.</h2></div><p>Three tools cover the whole life of your system. <a class="inl" href="{DOCS}">Full command reference →</a></p></div>
   <div class="how3">
-    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A guided installer. Pick your desktop, accent, kernel, shell and extra software, and Auxo sets up drivers, snapshots and dual boot.</p>
+    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A guided installer. Pick your desktop, accent, kernel, shell and extra software, and Auxo sets up drivers, snapshots and dual boot. We recommend <b>linux-zen</b> and <b>zsh</b>.</p>
       <div class="term"><pre><span class="tm"># in the live session</span>
 <span class="ta">❯</span> auxo-welcome
 <span class="tg">✓</span> Install Auxo Linux</pre></div></div>
@@ -950,6 +953,7 @@ home = head("Auxo Linux — Arch, set up the way you want it",
     <figure class="rv"><img src="{imgs[1]}" alt="Choosing a desktop in the Auxo installer" loading="lazy"><figcaption><b>Pick your desktop</b><span>Plasma, GNOME, Xfce, Cinnamon, or a ready-made Hyprland, Sway or i3 setup.</span></figcaption></figure>
     <figure class="rv"><img src="{imgs[2]}" alt="Choosing an accent colour in the Auxo installer" loading="lazy"><figcaption><b>Choose an accent</b><span>One colour for the boot menu, splash, login, prompt, terminal and bars.</span></figcaption></figure>
   </div>
+  <div class="note" style="margin-top:24px">{I['info']}<span>{REC_LONG}</span></div>
   <div class="sec-foot picker-row"><span class="hint">Try an accent on this page:</span><div class="swatches" role="radiogroup" aria-label="Accent colour">{swatches}</div></div>
 </div></section>
 
@@ -1057,6 +1061,7 @@ dl = head("Get Auxo Linux — Download",
     <div class="qtop">{mark()}<div><b>Auxo Linux 3.0</b><span>x86_64 · {STD['size']} · {STD['date']}</span></div></div>
     <a class="btn primary lg" href="{STD['url']}">{I['dl']}Download for PC</a>
     <a class="btn lg" href="{VM['url']}">{I['dl']}Download for virtual machines</a>
+    <p class="qrec">Installing? We recommend the <b>linux-zen</b> kernel and <b>zsh</b> shell.</p>
     <p class="qlinks"><a href="{STD['torrent']}">Torrent</a><a href="{STD['details']}">Checksums</a><a href="#choose">Which one do I need?</a></p>
   </div>
 </div></div>
@@ -1126,10 +1131,11 @@ dl = head("Get Auxo Linux — Download",
         <li><span>Choose <b>Auxo Linux</b> in the boot menu. The live KDE Plasma desktop starts.</span></li>
         <li><span>Connect to Wi-Fi from the welcome app if you want the extra software.</span></li>
         <li><span>Click <b>Install Auxo Linux</b>. Pick your language, keyboard and disk (erase, or install alongside another OS).</span></li>
-        <li><span>Choose your desktop, accent, kernel, shell and any extra software, then create your user.</span></li>
+        <li><span>Choose your desktop and accent, then pick <b>linux-zen</b> as the kernel and <b>zsh</b> as the shell (recommended). Add any extra software and create your user.</span></li>
         <li><span>Check the summary and click <b>Install</b>. It takes a few minutes.</span></li>
         <li><span>When it says <b>All done</b>, restart and remove the USB stick. In a VM, choose <b>Boot existing OS</b>.</span></li>
-      </ol></div>
+      </ol>
+      <div class="note">{I['info']}<span>{REC_LONG}</span></div></div>
     <div class="card rv" id="verify"><h3>Verify your download</h3><p>Make sure the image downloaded completely before you write it. Compare the result with the SHA-1 on the file's <b>Checksums</b> page.</p>
       <div class="code"><span class="tm"># Linux</span>
 <span class="tm">$ </span>sha1sum {N}
