@@ -15,6 +15,10 @@ OUT = "preview" if PREVIEW else "site"
 HOME = "index.html" if PREVIEW else "/"
 DL = "download.html" if PREVIEW else "/download/"
 DOCS = "docs.html" if PREVIEW else "/docs/"
+DESKP = "desktops.html" if PREVIEW else "/desktops/"
+RELP = "releases.html" if PREVIEW else "/releases/"
+COMP = "community.html" if PREVIEW else "/community/"
+PRESSP = "press.html" if PREVIEW else "/press/"
 
 def iso(ident, name):
     return {"url": f"https://archive.org/download/{ident}/{name}",
@@ -524,6 +528,98 @@ SOFTRULES
 .rtable b{font:600 14px var(--fm);color:var(--a)}
 .rtable span{font:13px var(--fm);color:var(--mut)}
 .rtable em{font-style:normal;font-size:12.5px;color:var(--dim)}
+
+/* v8 pages */
+.muted{color:var(--dim);font-size:14.5px}
+.subnav{border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:72px;z-index:30}
+.subnav .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px}
+.subnav a{padding:8px 14px;border-radius:6px;font-size:14px;font-weight:600;color:var(--mut);white-space:nowrap}
+.subnav a:hover{color:var(--tx);background:var(--card)}
+@media(max-width:760px){.subnav{position:static}}
+.auxo section.dsec{padding:80px 0;border-bottom:1px solid var(--line);scroll-margin-top:130px}
+.dsgrid{display:grid;grid-template-columns:.9fr 1.1fr;gap:56px;align-items:start}
+.dsgrid>*{min-width:0}
+@media(max-width:960px){.dsgrid{grid-template-columns:1fr;gap:28px}}
+.dsec:nth-child(even) .dtext{order:2}
+@media(max-width:960px){.dsec:nth-child(even) .dtext{order:0}}
+.dtext h2{font-size:clamp(28px,3vw,38px)}
+.dtext .dl{color:var(--mut);font-size:16.5px;margin-bottom:20px}
+.dtext .code{margin-bottom:16px}
+.note2{margin-top:14px;font-size:14px;color:var(--mut)}
+.screen.mini{border:1px solid var(--line2);border-radius:8px;aspect-ratio:16/10}
+.kh{font:600 12px var(--fb);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:22px 0 10px}
+.keys{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--line);gap:1px}
+@media(max-width:560px){.keys{grid-template-columns:1fr}}
+.keys>div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;background:var(--card);font-size:14px}
+.keys .kempty{background:var(--card)}
+.keys em{font-style:normal;color:var(--mut);text-align:right}
+kbd{display:inline-block;font:600 11.5px var(--fm);padding:3px 7px;border-radius:5px;border:1px solid var(--line2);border-bottom-width:2px;background:#12151a;color:var(--tx);margin-right:4px}
+.timeline{position:relative;max-width:880px;padding-left:34px}
+.timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:linear-gradient(var(--a),var(--line) 30%)}
+.tl{position:relative;margin-bottom:24px;scroll-margin-top:96px}
+.tldot{position:absolute;left:-31px;top:26px;width:14px;height:14px;border-radius:50%;background:var(--bg);border:3px solid var(--a)}
+.tl:not(:first-child) .tldot{border-color:var(--line2)}
+.tlcard{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:24px 26px}
+.tl:first-child .tlcard{border-color:color-mix(in srgb,var(--a) 45%,var(--line2))}
+.tlcard header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.tlcard h2{font-size:24px;margin:0}
+.rbadge{font:600 12px var(--fm);padding:4px 9px;border-radius:5px;border:1px solid var(--line2);color:var(--mut)}
+.tl:first-child .rbadge{background:var(--a);border-color:var(--a);color:#0a0a0d}
+.tlt{color:var(--mut);margin:6px 0 4px}
+.cgrid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:20px}
+.cgrid.two-up{grid-template-columns:1fr 1fr}
+@media(max-width:960px){.cgrid,.cgrid.two-up{grid-template-columns:1fr}}
+.ccard{display:flex;flex-direction:column;gap:18px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:28px;transition:border-color .2s}
+.ccard:hover{border-color:var(--a)}
+.ccard.big{background:linear-gradient(160deg,color-mix(in srgb,#5865f2 14%,var(--card)),var(--card))}
+.ccard>div:last-child{display:flex;flex-direction:column;flex:1}
+.cico{width:48px;height:48px;border-radius:10px;display:grid;place-items:center;background:#12151a;border:1px solid var(--line2);color:var(--tx)}
+.cico svg{width:24px;height:24px}
+.ccard h2{font-size:22px;margin:0 0 8px}
+.ccard p{color:var(--mut);font-size:15px;margin-bottom:18px}
+.ccard .btn,.ccard .more{margin-top:auto;align-self:flex-start}
+.ccard .more{font-size:14px;font-weight:600;color:var(--a)}
+.rules{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:900px){.rules{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.rules{grid-template-columns:1fr}}
+.rules>div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:22px}
+.rules b{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:6px;background:var(--a);color:#0a0a0d;font:700 14px var(--fh);margin-bottom:12px}
+.rules p{color:var(--mut);font-size:15px}
+.facts table{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:12px}
+.facts th{text-align:left;font-weight:500;color:var(--dim);padding:10px 12px 10px 0;border-top:1px solid var(--line);white-space:nowrap;vertical-align:top;width:40%}
+.facts td{padding:10px 0;border-top:1px solid var(--line);color:#d2d6dd}
+.facts tr:first-child th,.facts tr:first-child td{border-top:0}
+.blurb{margin-top:14px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#12151a}
+.blurb small{display:block;font:600 11px var(--fb);letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.blurb p{color:#d2d6dd;font-size:14.5px;user-select:all}
+.logogrid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:1000px){.logogrid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.logogrid{grid-template-columns:1fr}}
+.lg{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--card)}
+.lgv{height:170px;display:grid;place-items:center;background:#161a20;border-bottom:1px solid var(--line)}
+.lgv.dark{background:#0a0b0e}.lgv.light{background:#f4f5f7}
+.pm{width:84px;height:84px}
+.wm{display:flex;align-items:center;gap:12px;font:700 40px var(--fh);letter-spacing:-.03em;color:#ececf5}
+.wm .pm{width:52px;height:52px}
+.tile{display:grid;place-items:center;width:104px;height:104px;border-radius:24px;background:#0b0b10;box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.tile .pm{width:70px;height:70px}
+.lgf{display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:center;padding:16px}
+.lgf b{font-size:15px}
+.lgf span{grid-column:1;font-size:13px;color:var(--dim)}
+.lgf .btn{grid-row:1/3;grid-column:2}
+.subh{font-size:20px;margin:40px 0 16px}
+.colors{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:800px){.colors{grid-template-columns:1fr 1fr}}
+.colors>div{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;display:grid;gap:4px}
+.colors i{height:64px;border-radius:6px;margin-bottom:8px}
+.colors code{justify-self:start}
+.colors span{font-size:13px;color:var(--dim)}
+.pshots{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:900px){.pshots{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.pshots{grid-template-columns:1fr}}
+.pshots figure{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--card)}
+.pshots img{width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;background:#15181e}
+.pshots figcaption{padding:12px 14px;font-size:14px;color:var(--mut)}
 """ + acc_css
 
 I = {
@@ -633,7 +729,7 @@ def nav(page):
     h = "" if page == "home" else HOME
     return f"""<header class="nav"><div class="wrap">
 <a class="brand" href="{HOME}">{mark()}auxo<small>3.0</small></a>
-<nav class="links" aria-label="Main"><a href="{DL}"{cur('dl')}>Get Auxo</a><a href="{DOCS}"{cur('docs')}>Docs</a><a href="{h}#desktops">Desktops</a><a href="{h}#software">Software</a><a href="{h}#news">News</a><a href="{DISCORD}">Community</a></nav>
+<nav class="links" aria-label="Main"><a href="{DL}"{cur('dl')}>Get Auxo</a><a href="{DESKP}"{cur('desktops')}>Desktops</a><a href="{DOCS}"{cur('docs')}>Docs</a><a href="{RELP}"{cur('releases')}>Releases</a><a href="{COMP}"{cur('community')}>Community</a></nav>
 <div class="right"><a class="icon-link" href="{DISCORD}" aria-label="Auxo Discord">{I['discord']}</a><a class="btn primary sm" href="{DL}">{I['dl']}Get Auxo</a></div>
 </div></header>
 """
@@ -643,9 +739,9 @@ def footer():
 <div class="fgrid">
   <div><a class="brand" href="{HOME}">{mark()}auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
   <div><h4>Get Auxo</h4><ul><li><a href="{DL}#installer">Installer image</a></li><li><a href="{DL}#vm">Virtual machines</a></li><li><a href="{DL}#usb">Make a USB stick</a></li><li><a href="{DL}#verify">Verify a download</a></li></ul></div>
-  <div><h4>Explore</h4><ul><li><a href="{HOME}#features">Why Auxo</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{HOME}#desktops">Desktops</a></li><li><a href="{HOME}#news">News</a></li></ul></div>
+  <div><h4>Explore</h4><ul><li><a href="{DESKP}">Desktops</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{RELP}">Releases</a></li><li><a href="{PRESSP}">Press kit</a></li></ul></div>
   <div><h4>Docs</h4><ul><li><a href="{DOCS}#tweak">auxo-tweak</a></li><li><a href="{DOCS}#snapshots">Snapshots</a></li><li><a href="{DOCS}#gaming">Gaming</a></li><li><a href="{DOCS}#trouble">Troubleshooting</a></li></ul></div>
-  <div><h4>Community</h4><ul><li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li></ul></div>
+  <div><h4>Community</h4><ul><li><a href="{COMP}">Get involved</a></li><li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
 <div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
 </div></footer>
@@ -1221,15 +1317,278 @@ docs = head("Auxo Linux documentation",
 """ + footer()
 
 
+# ================= EXTRA PAGES (v8) =================
+import base64 as _b64
+def _datauri(path, mime):
+    return f"data:{mime};base64," + _b64.b64encode(open(path, "rb").read()).decode()
+
+def page_head(eyebrow, title, lede, extra=""):
+    return f'''<div class="phead"><div class="wrap">
+  <p class="eyebrow rise">{eyebrow}</p>
+  <h1 class="rise r1">{title}</h1>
+  <p class="rise r2">{lede}</p>{extra}
+</div></div>'''
+
+def keytable(rows):
+    rows = list(rows) + ([("", "")] if len(rows) % 2 else [])
+    return '<div class="keys">' + "".join((f'<div><span>{" ".join(f"<kbd>{k}</kbd>" for k in keys.split("+"))}</span><em>{what}</em></div>' if keys else '<div class="kempty"></div>') for keys, what in rows) + '</div>'
+
+def mini_screen(k):
+    lay = {d[0]: d[5] for d in DESKS}[k]
+    if k == "plasma":
+        return f'<div class="screen mini" role="img" aria-label="KDE Plasma 6 on Auxo">{RIDGE}<div class="L L-plasma" style="display:block"><img src="{KDE_SHOT}" alt="" loading="lazy"></div></div>'
+    return f'<div class="screen mini" aria-hidden="true">{RIDGE}<div class="L" style="display:block">{lay}</div></div>'
+
+KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"),
+             ("Super+Q", "Close window"), ("Super+F", "Fullscreen"), ("Super+V", "Toggle floating"), ("Super+L", "Lock screen"),
+             ("Super+1…9", "Switch workspace"), ("Print", "Screenshot a region"), ("Super+Print", "Screenshot to clipboard"), ("Super+Shift+E", "Exit Hyprland")]
+KEYS_SWAY = [("Super+Enter", "Terminal (foot)"), ("Super+D", "App launcher (wofi)"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+             ("Super+L", "Lock screen"), ("Print", "Screenshot a region"), ("Super+Shift+E", "Exit Sway")]
+KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (rofi)"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+           ("Super+L", "Lock screen"), ("Print", "Screenshot a region to the clipboard"), ("Super+Shift+E", "Exit i3")]
+
+DPAGE = [
+ ("plasma", "KDE Plasma 6", "Default · Wayland", "The default desktop and the live session. A full, familiar desktop with Auxo theming, and the only one that installs without internet.",
+  ["plasma-desktop", "konsole", "dolphin", "kate", "ark", "spectacle", "kde-gtk-config"], None),
+ ("hyprland", "Hyprland", "Auxo rice · Wayland", "Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent.",
+  ["hyprland", "hyprpaper", "hypridle", "hyprlock", "waybar", "wofi", "mako", "kitty", "grim + slurp + swappy"], KEYS_HYPR),
+ ("sway", "Sway", "Auxo rice · Wayland", "i3-style tiling on Wayland. Lightweight and predictable, with waybar and your accent on the focused window.",
+  ["sway", "swaybg", "swayidle", "swaylock", "waybar", "wofi", "mako", "foot"], KEYS_SWAY),
+ ("i3", "i3", "Auxo rice · X11", "Classic X11 tiling with no wasted space. polybar, rofi and picom are configured to match your accent.",
+  ["i3-wm", "polybar", "rofi", "picom", "dunst", "alacritty", "feh", "maim"], KEYS_I3),
+ ("gnome", "GNOME", "Wayland", "Stock GNOME with gestures and the activities overview. Your accent is mapped to the nearest GNOME accent colour.",
+  ["gnome", "gnome-tweaks", "gnome-console"], None),
+ ("xfce", "Xfce", "X11", "Light, fast and traditional. A good fit for older hardware.",
+  ["xfce4", "xfce4-goodies", "network-manager-applet", "pavucontrol", "papirus-icon-theme"], None),
+ ("cinnamon", "Cinnamon", "X11", "A traditional layout with a full-width bottom panel, menu and system tray.",
+  ["cinnamon", "nemo", "gnome-terminal", "xed", "papirus-icon-theme"], None),
+ ("none", "No desktop", "Text only", "Just the text login and a shell. Useful for servers, or for building your own setup from scratch. Add a desktop at any time.",
+  [], None),
+]
+d_index = "".join(f'<a href="#d-{k}">{n}</a>' for k, n, *_ in DPAGE)
+def dsec(k, n, tag, desc, pk, keys):
+    rice = "Auxo rice" in tag
+    pk_html = ('<p class="pkgs"><span>Installs</span>' + " · ".join(pk) + '</p>') if pk else '<p class="pkgs"><span>Installs</span>nothing extra</p>'
+    keys_html = (f'<h4 class="kh">Keybindings</h4>{keytable(keys)}') if keys else ""
+    extra = ""
+    if rice:
+        extra = f'<p class="note2">Changed a config and want the original back? <code>auxo-tweak rice {k}</code></p>'
+    if k == "gnome":
+        extra = '<p class="note2">Accent mapping: violet → purple, cyan → teal, emerald → green, amber → yellow, rose → pink, blue → blue, mono → slate.</p>'
+    return f'''<section class="dsec" id="d-{k}">
+  <div class="dsgrid">
+    <div class="dtext rv">
+      <p class="eyebrow">{tag}</p><h2>{n}</h2><p class="dl">{desc}</p>
+      <div class="code"><span class="ta">❯</span> auxo-tweak desktop {k}</div>
+      {pk_html}{extra}
+    </div>
+    <div class="dvis rv">{mini_screen(k)}{keys_html}</div>
+  </div>
+</section>'''
+
+desk_page = head("Desktops — Auxo Linux",
+                 "Every desktop Auxo Linux offers: KDE Plasma, Hyprland, Sway, i3, GNOME, Xfce and Cinnamon. What each one installs, its keybindings, and the command to switch.",
+                 "https://auxolinux.com/desktops/") + nav("desktops") + f"""
+<main id="main">
+{page_head("Desktops", "Eight desktops. One command.", "Pick a desktop in the installer, or switch any time with <code>auxo-tweak desktop</code>. Your previous config files are kept as <code>*.auxo-bak</code>, and the login screen follows your choice.",
+  f'<div class="chips rise r3"><span><b>4</b> Wayland</span><span><b>3</b> X11</span><span><b>3</b> Auxo rices</span><span><b>1</b> text-only</span></div>')}
+<nav class="subnav" aria-label="Desktops"><div class="wrap">{d_index}</div></nav>
+<div class="wrap">{"".join(dsec(*d) for d in DPAGE)}</div>
+<div class="band" style="padding-top:40px"><div class="wrap"><div class="inner rv">
+  {mark()}
+  <div><h2>Can't decide? You don't have to.</h2><p>Try one, switch tomorrow. Every change is one command, and snapshots have your back.</p></div>
+  <div class="cta"><a class="btn primary lg" href="{DL}">{I['dl']}Get Auxo</a><a class="btn lg" href="{DOCS}#desktops">Desktop docs</a></div>
+</div></div></div>
+</main>
+""" + footer()
+
+# ---------- releases ----------
+REL = [
+ ("3.0.3", "Latest", "Login fix for every desktop", [
+   ("fix", "Fixed a black screen after install when a desktop other than KDE Plasma was chosen, on VMs and real hardware."),
+   ("new", "Installed systems now use a text login screen (greetd + tuigreet) in your accent colour. It starts the desktop you picked, and F3 switches session."),
+   ("fix", "The login screen is never pointed at a theme that isn't installed."),
+ ]),
+ ("3.0.2", "", "Boot splash and gaming", [
+   ("new", "Animated boot splash: the Auxo mark in your accent with a climber running up the trail, plus a progress bar. <code>auxo-tweak splash on|off|status</code>"),
+   ("new", "<code>auxo-tweak gaming on|off|status</code>: Steam, GameMode, MangoHud, Gamescope, 32-bit Vulkan drivers, vm.max_map_count and split-lock tweaks, and ntsync for Wine and Proton."),
+ ]),
+ ("3.0.1", "", "Virtual machine fixes", [
+   ("fix", "Installed systems now boot in VirtualBox and other VMs. <code>/boot</code> is no longer btrfs-compressed, so GRUB can always read the kernel."),
+   ("fix", "Everything is flushed to disk before the install finishes."),
+   ("new", "<code>auxo-tweak drivers --prune</code> keeps only the guest tools for the hypervisor you're on, and removes them on real hardware."),
+ ]),
+ ("3.0", "2026-09-26", "First public release", [
+   ("new", "Calamares installer with Desktop, Accent, Kernel, Shell and Software pages."),
+   ("new", "<code>auxo-tweak</code>, <code>auxo-update</code>, <code>auxo-rollback</code>, <code>auxo-fetch</code> and the welcome app."),
+   ("new", "Ready-made Hyprland, Sway and i3 setups, seven accent colours, and bootable btrfs snapshots."),
+ ]),
+]
+def relcard(v, date, title, items):
+    lis = "".join(f'<li><b class="{t}">{"New" if t=="new" else "Fix"}</b><span>{x}</span></li>' for t, x in items)
+    badge = f'<span class="rbadge">{date}</span>' if date else ""
+    return f'<article class="tl rv" id="v{v.replace(".","-")}"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo {v}</h2>{badge}</header><p class="tlt">{title}</p><ul class="rel">{lis}</ul></div></article>'
+
+rel_page = head("Releases — Auxo Linux",
+                "Auxo Linux release notes: what changed in each version, and links to every image on the Internet Archive.",
+                "https://auxolinux.com/releases/") + nav("releases") + f"""
+<main id="main">
+{page_head("Releases", "What's new in Auxo", "Auxo is a rolling release. Once it's installed, <code>auxo-update</code> keeps you current, so you never need to reinstall for a new version.",
+  f'<div class="cta rise r3" style="margin-top:28px"><a class="btn primary lg" href="{DL}">{I["dl"]}Download the latest</a><a class="btn lg" href="https://github.com/rxvy-dev/AUXO">Source on GitHub</a></div>')}
+<section><div class="wrap">
+  <div class="timeline">
+    {"".join(relcard(*r) for r in REL)}
+    <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 2</h2><span class="rbadge">2026-07-19</span></header><p class="tlt">Earlier release</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64">View on archive.org</a></p></div></article>
+    <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 1</h2><span class="rbadge">2026-07-09</span></header><p class="tlt">The first Auxo image</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.09-x86_64">View on archive.org</a></p></div></article>
+  </div>
+</div></section>
+</main>
+""" + footer()
+
+# ---------- community ----------
+com_page = head("Community — Auxo Linux",
+                "Join the Auxo Linux community: Discord, r/DistroHub and GitHub. Get help, share your setup, report bugs and contribute.",
+                "https://auxolinux.com/community/") + nav("community") + f"""
+<main id="main">
+{page_head("Community", "Built in the open, with you", "Auxo is a small, independent project. Every bug report, screenshot and suggestion shapes where it goes next.")}
+<section style="padding-top:64px"><div class="wrap">
+  <div class="cgrid">
+    <a class="ccard big rv" href="{DISCORD}"><div class="cico">{I['discord']}</div><div><h2>Discord</h2><p>The main place to hang out. Install help, rice showcases, wallpapers, and release news first.</p><span class="btn primary">{I['discord']}Join the Discord</span></div></a>
+    <a class="ccard rv" href="https://www.reddit.com/r/DistroHub/"><div class="cico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><circle cx="9" cy="13" r="1"/><circle cx="15" cy="13" r="1"/><path d="M9 16.5c1.8 1.2 4.2 1.2 6 0M16 5l-4-1-1 5"/><circle cx="18" cy="5" r="1.5"/></svg></div><div><h2>r/DistroHub</h2><p>A subreddit for discovering new and indie Linux distros, Auxo included.</p><span class="more">Visit the subreddit →</span></div></a>
+    <a class="ccard rv" href="https://github.com/rxvy-dev/AUXO"><div class="cico"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.8 1a9.6 9.6 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></div><div><h2>GitHub</h2><p>The source code for the installer, auxo-tweak and every other Auxo tool.</p><span class="more">View the source →</span></div></a>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Get involved</p><h2>Ways to help</h2></div><p>No code required for most of these.</p></div>
+  <div class="cards5">
+    <div class="rv"><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg><h3>Report bugs</h3><p>Something broke? Tell us what you did, what happened and your hardware. <a class="inl" href="https://github.com/rxvy-dev/AUXO/issues">Open an issue</a> or post in Discord.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Share your setup</h3><p>Post screenshots of your rice in Discord. The best ones get featured.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M12 4v16M8 16l4 4 4-4"/></svg><h3>Test releases</h3><p>Try new images on real hardware and in VMs, and say what worked.</p></div>
+    <div class="rv"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><h3>Spread the word</h3><p>Tell a friend, write a review, or post about Auxo. It all helps a small project.</p></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Developers</p><h2>Build Auxo from source</h2></div><p>Everything, including the ISO, builds from the repository.</p></div>
+  <div class="two">
+    <div class="card rv"><h3>Build the ISO</h3><p>On Arch or an Arch-based distro. Takes 20–40 minutes and about 20 GB of free space.</p>
+      <div class="code"><span class="tm">$ </span>git clone https://github.com/rxvy-dev/AUXO.git
+<span class="tm">$ </span>cd AUXO
+<span class="tm">$ </span>sudo ./build.sh --clean
+<span class="tm">$ </span>./scripts/test-vm.sh out/auxo-linux-*.iso</div>
+      <p class="muted" style="margin-top:12px">Not on Arch? Use <code>./scripts/build-in-docker.sh</code>.</p></div>
+    <div class="card rv"><h3>Run the tests</h3><p>Both suites run anywhere, without root.</p>
+      <div class="code"><span class="tm">$ </span>./tests/test-tools.sh
+<span class="tm">$ </span>python3 tests/test-calamares-modules.py</div>
+      <p class="muted" style="margin-top:12px">Please run both before sending a pull request.</p></div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Guidelines</p><h2>Be excellent to each other</h2></div><p>A few simple rules for every Auxo space.</p></div>
+  <div class="rules">
+    <div class="rv"><b>1</b><p>Be kind and patient, especially with people new to Linux.</p></div>
+    <div class="rv"><b>2</b><p>No distro wars. Every distro has its place.</p></div>
+    <div class="rv"><b>3</b><p>Help others the way you'd want to be helped: with detail, not "RTFM".</p></div>
+    <div class="rv"><b>4</b><p>No spam, piracy or harassment.</p></div>
+  </div>
+</div></section>
+</main>
+""" + footer()
+
+# ---------- press kit ----------
+LOGO_DIR = os.path.join(HERE, "..", "branding", "logo")
+lg_svg = _datauri(os.path.join(LOGO_DIR, "auxo-mark.svg"), "image/svg+xml")
+lg_word = _datauri(os.path.join(LOGO_DIR, "auxo-logo-wordmark.png"), "image/png")
+lg_icon = _datauri(os.path.join(LOGO_DIR, "auxo-logo-icon-512.png"), "image/png")
+
+FACTS = [("Name", "Auxo Linux"), ("Based on", "Arch Linux"), ("Release model", "Rolling"), ("Latest version", "3.0.3"),
+         ("Architecture", "x86_64"), ("Installer", "Calamares, with Auxo's own pages"), ("Default desktop", "KDE Plasma 6"),
+         ("Desktops", "Plasma, GNOME, Xfce, Cinnamon, Hyprland, Sway, i3"), ("Developer", "rxvy"),
+         ("Website", '<a class="inl" href="https://auxolinux.com">auxolinux.com</a>'), ("Source", '<a class="inl" href="https://github.com/rxvy-dev/AUXO">github.com/rxvy-dev/AUXO</a>')]
+facts_html = "".join(f"<tr><th>{a}</th><td>{b}</td></tr>" for a, b in FACTS)
+
+BLURB_S = "Auxo Linux is an Arch-based distro where you can switch your whole desktop with one command, without reinstalling."
+BLURB_M = ("Auxo Linux is an Arch-based rolling distribution with a graphical installer. Users pick their desktop, kernel, shell and "
+           "accent colour during install, and can change any of them later with a single command, auxo-tweak. Every update takes a "
+           "bootable btrfs snapshot, so a bad update can be rolled back from the boot menu.")
+BLURB_L = ("Auxo Linux is an independent, Arch-based rolling distribution built around one idea: your setup should be easy to change. "
+           "Its Calamares installer lets users choose between KDE Plasma 6, GNOME, Xfce, Cinnamon, or ready-made Hyprland, Sway and i3 "
+           "setups, along with a kernel, shell and one of seven accent colours that theme everything from the boot menu to the terminal. "
+           "After installing, the auxo-tweak tool changes any of those choices with one command, using the same code the installer runs. "
+           "Snapper and grub-btrfs take a snapshot on every package transaction, and auxo-rollback restores one if something breaks. "
+           "Auxo uses the official Arch repositories, so the AUR and the Arch Wiki work as normal.")
+
+shots_dl = [(KDE_SHOT, "KDE Plasma 6 desktop", False)] + [(imgs[i], t, True) for i, t in
+            [(0, "Live session and welcome app"), (1, "Installer: pick a desktop"), (2, "Installer: pick an accent"), (3, "Installer: extra software"), (4, "Installer: installing")]]
+shots_html = "".join(
+    f'<figure class="rv"><img src="{src}" alt="{t}" loading="lazy"><figcaption><span>{t}</span></figcaption></figure>'
+    for n, (src, t, embedded) in enumerate(shots_dl))
+
+press_page = head("Press kit — Auxo Linux",
+                  "Auxo Linux press kit: fact sheet, ready-to-use descriptions, logos, brand colours and screenshots for reviews and articles.",
+                  "https://auxolinux.com/press/") + nav("press") + f"""
+<main id="main">
+{page_head("Press kit", "Writing about Auxo?", "Everything you need for a review, article or video: the facts, ready-to-use descriptions, logos and screenshots. Use any of it freely.")}
+<section style="padding-top:64px"><div class="wrap">
+  <div class="two">
+    <div class="card rv"><h3>At a glance</h3><div class="facts"><table>{facts_html}</table></div></div>
+    <div class="card rv"><h3>Descriptions</h3><p class="muted">Copy whichever length fits.</p>
+      <div class="blurb"><small>One line</small><p>{BLURB_S}</p></div>
+      <div class="blurb"><small>Short · about 60 words</small><p>{BLURB_M}</p></div>
+      <div class="blurb"><small>Long · about 130 words</small><p>{BLURB_L}</p></div>
+    </div>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Brand</p><h2>Logos</h2></div><p>The Auxo mark is a mountain peak with a climbing trail and a summit dot. Please don't stretch, recolour or redraw it.</p></div>
+  <div class="logogrid">
+    <div class="lg rv"><div class="lgv dark"><svg class="pm" viewBox="0 0 128 128"><use href="#pmark"/></svg></div><div class="lgf"><b>Mark</b><span>SVG · scalable, transparent</span><a class="btn sm" href="{lg_svg}" download="auxo-mark.svg">{I['dl']}SVG</a></div></div>
+    <div class="lg rv"><div class="lgv light"><svg class="pm" viewBox="0 0 128 128"><use href="#pmark"/></svg></div><div class="lgf"><b>Mark on light</b><span>Same SVG works on light backgrounds</span><a class="btn sm" href="{lg_svg}" download="auxo-mark.svg">{I['dl']}SVG</a></div></div>
+    <div class="lg rv"><div class="lgv dark wide"><span class="wm"><svg class="pm" viewBox="0 0 128 128"><use href="#pmark"/></svg>auxo</span></div><div class="lgf"><b>Wordmark</b><span>PNG · 1840×560, for dark backgrounds</span><a class="btn sm" href="{lg_word}" download="auxo-logo-wordmark.png">{I['dl']}PNG</a></div></div>
+    <div class="lg rv"><div class="lgv"><span class="tile"><svg class="pm" viewBox="0 0 128 128"><use href="#pmark"/></svg></span></div><div class="lgf"><b>App icon</b><span>PNG · 512 px, dark tile</span><a class="btn sm" href="{lg_icon}" download="auxo-logo-icon.png">{I['dl']}PNG</a></div></div>
+  </div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="pg" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#22d3ee"/></linearGradient><symbol id="pmark" viewBox="0 0 128 128"><g fill="none" stroke="url(#pg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#pg)" stroke="none"/></g></symbol></defs></svg>
+  <h3 class="subh">Colours</h3>
+  <div class="colors">
+    <div class="rv"><i style="background:#a78bfa"></i><b>Violet</b><code>#A78BFA</code><span>Logo gradient start</span></div>
+    <div class="rv"><i style="background:#22d3ee"></i><b>Cyan</b><code>#22D3EE</code><span>Logo gradient end</span></div>
+    <div class="rv"><i style="background:#fbbf24"></i><b>Amber</b><code>#FBBF24</code><span>Website accent</span></div>
+    <div class="rv"><i style="background:#0e1014;box-shadow:inset 0 0 0 1px #2f3641"></i><b>Night</b><code>#0E1014</code><span>Background</span></div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Media</p><h2>Screenshots</h2></div><p>Real screenshots from Auxo 3.0, free to use in coverage. Right-click an image and choose <b>Save image as</b>.</p></div>
+  <div class="pshots">{shots_html}</div>
+</div></section>
+
+<section class="alt"><div class="wrap">
+  <div class="sec-head"><div><p class="eyebrow">Contact</p><h2>Get in touch</h2></div><p>Questions, interview requests or anything else? Reach out.</p></div>
+  <div class="cgrid two-up">
+    <a class="ccard rv" href="{DISCORD}"><div class="cico">{I['discord']}</div><div><h2>Discord</h2><p>The fastest way to reach the developer.</p><span class="more">Join the Discord →</span></div></a>
+    <a class="ccard rv" href="https://github.com/rxvy-dev/AUXO"><div class="cico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></div><div><h2>GitHub</h2><p>Source code, issues and technical details.</p><span class="more">Open GitHub →</span></div></a>
+  </div>
+</div></section>
+</main>
+""" + footer()
+
 os.makedirs(OUT, exist_ok=True)
 if PREVIEW:
     open(f"{OUT}/index.html", "w").write(home)
     open(f"{OUT}/download.html", "w").write(dl)
     open(f"{OUT}/docs.html", "w").write(docs)
+    for _n, _pg in [("desktops", desk_page), ("releases", rel_page), ("community", com_page), ("press", press_page)]:
+        open(f"{OUT}/{_n}.html", "w").write(_pg)
 else:
     os.makedirs(f"{OUT}/download", exist_ok=True)
     open(f"{OUT}/index.html", "w").write(home)
     open(f"{OUT}/download/index.html", "w").write(dl)
     os.makedirs(f"{OUT}/docs", exist_ok=True)
     open(f"{OUT}/docs/index.html", "w").write(docs)
-print("built", OUT, len(home), len(dl), len(docs))
+    for _n, _pg in [("desktops", desk_page), ("releases", rel_page), ("community", com_page), ("press", press_page)]:
+        os.makedirs(f"{OUT}/{_n}", exist_ok=True)
+        open(f"{OUT}/{_n}/index.html", "w").write(_pg)
+print("built", OUT, len(home), len(dl), len(docs), len(desk_page), len(rel_page), len(com_page), len(press_page))

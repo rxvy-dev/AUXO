@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="branding/new-logo/logo.png" width="96" alt="Auxo Linux logo">
+  <img src="branding/logo/auxo-logo-icon-512.png" width="110" alt="Auxo Linux logo">
 </p>
 
 <h1 align="center">Auxo Linux</h1>
@@ -91,7 +91,7 @@ auxo/
 │   ├── auxo-tools/             # PKGBUILD: auxo-tweak, auxo-fetch, auxo-update, auxo-rollback, auxo-welcome,
 │   │                           #           rices, accents, Plymouth theme
 │   └── calamares/              # PKGBUILD: Calamares built WITH the packagechooser module
-├── branding/                   # gen-assets.py (logo, wallpapers, previews), gen-plymouth.py (boot splash)
+├── branding/                   # logo/ (official logo files), gen-assets.py, gen-plymouth.py (boot splash)
 ├── scripts/
 │   ├── build-in-docker.sh      # build from any distro with Docker
 │   ├── test-vm.sh              # boot the ISO in QEMU (UEFI or --bios) with a 40 GB virtual disk
