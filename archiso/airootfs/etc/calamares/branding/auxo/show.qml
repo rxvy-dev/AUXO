@@ -5,6 +5,10 @@ import calamares.slideshow 1.0
 Presentation {
     id: presentation
 
+    // Presentation itself has no background, so the widget behind it showed as a
+    // light frame around the slides. Paint the whole area dark.
+    Rectangle { anchors.fill: parent; color: "#0b0b10"; z: -1 }
+
     Timer {
         interval: 7000
         running: presentation.activatedInCalamares

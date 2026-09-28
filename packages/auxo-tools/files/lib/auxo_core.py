@@ -146,6 +146,20 @@ def set_kv(path, key, value, quote=True):
         f.write("\n".join(out) + "\n")
 
 
+def del_kv(path, key):
+    """Remove an active KEY=... line from a shell-style file (commented lines are kept)."""
+    p = R(path)
+    if not os.path.exists(p):
+        return False
+    lines = open(p).read().splitlines()
+    out = [ln for ln in lines if not ln.strip().startswith(key + "=")]
+    if len(out) == len(lines):
+        return False
+    with open(p, "w") as f:
+        f.write("\n".join(out) + "\n")
+    return True
+
+
 def get_kv(path, key, default=""):
     try:
         for line in open(R(path)):

@@ -52,5 +52,7 @@ def _run():
         warning(f"auxosnap: snapshot setup exited with {rc}")
         return None
     # regenerate GRUB so the snapshot submenu is present from the first boot
-    target_env_call(["grub-mkconfig", "-o", "/boot/grub/grub.cfg"])
+    if target_env_call(["sh", "-c", "grub-mkconfig -o /boot/grub/grub.cfg >>/var/log/auxo-install.log 2>&1"]) != 0:
+        # the bootloader job already wrote a working grub.cfg; only the snapshot submenu is missing
+        warning("auxosnap: grub-mkconfig failed (see /var/log/auxo-install.log); snapshot menu appears after the next update")
     return None

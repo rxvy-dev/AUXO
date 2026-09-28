@@ -28,3 +28,6 @@ QScrollBar:vertical { background: transparent; width: 10px; }
 QScrollBar::handle:vertical { background: #2c2c3c; border-radius: 5px; min-height: 24px; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
 QToolTip { background-color: #1b1b25; color: #e8e8f0; border: 1px solid #a78bfa; }
+
+/* installer slideshow area */
+QQuickWidget, #slideshow { background-color: #0b0b10; border: none; }

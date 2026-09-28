@@ -1,6 +1,6 @@
 # Maintainer: Auxo Linux <https://auxolinux.com>
 pkgname=auxo-tools
-pkgver=3.0.3
+pkgver=3.0.4
 pkgrel=1
 pkgdesc="Auxo Linux tools: auxo-tweak, auxo-fetch, auxo-update, auxo-rollback, auxo-welcome, rices and branding"
 arch=('any')

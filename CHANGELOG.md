@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.0.4
+- Fixed: installs could fail at the GRUB step when a kernel other than linux-zen
+  or a shell other than zsh was picked. The installer now:
+  - only makes your kernel the default boot entry if its image is really in `/boot`
+    (and copies it there if the pacman hook missed it)
+  - falls back to the stable kernel if your kernel fails to install, and to zsh if
+    your shell fails, and tells you on the last page
+  - test-runs `grub-mkconfig` before the bootloader step, and undoes the kernel
+    default if that is what breaks it
+  - writes GRUB output to `/var/log/auxo-install.log`
+- `auxo-tweak kernel`: installs headers separately, so a headers problem no longer
+  stops the kernel switch; never points GRUB at a missing kernel.
+- `auxo-tweak shell`: completions/plugins are optional, so bash works offline.
+- Live ISO: the normal boot entries no longer copy the whole system into RAM first
+  (that looked like a black screen for minutes on some laptops). The separate
+  *copy to RAM* entry still does, and now shows its progress.
+- Live ISO: "Loading Auxo Linux..." shows while the kernel loads; removed a stray
+  `%KERNEL_PARAMS%` from the boot entries.
+- Installer: the slideshow no longer has a light frame around it.
+
 ## 3.0.3
 - Fixed: black screen after install when a desktop other than KDE Plasma was chosen
   (on VMs and real hardware). Removing the live Plasma packages also removed the

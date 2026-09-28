@@ -105,7 +105,7 @@ printf '# grml stub\n' > "$ROOT/home/alex/.zshrc"
 check "zsh: Auxo zshrc replaces skel stub"   "grep -q auxo/shell/prompt.zsh $ROOT/home/alex/.zshrc && grep -q 'grml stub' $ROOT/home/alex/.zshrc.auxo-bak"
 check "fish config seeded"                   "grep -q prompt.fish $ROOT/home/alex/.config/fish/config.fish"
 out=$("$T" kernel linux-zen --no-grub 2>&1)
-check "kernel: zen + headers"                "echo \"\$out\" | grep -q -- '-S linux-zen linux-zen-headers'"
+check "kernel: zen + headers"                "echo \"\$out\" | grep -q -- '-S linux-zen\$' && echo \"\$out\" | grep -q -- '-S linux-zen-headers'"
 check "kernel: GRUB_TOP_LEVEL"               "grep -q 'GRUB_TOP_LEVEL=\"/boot/vmlinuz-linux-zen\"' $ROOT/etc/default/grub"
 out=$("$T" snapshots on --no-now --no-grub --description test 2>&1)
 check "snapper config for /"                 "grep -q 'SUBVOLUME=\"/\"' $ROOT/etc/snapper/configs/root"

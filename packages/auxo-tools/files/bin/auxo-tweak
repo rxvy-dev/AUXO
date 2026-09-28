@@ -28,7 +28,7 @@ import sys
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 
 from auxo_accents import ACCENTS, ansi  # noqa: E402
-from auxo_core import (R, DRY, AuxoError, log, warn, run, have, pacman, installed, online, require_root,  # noqa: E402
+from auxo_core import (R, DRY, AuxoError, del_kv, log, warn, run, have, pacman, installed, online, require_root,  # noqa: E402
                        read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
                        invoking_user, systemctl_enable, systemctl_disable, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS  # noqa: E402
@@ -109,14 +109,49 @@ def cmd_kernel(args):
     if k not in KERNELS:
         raise AuxoError(f"unknown kernel {k}; choose {', '.join(KERNELS)}")
     log(f"installing {k}")
-    pacman("-S", k, f"{k}-headers")
+    pacman("-S", k)
+    # headers are only needed for DKMS modules; a headers download problem must not
+    # leave the kernel half-configured
+    try:
+        pacman("-S", f"{k}-headers")
+    except AuxoError as e:
+        warn(f"{k}-headers could not be installed ({e}); DKMS modules may not build for {k}")
     if nvidia_status() == "open":
-        ensure_nvidia(installed_kernels() if not DRY else ["linux", k])
-    set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", f"/boot/vmlinuz-{k}")
+        try:
+            ensure_nvidia(installed_kernels() if not DRY else ["linux", k])
+        except AuxoError as e:
+            warn(f"NVIDIA driver update for {k} failed: {e}")
+    vmlinuz = f"/boot/vmlinuz-{k}"
+    if not DRY and not os.path.exists(R(vmlinuz)):
+        _copy_kernel_image(k, vmlinuz)
+    if DRY or os.path.exists(R(vmlinuz)):
+        set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", vmlinuz)
+    else:
+        # never point GRUB at a kernel image that isn't there
+        del_kv("/etc/default/grub", "GRUB_TOP_LEVEL")
+        raise AuxoError(f"{vmlinuz} is missing after installing {k}; GRUB left on the current kernel")
+    if not DRY and not args.no_initramfs and not os.path.exists(R(f"/boot/initramfs-{k}.img")):
+        run(["mkinitcpio", "-p", k], check=False)
     write_conf({"KERNEL": k})
     if not args.no_grub:
         auxo_theme.grub_mkconfig()
     log(f"{k} is now the default boot entry (other kernels stay under 'Advanced options').")
+
+
+def _copy_kernel_image(k, dest):
+    """Same as the kernel's pacman hook: /usr/lib/modules/<ver>/vmlinuz → /boot/vmlinuz-<pkgbase>."""
+    base = R("/usr/lib/modules")
+    for ver in sorted(os.listdir(base)) if os.path.isdir(base) else []:
+        d = os.path.join(base, ver)
+        try:
+            pkgbase = open(os.path.join(d, "pkgbase")).read().strip()
+        except OSError:
+            continue
+        if pkgbase == k and os.path.exists(os.path.join(d, "vmlinuz")):
+            shutil.copyfile(os.path.join(d, "vmlinuz"), R(dest))
+            log(f"copied {dest} from /usr/lib/modules/{ver}")
+            return True
+    return False
 
 
 # ── shell ─────────────────────────────────────────────────────────────
@@ -133,7 +168,15 @@ def cmd_shell(args):
     require_root()
     path, pkgs = SHELLS[args.name]
     if not all(installed(p) for p in pkgs) or DRY:
-        pacman("-S", *pkgs)
+        pacman("-S", pkgs[0])          # the shell itself is required…
+        extras = pkgs[1:]
+        if extras:
+            try:                        # …completions/plugins are nice to have (and need internet)
+                pacman("-S", *extras)
+            except AuxoError as e:
+                warn(f"optional {args.name} extras not installed: {e}")
+    if not os.path.exists(R(path)) and not DRY:
+        raise AuxoError(f"{path} is missing; login shell not changed")
     for u in target_users(args):
         run(["chsh", "-s", path, u])
         home = home_of(u)
@@ -674,7 +717,8 @@ def main():
     s.add_argument("--user"); s.add_argument("--no-grub", action="store_true")
     s.add_argument("--no-initramfs", action="store_true"); s.set_defaults(fn=cmd_accent)
     s = sub.add_parser("kernel"); s.add_argument("name", choices=list(KERNELS))
-    s.add_argument("--no-grub", action="store_true"); s.set_defaults(fn=cmd_kernel)
+    s.add_argument("--no-grub", action="store_true"); s.add_argument("--no-initramfs", action="store_true")
+    s.set_defaults(fn=cmd_kernel)
     s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_shell)
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")

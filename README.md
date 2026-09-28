@@ -123,7 +123,7 @@ Desktop/Accent/Kernel/Shell pages need, so Auxo ships its own PKGBUILD.
 
 ```bash
 ./tests/test-tools.sh                     # 69 checks: auxo-tweak / auxo-fetch against a fake root
-python3 tests/test-calamares-modules.py   # 33 checks: installer jobs with a mocked libcalamares
+python3 tests/test-calamares-modules.py   # 41 checks: installer jobs with a mocked libcalamares
 ./scripts/smoke-test.sh out/*.iso         # boots the real ISO headless and takes a screenshot
 ```
 

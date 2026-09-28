@@ -142,11 +142,49 @@ flat = [" ".join(c) for c in calls]
 check("defaults: violet / zsh / plasma", "auxo-tweak accent violet --no-grub --no-initramfs --user alex" in flat
       and "auxo-tweak shell zsh --user alex" in flat and "auxo-tweak desktop plasma --user alex" in flat)
 
+print("▲ auxodesktop (lts + fish both fail → safe fallbacks)")
+r = root_with_files()
+open(r + "/etc/default/grub", "a").write('GRUB_TOP_LEVEL="/boot/vmlinuz-linux-lts"\n')
+gs = GS(rootMountPoint=r, hasInternet=True, username="alex", packagechooser_desktop="plasma",
+        packagechooser_accent="violet", packagechooser_kernel="linux-lts", packagechooser_shell="fish")
+calls, warns = mock(gs, rc=lambda c: 1 if c[:2] in (["auxo-tweak", "kernel"], ["auxo-tweak", "shell"]) and "zsh" not in c else 0)
+check("returns success", load("auxodesktop").run() is None)
+flat = [" ".join(c) for c in calls]
+check("shell falls back to zsh", "auxo-tweak shell zsh --user alex" in flat)
+check("GRUB_TOP_LEVEL removed after failed kernel", "GRUB_TOP_LEVEL" not in open(r + "/etc/default/grub").read())
+check("notes explain both", any("linux-lts failed" in n for n in gs["auxoNotes"]) and any("fish could not" in n for n in gs["auxoNotes"]))
+check("grub-mkconfig tested before bootloader", any("grub-mkconfig -o /tmp/auxo-grub-test.cfg" in f for f in flat))
+
+print("▲ auxodesktop (GRUB_TOP_LEVEL points at a missing file)")
+r = root_with_files()
+os.makedirs(r + "/boot")
+open(r + "/etc/default/grub", "a").write('GRUB_TOP_LEVEL="/boot/vmlinuz-linux-hardened"\n')
+gs = GS(rootMountPoint=r, hasInternet=True, username="alex", packagechooser_kernel="linux-hardened")
+calls, warns = mock(gs)
+load("auxodesktop").run()
+check("dangling GRUB_TOP_LEVEL removed", "GRUB_TOP_LEVEL" not in open(r + "/etc/default/grub").read())
+check("user told why", any("vmlinuz-linux-hardened was missing" in n for n in gs.get("auxoNotes", [])))
+
+print("▲ auxodesktop (grub-mkconfig fails only with GRUB_TOP_LEVEL)")
+r = root_with_files()
+os.makedirs(r + "/boot"); open(r + "/boot/vmlinuz-linux-zen", "w").write("k")
+open(r + "/etc/default/grub", "a").write('GRUB_TOP_LEVEL="/boot/vmlinuz-linux-zen"\n')
+gs = GS(rootMountPoint=r, hasInternet=True, username="alex", packagechooser_kernel="linux-zen")
+state = {"n": 0}
+def rc_mk(c):
+    if "grub-mkconfig -o /tmp" in " ".join(c):
+        return 1 if "GRUB_TOP_LEVEL" in open(r + "/etc/default/grub").read() else 0
+    return 0
+calls, warns = mock(gs, rc=rc_mk)
+load("auxodesktop").run()
+check("retried without GRUB_TOP_LEVEL", "GRUB_TOP_LEVEL" not in open(r + "/etc/default/grub").read()
+      and sum("grub-mkconfig -o /tmp" in " ".join(c) for c in calls) == 2)
+
 print("▲ auxosnap")
 calls, _ = mock(GS(partitions=[{"mountPoint": "/", "fs": "btrfs"}, {"mountPoint": "/boot/efi", "fs": "fat32"}]))
 load("auxosnap").run()
 check("btrfs → splash check, snapshots on + grub-mkconfig", calls and calls[0] == ["auxo-tweak", "splash", "on"] and calls[1][:3] == ["auxo-tweak", "snapshots", "on"]
-      and ["grub-mkconfig", "-o", "/boot/grub/grub.cfg"] in calls)
+      and any("grub-mkconfig -o /boot/grub/grub.cfg" in " ".join(c) for c in calls))
 calls, _ = mock(GS(partitions=[{"mountPoint": "/", "fs": "ext4"}]))
 load("auxosnap").run()
 check("ext4 → no snapshots (splash check + disk flush only)", calls == [["auxo-tweak", "splash", "on"], ["sync"]])
