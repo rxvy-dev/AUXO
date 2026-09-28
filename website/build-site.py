@@ -346,6 +346,10 @@ TABRULES
 .code{font:12.5px/1.7 var(--fm);background:#0a0a0e;border:1px solid var(--line);border-radius:6px;padding:12px 14px;margin-top:10px;overflow-x:auto;color:#d4d4dc;white-space:pre}
 .code .tm{user-select:none}
 .note{margin-top:22px;padding:14px 16px;border-radius:8px;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);background:color-mix(in srgb,var(--a) 7%,transparent);font-size:14.5px;display:grid;grid-template-columns:20px 1fr;gap:10px}
+.alertbar{background:#15130b;border-bottom:1px solid #3a3118}
+.alertbar .wrap{display:grid;grid-template-columns:22px 1fr;gap:12px;padding-top:14px;padding-bottom:14px;font-size:14.5px;line-height:1.6;color:#d6d3c4}
+.alertbar svg{width:20px;height:20px;margin-top:2px;fill:none;stroke:#fbbf24;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.alertbar b{color:#fde68a}.alertbar code{color:#fde68a}
 .note svg{width:20px;height:20px;fill:none;stroke:var(--a);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .two>*{min-width:0}
@@ -758,6 +762,15 @@ def checks(items):
 def shot(src, alt, title="Auxo 3.0"):
     return f'<div class="shot rv"><div class="bar mute"><i></i><i></i><i></i><b>{title}</b></div><img src="{src}" alt="{alt}" loading="lazy"></div>'
 
+NOTICE_DATE = "Wednesday, October 7, 2026"
+ALERT_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>'
+def alertbar():
+    return (f'<div class="alertbar" role="note"><div class="wrap">{ALERT_ICO}<span>'
+            f'<b>Before you install:</b> pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell in the installer. '
+            f'Some users have hit errors with the other options. '
+            f'<b>Known issue:</b> GNOME may fail to start after install, so pick KDE Plasma, Hyprland, Sway or i3 for now. '
+            f'A fix is expected around {NOTICE_DATE}.</span></div></div>')
+
 REC_LONG = "<b>Recommended:</b> in the installer, pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell. They're the best-tested combination, and some users have hit errors with the other options."
 # ================= HOME =================
 swatches = "".join(
@@ -873,7 +886,7 @@ HERO_SHOT = (f'<figure class="heroshot" aria-label="The Auxo Linux KDE Plasma 6 
 home = head("Auxo Linux — Arch, set up the way you want it",
             "Auxo Linux is an Arch-based rolling distro. Pick your desktop, kernel, shell and accent colour in a graphical installer, and change any of them later with one command.",
             "https://auxolinux.com/") + nav("home") + f"""
-<main id="main">
+<main id="main">{alertbar()}
 <section class="khero v7">{RIDGE.replace('class="ridge"','class="hridge"')}<div class="wrap hgrid">
   <div>
     <a class="badge rise" href="{DL}#releases"><b>.</b>Auxo Linux 3.0 is now available →</a>
@@ -1049,7 +1062,7 @@ vm_tabs = f"""{radios('vm', TABSETS['vm'])}
 dl = head("Get Auxo Linux — Download",
           "Download Auxo Linux 3.0: the installer image for your PC, or the VM image for VirtualBox, QEMU/KVM and VMware.",
           "https://auxolinux.com/download/") + nav("dl") + f"""
-<main id="main">
+<main id="main">{alertbar()}
 <div class="phead"><div class="wrap pgrid">
   <div>
     <p class="eyebrow rise">Auxo Linux 3.0</p>

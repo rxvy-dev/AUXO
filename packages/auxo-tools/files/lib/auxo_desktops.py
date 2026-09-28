@@ -19,10 +19,14 @@ DESKTOPS = {
     },
     "gnome": {
         "name": "GNOME",
-        "packages": ["gnome", "gnome-tweaks", "gnome-console", "xdg-desktop-portal-gnome", "greetd", "greetd-tuigreet"],
-        "dm": "greetd",
+        # GNOME 49+ is Wayland-only and needs a login session that is registered as
+        # Wayland from the start. Launched from greetd the session is a plain tty one,
+        # so GNOME Shell can't take the screen ("Oh no! Something has gone wrong").
+        # GDM (part of the gnome group) sets it up correctly.
+        "packages": ["gnome", "gdm", "gnome-tweaks", "gnome-console", "xdg-desktop-portal-gnome"],
+        "dm": "gdm",
         "session": "gnome",
-        "cmd": "env XDG_SESSION_TYPE=wayland gnome-session",
+        "cmd": "gnome-session",
     },
     "xfce": {
         "name": "Xfce",

@@ -249,9 +249,13 @@ def set_display_manager(dm):
         run(["systemctl", "set-default", "multi-user.target"], check=False)
 
 
-def set_default_session(user, session):
-    """tuigreet: pre-fill the username; the desktop itself comes from --cmd in greetd's config."""
+def set_default_session(user, session, dm="greetd"):
+    """greetd/tuigreet: pre-fill the username (the desktop comes from --cmd in greetd's config).
+    GDM: remember the session in AccountsService so GDM starts it without asking."""
     if not user:
+        return
+    if dm == "gdm":
+        write_file(f"/var/lib/AccountsService/users/{user}", f"[User]\nSession={session}\nSystemAccount=false\n", mode=0o600)
         return
     write_file("/var/cache/tuigreet/lastuser", user + "\n")
     run(["chown", "-R", "greeter:greeter", "/var/cache/tuigreet"], check=False)
@@ -285,8 +289,8 @@ def cmd_desktop(args):
     set_display_manager(d["dm"])
     if d["dm"] == "greetd":
         auxo_theme.apply_login(auxo_theme.current())
-        if users:
-            set_default_session(users[0], d["session"])
+    if users and d["dm"] in ("greetd", "gdm"):
+        set_default_session(users[0], d["session"], d["dm"])
     log(f"desktop → {d['name']}. Reboot or log out to use it.")
 
 

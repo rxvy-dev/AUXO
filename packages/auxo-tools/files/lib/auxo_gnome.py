@@ -63,6 +63,12 @@ def fetch_ego(uuid, version):
             shutil.rmtree(dst)
         os.makedirs(dst)
         zipfile.ZipFile(io.BytesIO(data)).extractall(dst)
+        # only keep a build that says it supports this GNOME version; an extension
+        # built for another version could break the shell
+        meta = json.load(open(f"{dst}/metadata.json"))
+        if str(version) not in [str(v).split(".")[0] for v in meta.get("shell-version", [])]:
+            shutil.rmtree(dst)
+            raise ValueError(f"build supports GNOME {meta.get('shell-version')}, not {version}")
         for base, dirs, files in os.walk(dst):
             for d in dirs:
                 os.chmod(os.path.join(base, d), 0o755)

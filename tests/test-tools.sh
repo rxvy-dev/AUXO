@@ -105,6 +105,8 @@ check "dock + blur fetched for GNOME 50"     "echo \"\$out\" | grep -q 'fetch da
 check "dconf profile + defaults written"     "grep -q 'system-db:local' $ROOT/etc/dconf/profile/user && grep -q \"enabled-extensions=\\['appindicatorsupport\" \"\$D\""
 check "dock dots use the accent"             "grep -q \"custom-theme-running-dots-color='#\" \"\$D\""
 check "dconf update ran"                     "echo \"\$out\" | grep -q 'dconf update'"
+check "GNOME uses GDM, not greetd"           "echo \"\$out\" | grep -q 'systemctl enable -f gdm' && echo \"\$out\" | grep -q 'systemctl disable greetd'"
+check "GDM remembers the GNOME session"      "grep -q 'Session=gnome' $ROOT/var/lib/AccountsService/users/alex"
 "$T" accent rose --no-grub --no-initramfs --user alex >/dev/null 2>&1
 check "accent change updates GNOME defaults" "grep -q \"accent-color='pink'\" \"\$D\" && grep -q 'auxo-rose.png' \"\$D\""
 out=$("$T" rice gnome 2>&1)
