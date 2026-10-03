@@ -97,26 +97,40 @@ echo "▲ desktop none"
 out=$("$T" desktop none --user alex 2>&1)
 check "none → multi-user target"             "echo \"\$out\" | grep -q 'set-default multi-user.target'"
 
-echo "▲ GNOME extensions + defaults"
+echo "▲ GNOME (stock) + old rice cleanup"
+mkdir -p "$ROOT/etc/dconf/db/local.d" "$ROOT/etc/dconf/profile" "$ROOT/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com"
+printf '[org/gnome/shell]\n' > "$ROOT/etc/dconf/db/local.d/00-auxo"
+printf 'user-db:user\nsystem-db:local\n' > "$ROOT/etc/dconf/profile/user"
 out=$("$T" desktop gnome --user alex 2>&1)
-D="$ROOT/etc/dconf/db/local.d/00-auxo"
-check "repo extensions installed"            "echo \"\$out\" | grep -q -- 'gnome-shell-extension-appindicator' && echo \"\$out\" | grep -q -- 'gnome-shell-extension-caffeine'"
-check "dock + blur fetched for GNOME 50"     "echo \"\$out\" | grep -q 'fetch dash-to-dock@micxgx.gmail.com for GNOME 50' && echo \"\$out\" | grep -q 'fetch blur-my-shell@aunetx'"
-check "dconf profile + defaults written"     "grep -q 'system-db:local' $ROOT/etc/dconf/profile/user && grep -q \"enabled-extensions=\\['appindicatorsupport\" \"\$D\""
-check "dock dots use the accent"             "grep -q \"custom-theme-running-dots-color='#\" \"\$D\""
-check "dconf update ran"                     "echo \"\$out\" | grep -q 'dconf update'"
+check "no extensions or downloads any more"  "! echo \"\$out\" | grep -q 'gnome-shell-extension\\|fetch '"
+check "old dconf defaults removed"           "[ ! -e $ROOT/etc/dconf/db/local.d/00-auxo ] && [ ! -e $ROOT/etc/dconf/profile/user ]"
+check "old downloaded extension removed"     "[ ! -e '$ROOT/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com' ]"
 check "GNOME uses GDM, not greetd"           "echo \"\$out\" | grep -q 'systemctl enable -f gdm' && echo \"\$out\" | grep -q 'systemctl disable greetd'"
 check "GDM remembers the GNOME session"      "grep -q 'Session=gnome' $ROOT/var/lib/AccountsService/users/alex"
-"$T" accent rose --no-grub --no-initramfs --user alex >/dev/null 2>&1
-check "accent change updates GNOME defaults" "grep -q \"accent-color='pink'\" \"\$D\" && grep -q 'auxo-rose.png' \"\$D\""
-out=$("$T" rice gnome 2>&1)
-check "rice gnome re-applies"                "echo \"\$out\" | grep -q 'GNOME: dock'"
 "$T" desktop none --user alex >/dev/null 2>&1   # back to the state the later checks expect
+
+echo "▲ KDE global theme"
+mkdir -p "$ROOT/usr/share/plasma/look-and-feel"; cp -r "$PKG/share/plasma/look-and-feel/." "$ROOT/usr/share/plasma/look-and-feel/"
+L="$PKG/share/plasma/look-and-feel/org.auxolinux.desktop"
+check "theme package complete"               "python3 -m json.tool $L/metadata.json >/dev/null && [ -s $L/contents/defaults ] && [ -s $L/contents/layouts/org.kde.plasma.desktop-layout.js ] && [ -s $L/contents/previews/preview.png ]"
+"$T" accent rose --no-grub --no-initramfs --user alex >/dev/null 2>&1
+K="$ROOT/home/alex/.config/kdeglobals"
+check "user kdeglobals → Auxo theme"         "grep -q 'LookAndFeelPackage=org.auxolinux.desktop' $K && grep -q 'ColorScheme=AuxoDark' $K"
+check "accent baked into selection colour"   "grep -A2 '^\\[Colors:Selection\\]' $K | grep -q 'BackgroundNormal=251,113,133' || grep -q 'AccentColor=251,113,133' $K"
+check "colours written for first login"      "grep -q '^\\[Colors:Window\\]' $K && grep -q '^\\[Colors:Header\\]\\[Inactive\\]' $K"
+check "system default for new users"         "grep -q 'LookAndFeelPackage=org.auxolinux.desktop' $ROOT/etc/xdg/kdeglobals"
+check "Auxo Dark colour scheme installed"    "grep -q 'Name=Auxo Dark' $ROOT/usr/share/color-schemes/AuxoDark.colors"
+printf '[Containments]\n' > "$ROOT/home/alex/.config/plasma-org.kde.plasma.desktop-appletsrc"
+printf '[General]\nfoo=bar\n' >> "$K"
+out=$("$T" rice kde --user alex 2>&1)
+check "rice kde resets the panel layout"     "[ -e $ROOT/home/alex/.config/plasma-org.kde.plasma.desktop-appletsrc.auxo-bak ] && [ ! -e $ROOT/home/alex/.config/plasma-org.kde.plasma.desktop-appletsrc ]"
+check "rice kde keeps other kdeglobals keys" "grep -q 'foo=bar' $K"
 
 echo "▲ live wallpaper change per desktop"
 FB="$ROOT/fakebin"; mkdir -p "$FB"
 for b in hyprctl hyprpaper swaymsg feh i3-msg gsettings plasma-apply-wallpaperimage plasma-apply-colorscheme xfconf-query makoctl; do printf '#!/bin/sh\n' > "$FB/$b"; chmod +x "$FB/$b"; done
 sa() { XDG_CURRENT_DESKTOP="$1" PATH="$FB:$PATH" "$T" session-apply --accent emerald 2>&1; }
+check "KDE: Auxo colour scheme + accent"     "sa KDE | grep -q 'plasma-apply-colorscheme --accent-color .#34d399. AuxoDark'"
 check "KDE: plasma wallpaper"                "sa KDE | grep -q 'plasma-apply-wallpaperimage /usr/share/wallpapers/auxo-emerald.png'"
 check "GNOME: gsettings picture-uri"         "sa GNOME | grep -q 'org.gnome.desktop.background picture-uri file:///usr/share/wallpapers/auxo-emerald.png'"
 check "Cinnamon: picture-uri"                "sa X-Cinnamon | grep -q 'org.cinnamon.desktop.background picture-uri'"

@@ -6,12 +6,15 @@
   (GDM); the text login started it in a plain terminal session it can't use.
   GNOME installs now use GDM, remember your session, and skip GNOME's first-login
   wizard (the installer already asked those questions).
-- New: GNOME comes customised. Installing GNOME (in the installer or with
-  `auxo-tweak desktop gnome`) adds Dash to Dock, Blur my Shell, AppIndicator (tray
-  icons) and Caffeine, plus dark mode, your accent on the dock, minimise/maximise
-  buttons, Super+Enter for a terminal, Super+T for auxo-tweak and Super+Q to close.
-  These are defaults, so your own changes always win. `auxo-tweak rice gnome`
-  re-applies them.
+- New: **Auxo global theme for KDE Plasma.** A dark "Auxo Dark" colour scheme with
+  your accent built in, Breeze Dark icons, the Auxo wallpaper and a floating,
+  centred dock-style panel with the Auxo logo as the app menu. It's on by default for
+  new Plasma installs (and the live session), follows `auxo-tweak accent`, and shows
+  up in System Settings → Global Theme as "Auxo". `auxo-tweak rice kde` puts the
+  Auxo theme and panel back (your old panel config is kept as `*.auxo-bak`).
+- GNOME is now stock GNOME. The GNOME extensions and defaults from the 3.0.4 betas
+  (Dash to Dock, Blur my Shell) stopped the normal GNOME session from starting, so
+  they're gone, and installing GNOME removes them from systems that had them.
 - `auxo-tweak accent` now changes the wallpaper straight away on every desktop:
   KDE Plasma, GNOME, Cinnamon, Xfce, Hyprland (hyprpaper is restarted), Sway and
   i3. Before, it only changed after logging out, or not at all under sudo.

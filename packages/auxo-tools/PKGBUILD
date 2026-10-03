@@ -22,6 +22,8 @@ package() {
   install -m644 "$src"/lib/*.py "$pkgdir/usr/lib/auxo/"
   cp -r "$src"/share/auxo/. "$pkgdir/usr/share/auxo/"
   install -m644 "$src"/share/wallpapers/* "$pkgdir/usr/share/wallpapers/"
+  install -d "$pkgdir/usr/share/plasma/look-and-feel"
+  cp -r "$src"/share/plasma/look-and-feel/. "$pkgdir/usr/share/plasma/look-and-feel/"
   install -m644 "$src"/share/pixmaps/* "$pkgdir/usr/share/pixmaps/"
   install -m644 "$src"/applications/*.desktop "$pkgdir/usr/share/applications/"
   install -m644 "$src"/hooks/*.hook "$pkgdir/usr/share/libalpm/hooks/"

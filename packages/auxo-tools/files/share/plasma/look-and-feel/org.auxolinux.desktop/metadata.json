@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Auxo Linux",
+                "Email": ""
+            }
+        ],
+        "Category": "",
+        "Description": "Auxo's dark theme: near-black panels in your accent colour, a floating dock-style panel and the Auxo wallpaper. Change the accent with auxo-tweak accent.",
+        "Id": "org.auxolinux.desktop",
+        "License": "GPL-3.0-or-later",
+        "Name": "Auxo",
+        "Version": "1.0",
+        "Website": "https://auxolinux.com"
+    },
+    "X-Plasma-APIVersion": "2"
+}

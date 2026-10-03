@@ -214,11 +214,8 @@ def apply_system(accent, mkconfig=True):
     apply_login(accent)
     write_file("/etc/motd", motd(accent))
     splash_changed = apply_splash(accent)
-    try:
-        import auxo_gnome
-        auxo_gnome.refresh_accent(accent)
-    except Exception as e:  # never let GNOME defaults block an accent change
-        log(f"GNOME defaults not updated: {e}")
+    import auxo_kde
+    auxo_kde.apply_system(accent)
     log(f"system accent → {accent} ({ACCENTS[accent][0]})")
     return splash_changed
 
@@ -271,12 +268,9 @@ def apply_user(user, accent):
     if os.path.isdir(R(f"{home}/.config/dunst")):
         os.makedirs(R(f"{home}/.config/dunst/dunstrc.d"), exist_ok=True)
         shutil.copyfile(R(f"{cfg}/dunst.conf"), R(f"{home}/.config/dunst/dunstrc.d/50-auxo.conf"))
-    # KDE: accent + dark scheme are picked up at next login
-    r, g, b = hex_to_rgb(ACCENTS[accent][0])
-    kg = R(f"{home}/.config/kdeglobals")
-    _ini_set(kg, "General", "AccentColor", f"{r},{g},{b}")
-    _ini_set(kg, "General", "ColorScheme", "BreezeDark")
-    _ini_set(kg, "KDE", "LookAndFeelPackage", "org.kde.breezedark.desktop")
+    # KDE: Auxo global theme + colours with this accent (right from the first login)
+    import auxo_kde
+    auxo_kde.merge_kdeglobals(f"{home}/.config/kdeglobals", accent)
     # one-shot autostart that pushes wallpaper/accent into whatever desktop starts next
     write_file(f"{home}/.config/autostart/auxo-session-apply.desktop",
                "[Desktop Entry]\nType=Application\nName=Auxo accent\nExec=auxo-tweak session-apply --once\n"
@@ -378,7 +372,8 @@ def session_apply(accent=None, once=False):
     de = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
     if "kde" in de:
         if have("plasma-apply-colorscheme"):
-            run(["plasma-apply-colorscheme", "--accent-color", a, "BreezeDark"], check=False)
+            scheme = "AuxoDark" if os.path.exists("/usr/share/color-schemes/AuxoDark.colors") or DRY else "BreezeDark"
+            run(["plasma-apply-colorscheme", "--accent-color", a, scheme], check=False)
         if have("plasma-apply-wallpaperimage"):
             run(["plasma-apply-wallpaperimage", wall], check=False)
     elif "gnome" in de and have("gsettings"):

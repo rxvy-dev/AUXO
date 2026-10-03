@@ -1201,7 +1201,7 @@ TWEAK = [
  ("auxo-tweak info", "Show your current Auxo settings."),
  ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the boot splash, login screen, prompt, terminals and bars. With no name, lists the colours."),
  ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
- ("auxo-tweak rice NAME", "Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>), or the Auxo GNOME setup with <code>gnome</code>."),
+ ("auxo-tweak rice NAME", "Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
  ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code>, <code>linux-zen</code> or <code>linux-hardened</code>."),
  ("auxo-tweak shell NAME", "Change your shell to <code>zsh</code>, <code>fish</code> or <code>bash</code>."),
  ("auxo-tweak snapshots on|off|status", "Bootable btrfs snapshots with snapper, snap-pac and grub-btrfs."),
