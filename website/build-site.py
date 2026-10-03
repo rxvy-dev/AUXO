@@ -15,10 +15,21 @@ OUT = "preview" if PREVIEW else "site"
 HOME = "index.html" if PREVIEW else "/"
 DL = "download.html" if PREVIEW else "/download/"
 DOCS = "docs.html" if PREVIEW else "/docs/"
-DESKP = "desktops.html" if PREVIEW else "/desktops/"
-RELP = "releases.html" if PREVIEW else "/releases/"
-COMP = "community.html" if PREVIEW else "/community/"
-PRESSP = "press.html" if PREVIEW else "/press/"
+# The extra pages (Desktops, Releases, Community, Press kit) are built but not live on
+# auxolinux.com, so links point at sections of pages that do exist. Set True once
+# /desktops/, /releases/, /community/ and /press/ have been added to WordPress.
+EXTRA_PAGES = False
+if EXTRA_PAGES:
+    DESKP = "desktops.html" if PREVIEW else "/desktops/"
+    RELP = "releases.html" if PREVIEW else "/releases/"
+    COMP = "community.html" if PREVIEW else "/community/"
+    PRESSP = "press.html" if PREVIEW else "/press/"
+else:
+    DESKP = HOME + "#desktops"
+    RELP = DL + "#releases"
+    COMP = "https://discord.gg/XbQ66dH5a7"
+    PRESSP = None
+CHANGELOG_URL = "https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md"
 
 def iso(ident, name):
     return {"url": f"https://archive.org/download/{ident}/{name}",
@@ -745,9 +756,9 @@ def footer():
 <div class="fgrid">
   <div><a class="brand" href="{HOME}">{mark()}auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
   <div><h4>Get Auxo</h4><ul><li><a href="{DL}#installer">Installer image</a></li><li><a href="{DL}#vm">Virtual machines</a></li><li><a href="{DL}#usb">Make a USB stick</a></li><li><a href="{DL}#verify">Verify a download</a></li></ul></div>
-  <div><h4>Explore</h4><ul><li><a href="{DESKP}">Desktops</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{RELP}">Releases</a></li><li><a href="{PRESSP}">Press kit</a></li></ul></div>
+  <div><h4>Explore</h4><ul><li><a href="{DESKP}">Desktops</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{RELP}">Releases</a></li><li><a href="{CHANGELOG_URL}">Changelog</a></li>{f'<li><a href="{PRESSP}">Press kit</a></li>' if PRESSP else ''}</ul></div>
   <div><h4>Docs</h4><ul><li><a href="{DOCS}#tweak">auxo-tweak</a></li><li><a href="{DOCS}#snapshots">Snapshots</a></li><li><a href="{DOCS}#gaming">Gaming</a></li><li><a href="{DOCS}#trouble">Troubleshooting</a></li></ul></div>
-  <div><h4>Community</h4><ul><li><a href="{COMP}">Get involved</a></li><li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
+  <div><h4>Community</h4><ul>{f'<li><a href="{COMP}">Get involved</a></li>' if EXTRA_PAGES else ''}<li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
 <div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
 </div></footer>
