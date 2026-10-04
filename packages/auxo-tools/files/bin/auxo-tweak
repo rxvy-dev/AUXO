@@ -3,24 +3,32 @@
 
 Run with no arguments for the interactive menu, or use a sub-command:
 
-  auxo-tweak accent [NAME]          system + user accent colour (GRUB, login screen, MOTD, terminals, bars)
-  auxo-tweak kernel NAME            linux | linux-lts | linux-zen | linux-hardened
-  auxo-tweak shell NAME             zsh | fish | bash
-  auxo-tweak desktop NAME           plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
-  auxo-tweak rice NAME              (re)apply the Auxo dotfiles for hyprland | sway | i3 | kde (Auxo global theme)
+  auxo-tweak accent [NAME]            system + user accent colour (GRUB, login screen, MOTD, terminals, bars)
+  auxo-tweak desktop NAME             plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
+  auxo-tweak rice NAME                re-apply the Auxo setup for hyprland | sway | i3 | kde
+  auxo-tweak kernel NAME              linux | linux-lts | linux-mainline (becomes the default boot entry)
+  auxo-tweak shell NAME               zsh | fish | bash
+  auxo-tweak drivers [--prune]        detect the GPU and install the right driver
+  auxo-tweak nvidia status|on|off|prime   NVIDIA driver: pick the right branch, back to nouveau, laptop offload
+  auxo-tweak scheduler list|status|off|SCHED [--mode M]   sched-ext CPU schedulers (lavd, bpfland, ...)
+  auxo-tweak power balanced|performance|power-saver       power profile
+  auxo-tweak firewall on|off|status   ufw: block incoming, allow outgoing
+  auxo-tweak dns cloudflare|quad9|google|auto             DNS servers for every connection
   auxo-tweak snapshots on|off|status  btrfs time-travel: snapper + bootable snapshots in GRUB
-  auxo-tweak drivers                detect GPU and install the right driver (NVIDIA / AMD / Intel)
-  auxo-tweak mirrors                rank the fastest mirrors with reflector
-  auxo-tweak zram on|off            compressed RAM swap
-  auxo-tweak multilib on            enable 32-bit repo (Steam, Wine)
-  auxo-tweak splash on|off|status   animated Auxo boot splash (Plymouth) in your accent colour
-  auxo-tweak gaming on|off|status   Steam, GameMode, MangoHud, gamescope + low-latency tweaks
-  auxo-tweak aur                    install the paru AUR helper
-  auxo-tweak service NAME on|off    bluetooth | cups | sshd | ufw | power-profiles
-  auxo-tweak info                   show current Auxo settings
+  auxo-tweak gaming on|off|status     Steam, GameMode, MangoHud, gamescope + low-latency tweaks
+  auxo-tweak flatpak on|status        Flatpak + Flathub
+  auxo-tweak cleanup                  clear the package cache, orphans and old kernels
+  auxo-tweak mirrors [--url URL]      pick a faster Void mirror
+  auxo-tweak zram on|off              compressed RAM swap
+  auxo-tweak repo nonfree|multilib    enable Void's extra repositories
+  auxo-tweak splash on|off|status     animated Auxo boot splash (Plymouth) in your accent colour
+  auxo-tweak service NAME on|off      bluetooth | cups | sshd | power-profiles
+  auxo-tweak info                     show current Auxo settings
 """
 import argparse
+import glob
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -28,10 +36,11 @@ import sys
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 
 from auxo_accents import ACCENTS, ansi  # noqa: E402
-from auxo_core import (R, DRY, AuxoError, del_kv, log, warn, run, have, pacman, installed, online, require_root,  # noqa: E402
-                       read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
-                       invoking_user, systemctl_enable, systemctl_disable, SHARE, RESET, BOLD, DIM)
-from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS  # noqa: E402
+from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, installed, online,  # noqa: E402
+                       require_root, read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
+                       invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
+                       sv_enable, sv_disable, sv_enabled, SHARE, RESET, BOLD, DIM)
+from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
 import auxo_theme  # noqa: E402
 import auxo_gnome  # noqa: E402
 
@@ -41,6 +50,13 @@ def target_users(args):
         return [args.user]
     u = invoking_user()
     return [u] if u else normal_users()
+
+
+def _rm(path):
+    if os.path.lexists(R(path)):
+        os.remove(R(path))
+        return True
+    return False
 
 
 # ── accent ────────────────────────────────────────────────────────────
@@ -55,7 +71,7 @@ def cmd_accent(args):
     splash_changed = auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
     if splash_changed and read_conf().get("SPLASH") == "on" and not args.no_initramfs:
         log("boot splash colour changed → rebuilding initramfs")
-        run(["mkinitcpio", "-P"], check=False)
+        regen_initramfs()
     users = target_users(args)
     for u in users:
         auxo_theme.apply_user(u, args.name)
@@ -68,97 +84,109 @@ def cmd_accent(args):
                 run(["auxo-tweak", "session-apply", "--accent", args.name], check=False, user=u, env=env)
 
 
-# ── kernel ────────────────────────────────────────────────────────────
+# ── hardware detection ────────────────────────────────────────────────
 def gpu_info():
     """Return list of (vendor, device_id, description)."""
-    out = run(["lspci", "-nn"], capture=True, check=False) if have("lspci") else ""
+    if DRY and os.environ.get("AUXO_TEST_GPU"):
+        # "10de:2684 NVIDIA RTX 4090" — lets the test-suite pretend to have a GPU
+        v, rest = os.environ["AUXO_TEST_GPU"].split(":", 1)
+        d, desc = (rest.split(" ", 1) + [""])[:2]
+        return [(v, d, desc)]
+    out = run(["lspci", "-nn"], capture=True, check=False) if have("lspci") and not DRY else ""
     gpus = []
     for line in (out or "").splitlines():
         if any(k in line for k in ("VGA compatible", "3D controller", "Display controller")):
-            import re
             m = re.search(r"\[([0-9a-f]{4}):([0-9a-f]{4})\]", line)
             if m:
                 gpus.append((m.group(1), m.group(2), line.split(": ", 1)[-1]))
     return gpus
 
 
-def nvidia_status():
-    """None (no NVIDIA), 'open' (Turing+ → nvidia-open) or 'legacy' (Pascal and older)."""
+def nvidia_branch():
+    """Which Void NVIDIA package fits this GPU: 'nvidia' (Turing and newer, open kernel
+    modules), 'nvidia580' (Maxwell, Pascal, Volta), 'nvidia470' (Kepler), 'nouveau'
+    (older), or None when there's no NVIDIA GPU."""
     for vendor, dev, _ in gpu_info():
         if vendor == "10de":
-            return "open" if int(dev, 16) >= 0x1e00 else "legacy"
+            d = int(dev, 16)
+            if d >= 0x1e00:
+                return "nvidia"
+            if d >= 0x1340:
+                return "nvidia580"
+            if d >= 0x0fc0:
+                return "nvidia470"
+            return "nouveau"
     return None
+
+
+def detect_virt():
+    """'oracle', 'kvm', 'vmware', 'microsoft' or '' (Void has no systemd-detect-virt)."""
+    if DRY:
+        return os.environ.get("AUXO_TEST_VIRT", "")
+    txt = ""
+    for f in ("/sys/class/dmi/id/sys_vendor", "/sys/class/dmi/id/product_name"):
+        try:
+            txt += open(f).read().lower()
+        except OSError:
+            pass
+    for key, name in (("virtualbox", "oracle"), ("innotek", "oracle"), ("qemu", "kvm"),
+                      ("kvm", "kvm"), ("vmware", "vmware"), ("microsoft", "microsoft")):
+        if key in txt:
+            return name
+    return ""
+
+
+# ── kernel ────────────────────────────────────────────────────────────
+TEST_SERIES = {"linux": "linux6.18", "linux-lts": "linux6.12", "linux-mainline": "linux6.19"}
+
+
+def kernel_series(meta):
+    """'linux-lts' → 'linux6.12': the versioned package a Void kernel meta package pulls in."""
+    if DRY:
+        return TEST_SERIES.get(meta)
+    out = run(["xbps-query", "-x", meta], capture=True, check=False) or ""
+    for word in out.split():
+        m = re.match(r"(linux\d+\.\d+)", word)
+        if m:
+            return m.group(1)
+    return None
+
+
+def kernel_version(series):
+    """'linux6.12' → '6.12.111_1' (the name its /boot/vmlinuz-* file uses)."""
+    if DRY:
+        return series.replace("linux", "") + ".0_1"
+    pkgver = (run(["xbps-query", "-p", "pkgver", series], capture=True, check=False) or "").strip()
+    return pkgver.split("-", 1)[1] if "-" in pkgver else ""
 
 
 def installed_kernels():
     return [k for k in KERNELS if installed(k)]
 
 
-def ensure_nvidia(kernels=None):
-    kernels = kernels or installed_kernels() or ["linux"]
-    if kernels == ["linux"]:
-        if installed("nvidia-open-dkms"):
-            pacman("-Rdd", "nvidia-open-dkms", needed=False)
-        pacman("-S", "nvidia-open", "nvidia-utils", "nvidia-settings", "lib32-nvidia-utils" if multilib_enabled() else "nvidia-utils")
-    else:
-        if installed("nvidia-open"):
-            pacman("-Rdd", "nvidia-open", needed=False)
-        pacman("-S", "nvidia-open-dkms", "nvidia-utils", "nvidia-settings", *[f"{k}-headers" for k in kernels])
-    write_file("/etc/modprobe.d/auxo-nvidia.conf",
-               "# written by auxo-tweak\noptions nvidia_drm modeset=1 fbdev=1\noptions nvidia NVreg_PreserveVideoMemoryAllocations=1\n")
-    for unit in ("nvidia-suspend.service", "nvidia-hibernate.service", "nvidia-resume.service"):
-        systemctl_enable(unit)
-
-
 def cmd_kernel(args):
     require_root()
     k = args.name
-    if k not in KERNELS:
-        raise AuxoError(f"unknown kernel {k}; choose {', '.join(KERNELS)}")
     log(f"installing {k}")
-    pacman("-S", k)
-    # headers are only needed for DKMS modules; a headers download problem must not
-    # leave the kernel half-configured
-    try:
-        pacman("-S", f"{k}-headers")
+    xbps_install(k)
+    try:  # headers are only needed for DKMS modules (NVIDIA); don't fail the switch over them
+        xbps_install(f"{k}-headers")
     except AuxoError as e:
         warn(f"{k}-headers could not be installed ({e}); DKMS modules may not build for {k}")
-    if nvidia_status() == "open":
-        try:
-            ensure_nvidia(installed_kernels() if not DRY else ["linux", k])
-        except AuxoError as e:
-            warn(f"NVIDIA driver update for {k} failed: {e}")
-    vmlinuz = f"/boot/vmlinuz-{k}"
-    if not DRY and not os.path.exists(R(vmlinuz)):
-        _copy_kernel_image(k, vmlinuz)
-    if DRY or os.path.exists(R(vmlinuz)):
-        set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", vmlinuz)
-    else:
-        # never point GRUB at a kernel image that isn't there
+    series = kernel_series(k)
+    ver = kernel_version(series) if series else ""
+    vmlinuz = f"/boot/vmlinuz-{ver}"
+    if not ver or not (DRY or os.path.exists(R(vmlinuz))):
         del_kv("/etc/default/grub", "GRUB_TOP_LEVEL")
-        raise AuxoError(f"{vmlinuz} is missing after installing {k}; GRUB left on the current kernel")
-    if not DRY and not args.no_initramfs and not os.path.exists(R(f"/boot/initramfs-{k}.img")):
-        run(["mkinitcpio", "-p", k], check=False)
+        raise AuxoError(f"couldn't find the kernel image for {k}; GRUB left on the current kernel")
+    if not DRY and not args.no_initramfs and not os.path.exists(R(f"/boot/initramfs-{ver}.img")):
+        run(["xbps-reconfigure", "-f", series], check=False)  # runs dracut + the GRUB hook
+    # the 49-auxo-default-kernel hook keeps this pointing at the newest build after updates
+    set_kv("/etc/default/grub", "GRUB_TOP_LEVEL", vmlinuz)
     write_conf({"KERNEL": k})
     if not args.no_grub:
         auxo_theme.grub_mkconfig()
-    log(f"{k} is now the default boot entry (other kernels stay under 'Advanced options').")
-
-
-def _copy_kernel_image(k, dest):
-    """Same as the kernel's pacman hook: /usr/lib/modules/<ver>/vmlinuz → /boot/vmlinuz-<pkgbase>."""
-    base = R("/usr/lib/modules")
-    for ver in sorted(os.listdir(base)) if os.path.isdir(base) else []:
-        d = os.path.join(base, ver)
-        try:
-            pkgbase = open(os.path.join(d, "pkgbase")).read().strip()
-        except OSError:
-            continue
-        if pkgbase == k and os.path.exists(os.path.join(d, "vmlinuz")):
-            shutil.copyfile(os.path.join(d, "vmlinuz"), R(dest))
-            log(f"copied {dest} from /usr/lib/modules/{ver}")
-            return True
-    return False
+    log(f"{k} ({ver}) is now the default boot entry; other kernels stay under 'Advanced options'.")
 
 
 # ── shell ─────────────────────────────────────────────────────────────
@@ -174,21 +202,17 @@ alias update auxo-update
 def cmd_shell(args):
     require_root()
     path, pkgs = SHELLS[args.name]
-    if not all(installed(p) for p in pkgs) or DRY:
-        pacman("-S", pkgs[0])          # the shell itself is required…
-        extras = pkgs[1:]
-        if extras:
-            try:                        # …completions/plugins are nice to have (and need internet)
-                pacman("-S", *extras)
-            except AuxoError as e:
-                warn(f"optional {args.name} extras not installed: {e}")
+    xbps_install(pkgs[0])          # the shell itself is required…
+    try:                           # …completions/plugins are nice to have
+        xbps_install(*pkgs[1:])
+    except AuxoError as e:
+        warn(f"optional {args.name} extras not installed: {e}")
     if not os.path.exists(R(path)) and not DRY:
         raise AuxoError(f"{path} is missing; login shell not changed")
     for u in target_users(args):
         run(["chsh", "-s", path, u])
         home = home_of(u)
         if args.name == "zsh":
-            # /etc/skel/.zshrc belongs to grml-zsh-config, so the Auxo zshrc is written per user.
             rc = R(f"{home}/.zshrc")
             current = open(rc).read() if os.path.exists(rc) else ""
             if args.force or "auxo/shell/prompt.zsh" not in current:
@@ -216,9 +240,9 @@ def apply_rice(name, user):
     home = home_of(user)
     dst = R(f"{home}/.config")
     if name == "hyprland":
-        # Hyprland 0.56+ reads hyprland.lua first; park an old Auxo hyprland.conf so it can't confuse anyone
-        old = R(f"{home}/.config/hypr/hyprland.conf")
-        if os.path.exists(old) and "Auxo Hyprland rice" in open(old, errors="ignore").read():
+        # Void's Hyprland reads hyprland.conf; park a Lua config from the Arch-based Auxo
+        old = R(f"{home}/.config/hypr/hyprland.lua")
+        if os.path.exists(old):
             os.replace(old, old + ".auxo-bak")
     for base, _dirs, files in os.walk(src):
         rel = os.path.relpath(base, src)
@@ -228,8 +252,7 @@ def apply_rice(name, user):
             if os.path.exists(target) and not os.path.exists(target + ".auxo-bak"):
                 shutil.copy2(target, target + ".auxo-bak")
             shutil.copy2(os.path.join(base, f), target)
-    # scripts inside the rice must stay executable
-    for base, _dirs, files in os.walk(dst):
+    for base, _dirs, files in os.walk(dst):  # scripts inside the rice must stay executable
         for f in files:
             if f.endswith(".sh"):
                 os.chmod(os.path.join(base, f), 0o755)
@@ -238,19 +261,19 @@ def apply_rice(name, user):
     log(f"{user}: Auxo {name} rice applied (old files kept as *.auxo-bak)")
 
 
+DISPLAY_MANAGERS = ("sddm", "gdm", "lightdm", "greetd", "lxdm")
+
+
 def set_display_manager(dm):
-    for other in ("sddm", "gdm", "lightdm", "ly", "greetd"):
-        if other != dm:
-            systemctl_disable(other)
+    for other in DISPLAY_MANAGERS:
+        if other != dm and sv_enabled(other):
+            sv_disable(other)
     if dm:
-        run(["systemctl", "enable", "-f", dm], check=False)
-        run(["systemctl", "set-default", "graphical.target"], check=False)
-    else:
-        run(["systemctl", "set-default", "multi-user.target"], check=False)
+        sv_enable(dm)
 
 
 def set_default_session(user, session, dm="greetd"):
-    """greetd/tuigreet: pre-fill the username (the desktop comes from --cmd in greetd's config).
+    """greetd/tuigreet: pre-fill the username (the desktop comes from greetd's config).
     GDM: remember the session in AccountsService so GDM starts it without asking."""
     if not user:
         return
@@ -258,35 +281,52 @@ def set_default_session(user, session, dm="greetd"):
         write_file(f"/var/lib/AccountsService/users/{user}", f"[User]\nSession={session}\nSystemAccount=false\n", mode=0o600)
         return
     write_file("/var/cache/tuigreet/lastuser", user + "\n")
-    run(["chown", "-R", "greeter:greeter", "/var/cache/tuigreet"], check=False)
+    run(["chown", "-R", "_greeter:_greeter", "/var/cache/tuigreet"], check=False)
+
+
+def add_repo(name, url):
+    """Add a third-party xbps repository (its signing key is accepted on first sync)."""
+    path = f"/etc/xbps.d/20-{name}.conf"
+    if not os.path.exists(R(path)):
+        write_file(path, f"# added by auxo-tweak\nrepository={url}\n")
+        run(["xbps-install", "-Sy"], check=False)
 
 
 def cmd_desktop(args):
     require_root()
-    d = DESKTOPS.get(args.name)
-    if not d:
-        raise AuxoError(f"unknown desktop {args.name}; choose {', '.join(DESKTOPS)}")
+    d = DESKTOPS[args.name]
     if d["packages"]:
         if not online() and not all(installed(p) for p in d["packages"]):
             raise AuxoError("no internet connection — connect first (nmtui) and try again")
+        if d.get("repo"):
+            log(f"{d['name']}: adding its community repository")
+            add_repo(args.name, d["repo"])
         log(f"installing {d['name']}")
-        pacman("-S", *d["packages"])
+        xbps_install(*d["packages"])
+        for sv in GUI_SERVICES:
+            sv_enable(sv)
+        for sv in ("dhcpcd", "wpa_supplicant"):  # NetworkManager manages the network now
+            if sv_enabled(sv):
+                sv_disable(sv)
     users = target_users(args)
     if d.get("rice"):
         for u in users:
             apply_rice(d["rice"], u)
+    if args.name == "plasma":
+        import auxo_kde
+        auxo_kde.apply_system(auxo_theme.current())
     if args.name == "gnome":
-        auxo_gnome.cleanup()   # stock GNOME: undo the old rice if a beta installed it
-        for u in users:  # the installer already asked language/keyboard/user: skip GNOME's first-login wizard
+        auxo_gnome.cleanup()
+        for u in users:  # the installer already asked these questions: skip GNOME's first-login wizard
             write_file(f"{home_of(u)}/.config/gnome-initial-setup-done", "yes", owner=u)
     if args.replace and args.name != "plasma":
         keep = set(d["packages"])
         remove = [p for p in LIVE_PLASMA if p not in keep and (installed(p) or DRY)]
         if remove:
             log("removing the live Plasma desktop")
-            if run(["pacman", "--noconfirm", "-Rns", *remove], check=False) != 0:
-                for p in remove:  # something is still needed — remove what we can, one by one
-                    run(["pacman", "--noconfirm", "-Rns", p], check=False)
+            if xbps_remove(*remove) != 0:
+                for p in remove:  # something still needs one of them: remove what we can
+                    xbps_remove(p)
     write_conf({"DESKTOP": args.name})
     set_display_manager(d["dm"])
     if d["dm"] == "greetd":
@@ -305,7 +345,6 @@ def cmd_rice(args):
         for u in target_users(args):
             env = None if args.user else auxo_theme.session_env(u)
             if env and "KDE" in env.get("XDG_CURRENT_DESKTOP", ""):
-                # logged in to Plasma right now: let Plasma swap the theme + layout live
                 auxo_kde.apply_user(u, accent)
                 run(["plasma-apply-lookandfeel", "--apply", auxo_kde.LAF, "--resetLayout"], check=False, user=u, env=env)
             else:
@@ -339,8 +378,6 @@ TIMELINE_LIMIT_DAILY="5"
 TIMELINE_LIMIT_WEEKLY="2"
 TIMELINE_LIMIT_MONTHLY="1"
 TIMELINE_LIMIT_YEARLY="0"
-EMPTY_PRE_POST_CLEANUP="yes"
-EMPTY_PRE_POST_MIN_AGE="1800"
 """
 
 
@@ -355,19 +392,21 @@ def cmd_snapshots(args):
         cfg = os.path.exists(R("/etc/snapper/configs/root"))
         print(f"root filesystem : {root_fstype()}")
         print(f"snapper         : {'configured' if cfg else 'off'}")
+        print(f"bootable menu   : {'on' if sv_enabled('grub-btrfs') else 'off'}")
         if cfg and have("snapper") and not DRY:
             run(["snapper", "-c", "root", "list", "--columns", "number,date,description"], check=False)
         return
     require_root()
     if args.state == "off":
-        for u in ("snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd.service"):
-            systemctl_disable(u, now=True)
+        for sv in ("grub-btrfs", "snapperd"):
+            sv_disable(sv, now=True)
+        set_kv("/etc/conf.d/snapper", "SNAPPER_CONFIGS", "")
         write_conf({"SNAPSHOTS": "off"})
         log("automatic snapshots disabled (existing ones are kept)")
         return
     if root_fstype() != "btrfs":
         raise AuxoError("snapshots need a btrfs root filesystem (choose btrfs in the installer)")
-    pacman("-S", "snapper", "snap-pac", "grub-btrfs", "inotify-tools")
+    xbps_install("snapper", "grub-btrfs", "inotify-tools", "cronie")
     write_file("/etc/snapper/configs/root", SNAPPER_CFG, mode=0o640)
     set_kv("/etc/conf.d/snapper", "SNAPPER_CONFIGS", "root")
     os.makedirs(R("/.snapshots"), exist_ok=True)
@@ -377,36 +416,46 @@ def cmd_snapshots(args):
         if subprocess.run(["mountpoint", "-q", "/.snapshots"]).returncode != 0 and not os.listdir("/.snapshots"):
             os.rmdir("/.snapshots")
             run(["btrfs", "subvolume", "create", "/.snapshots"], check=False)
-    for u in ("snapper-timeline.timer", "snapper-cleanup.timer", "grub-btrfsd.service"):
-        systemctl_enable(u, now=not args.no_now)
+    # snapper's hourly timeline + cleanup run from cron; grub-btrfs watches for new snapshots
+    for sv in ("cronie", "grub-btrfs"):
+        sv_enable(sv, now=not args.no_now)
     run(["snapper", "--no-dbus", "-c", "root", "create", "-d", args.description or "auxo-tweak: snapshots enabled"], check=False)
     write_conf({"SNAPSHOTS": "on"})
     if not args.no_grub:
         auxo_theme.grub_mkconfig()
-    log("snapshots on: every pacman transaction is snapshotted, and snapshots are bootable from GRUB → 'Auxo snapshots'")
+    log("snapshots on: auxo-update snapshots before every update, hourly snapshots are kept for a day, "
+        "and all of them are bootable from GRUB → 'Auxo snapshots'")
 
 
-# ── drivers / mirrors / misc ──────────────────────────────────────────
-def multilib_enabled():
-    try:
-        return any(l.strip() == "[multilib]" for l in open(R("/etc/pacman.conf")))
-    except FileNotFoundError:
-        return False
-
-
-def cmd_multilib(args):
+# ── repos / drivers ───────────────────────────────────────────────────
+def cmd_repo(args):
     require_root()
-    p = R("/etc/pacman.conf")
-    txt = open(p).read()
-    if multilib_enabled():
-        log("multilib already enabled")
-        return
-    txt = txt.replace("#[multilib]\n#Include = /etc/pacman.d/mirrorlist", "[multilib]\nInclude = /etc/pacman.d/mirrorlist")
-    if "[multilib]" not in txt.replace("#[multilib]", ""):
-        txt += "\n[multilib]\nInclude = /etc/pacman.d/mirrorlist\n"
-    open(p, "w").write(txt)
-    pacman("-Sy", needed=False)
-    log("multilib enabled")
+    names = {"nonfree": ["nonfree"], "multilib": ["multilib", "multilib-nonfree"]}[args.name]
+    repo_enable(*names)
+    log(f"Void {args.name} repository enabled")
+
+
+def nvidia_on(branch=None):
+    """Install the right proprietary NVIDIA driver (from Void's nonfree repo)."""
+    branch = branch or nvidia_branch()
+    if branch in (None, "nouveau"):
+        raise AuxoError("no NVIDIA GPU the proprietary driver supports; nouveau is used")
+    repo_enable("nonfree")
+    kernels = installed_kernels() or ["linux"]
+    # DKMS builds the module for every kernel that has its headers installed
+    xbps_install(branch, *[f"{k}-headers" for k in kernels])
+    for other in ("nvidia", "nvidia580", "nvidia470"):
+        if other != branch and installed(other):
+            xbps_remove(other)
+    write_file("/etc/modprobe.d/auxo-nvidia.conf",
+               "# written by auxo-tweak\noptions nvidia_drm modeset=1 fbdev=1\n")
+    if installed("void-repo-multilib"):
+        repo_enable("multilib-nonfree")
+        try:
+            xbps_install(f"{branch}-libs-32bit")
+        except AuxoError:
+            warn("32-bit NVIDIA libraries not installed (needed by Steam/Wine)")
+    write_conf({"NVIDIA": branch})
 
 
 def cmd_drivers(args):
@@ -414,131 +463,286 @@ def cmd_drivers(args):
     gpus = gpu_info()
     if not gpus:
         warn("no GPU found via lspci")
-    for vendor, dev, desc in gpus:
+    for _v, _d, desc in gpus:
         print(f"  {DIM}found{RESET} {desc}")
     vendors = {v for v, _, _ in gpus}
-    ucode = "intel-ucode" if "GenuineIntel" in open("/proc/cpuinfo").read() else "amd-ucode"
-    pacman("-S", ucode, "mesa", "vulkan-icd-loader")
+    intel_cpu = DRY or "GenuineIntel" in open("/proc/cpuinfo").read()
+    xbps_install("mesa-dri", "vulkan-loader")
+    if intel_cpu:
+        repo_enable("nonfree")  # Intel CPU microcode lives in nonfree (AMD's ships with linux-firmware)
+        xbps_install("intel-ucode")
     if "1002" in vendors:
-        pacman("-S", "vulkan-radeon", "libva-utils")
+        xbps_install("mesa-vulkan-radeon", "mesa-vaapi", "libva-utils")
     if "8086" in vendors:
-        pacman("-S", "vulkan-intel", "intel-media-driver")
-    st = nvidia_status()
-    if st == "open":
-        log("NVIDIA Turing or newer → nvidia-open")
-        ensure_nvidia()
-    elif st == "legacy":
-        warn("NVIDIA GPU older than Turing: nvidia-open does not support it. Staying on nouveau.\n"
-             "   For the proprietary legacy driver install nvidia-580xx-dkms from the AUR (paru -S nvidia-580xx-dkms).")
+        xbps_install("mesa-vulkan-intel", "intel-video-accel")
+    branch = nvidia_branch()
+    if branch and branch != "nouveau":
+        log(f"NVIDIA GPU → {branch}")
+        nvidia_on(branch)
+    elif branch == "nouveau":
+        warn("this NVIDIA GPU is too old for the proprietary drivers; using nouveau (open source)")
     if args.prune:
-        # the live medium ships every driver; drop the ones this machine can't use
-        nv = [p for p in ("nvidia-open", "nvidia-settings", "nvidia-utils") if installed(p)]
-        if st != "open" and nv:
+        nv = [p for p in ("nvidia", "nvidia580", "nvidia470") if installed(p)]
+        if branch in (None, "nouveau") and nv:
             log("no supported NVIDIA GPU → removing NVIDIA packages")
-            run(["pacman", "--noconfirm", "-Rns", *nv], check=False)
-        if "1002" not in vendors and installed("vulkan-radeon"):
-            run(["pacman", "--noconfirm", "-Rns", "vulkan-radeon"], check=False)
+            xbps_remove(*nv)
+        if "1002" not in vendors:
+            xbps_remove(*[p for p in ("mesa-vulkan-radeon",) if installed(p)])
         if "8086" not in vendors:
-            gone = [p for p in ("vulkan-intel", "intel-media-driver") if installed(p)]
-            if gone:
-                run(["pacman", "--noconfirm", "-Rns", *gone], check=False)
-        other = "amd-ucode" if ucode == "intel-ucode" else "intel-ucode"
-        if installed(other):
-            run(["pacman", "--noconfirm", "-Rns", other], check=False)
+            xbps_remove(*[p for p in ("mesa-vulkan-intel", "intel-video-accel") if installed(p)])
         # VM guest tools: keep only the ones for the hypervisor we're running on
-        virt = (run(["systemd-detect-virt", "--vm"], check=False, capture=True) or "").strip()
-        if virt:
-            keep = {"oracle": {"virtualbox-guest-utils"},
-                    "kvm": {"qemu-guest-agent", "spice-vdagent"},
-                    "qemu": {"qemu-guest-agent", "spice-vdagent"},
-                    "vmware": {"open-vm-tools"}}.get(virt, set())
-            tools = ("virtualbox-guest-utils", "qemu-guest-agent", "spice-vdagent", "open-vm-tools")
-            drop = [p for p in tools if p not in keep and installed(p)]
-            if drop:
-                log(f"virtualization: {virt} → removing unused guest tools: {' '.join(drop)}")
-                run(["pacman", "--noconfirm", "-Rns", *drop], check=False)
-    if st == "open" and not args.no_initramfs:
-        run(["mkinitcpio", "-P"], check=False)
+        virt = detect_virt()
+        tools = {"oracle": [("virtualbox-ose-guest", "vboxservice")],
+                 "kvm": [("qemu-ga", "qemu-ga"), ("spice-vdagent", "spice-vdagentd")],
+                 "vmware": [("open-vm-tools", "vmtoolsd")]}
+        for v, pairs in tools.items():
+            for pkg, sv in pairs:
+                if v == virt:
+                    if installed(pkg) or DRY:
+                        sv_enable(sv)
+                elif installed(pkg):
+                    sv_disable(sv)
+                    xbps_remove(pkg)
+    if branch not in (None, "nouveau") and not args.no_initramfs:
+        regen_initramfs()
     write_conf({"GPU": ",".join(sorted(vendors)) or "none"})
     log("drivers done")
 
 
+PRIME_RUN = """#!/bin/sh
+# prime-run — run a program on the NVIDIA GPU of a hybrid laptop (written by auxo-tweak)
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __NV_PRIME_RENDER_OFFLOAD_PROVIDER=NVIDIA-G0
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+exec "$@"
+"""
+
+
+def cmd_nvidia(args):
+    branch = nvidia_branch()
+    if args.state == "status":
+        gpus = [g for g in gpu_info() if g[0] == "10de"]
+        print(f"  GPU         {gpus[0][2] if gpus else 'no NVIDIA GPU'}")
+        print(f"  fits        {branch or '-'}")
+        have_pkg = [p for p in ('nvidia', 'nvidia580', 'nvidia470') if installed(p)]
+        print(f"  installed   {', '.join(have_pkg) or 'none (nouveau)'}")
+        print(f"  modeset     {'on' if os.path.exists(R('/etc/modprobe.d/auxo-nvidia.conf')) else 'off'}")
+        print(f"  prime-run   {'yes' if os.path.exists(R('/usr/local/bin/prime-run')) else 'no'}")
+        return
+    require_root()
+    if args.state == "on":
+        nvidia_on(branch)
+        regen_initramfs()
+        log(f"NVIDIA {branch} installed — reboot to use it")
+    elif args.state == "off":
+        xbps_remove(*[p for p in ("nvidia", "nvidia580", "nvidia470") if installed(p)])
+        _rm("/etc/modprobe.d/auxo-nvidia.conf")
+        write_conf({"NVIDIA": "nouveau"})
+        regen_initramfs()
+        log("back to nouveau (open source) — reboot to use it")
+    elif args.state == "prime":
+        write_file("/usr/local/bin/prime-run", PRIME_RUN, mode=0o755)
+        log("prime-run installed: run 'prime-run <program>' to use the NVIDIA GPU "
+            "(Steam: prime-run %command%)")
+
+
+# ── performance ───────────────────────────────────────────────────────
+SCHEDULERS = {
+    "lavd": "latency-aware, made for gaming",
+    "bpfland": "keeps the desktop responsive under load",
+    "flash": "low latency, fair",
+    "cosmos": "lightweight general-purpose",
+    "rusty": "multi-domain, good for many-core CPUs",
+}
+SCX_MODES = {"auto": "Auto", "gaming": "Gaming", "lowlatency": "LowLatency", "powersave": "PowerSave", "server": "Server"}
+SCX_CONF = "/etc/scx_loader.toml"
+
+
+def cmd_scheduler(args):
+    name = args.name
+    if name == "list":
+        for s, d in SCHEDULERS.items():
+            print(f"  {s:<9} {d}")
+        print(f"  {DIM}modes: {', '.join(SCX_MODES)}{RESET}")
+        return
+    if name == "status":
+        cur = get_kv(SCX_CONF, "default_sched", "-") if os.path.exists(R(SCX_CONF)) else "-"
+        print(f"  scheduler   {cur if sv_enabled('scx-loader') else 'kernel default (EEVDF)'}")
+        print(f"  kernel      {'sched_ext supported' if os.path.isdir('/sys/kernel/sched_ext') or DRY else 'no sched_ext support'}")
+        return
+    require_root()
+    if name == "off":
+        sv_disable("scx-loader", now=True)
+        write_conf({"SCHEDULER": "default"})
+        log("back to the kernel's default scheduler")
+        return
+    if name not in SCHEDULERS:
+        raise AuxoError(f"unknown scheduler {name}; choose {', '.join(SCHEDULERS)}")
+    if not (DRY or os.path.isdir("/sys/kernel/sched_ext")):
+        warn("this kernel has no sched_ext support; the scheduler starts once you boot a kernel that does")
+    xbps_install("scx", "scx-loader")
+    mode = SCX_MODES[args.mode]
+    write_file(SCX_CONF, f'# written by auxo-tweak scheduler\ndefault_sched = "scx_{name}"\ndefault_mode = "{mode}"\n')
+    sv_enable("dbus")
+    sv_enable("scx-loader", now=True)
+    if not DRY and have("scxctl"):
+        run(["scxctl", "switch", "-s", name, "-m", args.mode], check=False)
+    write_conf({"SCHEDULER": f"{name}/{args.mode}"})
+    log(f"CPU scheduler → scx_{name} ({mode}), also after reboot")
+
+
+def cmd_power(args):
+    require_root()
+    xbps_install("power-profiles-daemon")
+    sv_enable("dbus")
+    sv_enable("power-profiles-daemon", now=True)
+    if not DRY:
+        run(["powerprofilesctl", "set", args.profile], check=False)
+    write_conf({"POWER": args.profile})
+    log(f"power profile → {args.profile}")
+
+
+# ── network ───────────────────────────────────────────────────────────
+def cmd_firewall(args):
+    if args.state == "status":
+        print(f"  firewall    {'on' if sv_enabled('ufw') else 'off'}")
+        if have("ufw") and not DRY and os.geteuid() == 0:
+            run(["ufw", "status", "verbose"], check=False)
+        return
+    require_root()
+    if args.state == "on":
+        xbps_install("ufw")
+        run(["ufw", "default", "deny", "incoming"], check=False)
+        run(["ufw", "default", "allow", "outgoing"], check=False)
+        sv_enable("ufw", now=True)
+        run(["ufw", "--force", "enable"], check=False)
+        log("firewall on: incoming connections blocked, outgoing allowed (open a port: sudo ufw allow 22/tcp)")
+    else:
+        run(["ufw", "--force", "disable"], check=False)
+        sv_disable("ufw", now=True)
+        log("firewall off")
+    write_conf({"FIREWALL": args.state})
+
+
+DNS = {
+    "cloudflare": ["1.1.1.1", "1.0.0.1", "2606:4700:4700::1111"],
+    "quad9": ["9.9.9.9", "149.112.112.112", "2620:fe::fe"],
+    "google": ["8.8.8.8", "8.8.4.4", "2001:4860:4860::8888"],
+}
+NM_DNS = "/etc/NetworkManager/conf.d/50-auxo-dns.conf"
+
+
+def cmd_dns(args):
+    require_root()
+    if args.provider == "auto":
+        _rm(NM_DNS)
+        log("DNS → automatic (from your network)")
+    else:
+        servers = DNS[args.provider]
+        write_file(NM_DNS, "# written by auxo-tweak dns\n[global-dns-domain-*]\nservers=" + ",".join(servers) + "\n")
+        log(f"DNS → {args.provider} ({', '.join(servers)}) for every connection")
+    if not DRY and have("nmcli"):
+        run(["nmcli", "general", "reload"], check=False)
+    write_conf({"DNS": args.provider})
+
+
+# ── housekeeping ──────────────────────────────────────────────────────
+def _du(path):
+    if DRY or not os.path.isdir(path):
+        return 0
+    out = run(["du", "-sb", path], capture=True, check=False) or "0"
+    return int(out.split()[0] or 0)
+
+
+def cmd_cleanup(args):
+    require_root()
+    before = _du("/var/cache/xbps")
+    log("removing cached packages and orphaned dependencies")
+    run(["xbps-remove", "-Ooy"], check=False)
+    log("removing old kernels (the running one is always kept)")
+    run(["vkpurge", "rm", "all"], check=False)
+    if args.user_cache:
+        for u in target_users(args):
+            thumbs = R(f"{home_of(u)}/.cache/thumbnails")
+            if os.path.isdir(thumbs):
+                shutil.rmtree(thumbs, ignore_errors=True)
+                log(f"{u}: thumbnail cache cleared")
+    if have("flatpak") and not DRY:
+        run(["flatpak", "uninstall", "--unused", "-y"], check=False)
+    freed = max(0, before - _du("/var/cache/xbps"))
+    log(f"cleanup done{f' — freed {freed / 1e6:.0f} MB of package cache' if freed else ''}")
+
+
+def cmd_flatpak(args):
+    if args.state == "status":
+        print(f"  flatpak     {'installed' if installed('flatpak') else 'not installed'}")
+        if have("flatpak") and not DRY:
+            run(["flatpak", "remotes"], check=False)
+        return
+    require_root()
+    xbps_install("flatpak")
+    run(["flatpak", "remote-add", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"], check=False)
+    write_conf({"FLATPAK": "on"})
+    log("Flatpak + Flathub ready (log out and back in so apps show up in your menu)")
+
+
 def cmd_mirrors(args):
     require_root()
-    pacman("-S", "reflector")
-    country = ["--country", args.country] if args.country else []
-    run(["reflector", "--protocol", "https", "--latest", "30", "--sort", "rate", "--age", "24",
-         *country, "--save", "/etc/pacman.d/mirrorlist"])
-    log("mirrorlist updated")
+    xbps_install("xmirror")
+    if args.url:
+        run(["xmirror", "-s", args.url])
+    elif args.default:
+        run(["xmirror", "-d"])
+    else:
+        run(["xmirror"])  # interactive list of Void mirrors
+    log("mirror updated")
 
 
 def cmd_zram(args):
     require_root()
     if args.state == "on":
-        pacman("-S", "zram-generator")
-        write_file("/etc/systemd/zram-generator.conf",
-                   "[zram0]\nzram-size = min(ram / 2, 8192)\ncompression-algorithm = zstd\nswap-priority = 100\n")
+        xbps_install("zramen")
+        write_file("/etc/sv/zramen/conf",
+                   "# written by auxo-tweak zram\nexport ZRAM_COMP_ALGORITHM=zstd\nexport ZRAM_SIZE=50\n"
+                   "export ZRAM_MAX_SIZE=8192\nexport ZRAM_PRIORITY=100\n")
         write_file("/etc/sysctl.d/99-auxo-zram.conf",
                    "vm.swappiness = 180\nvm.watermark_boost_factor = 0\nvm.watermark_scale_factor = 125\nvm.page-cluster = 0\n")
+        sv_enable("zramen", now=True)
     else:
-        for p in ("/etc/systemd/zram-generator.conf", "/etc/sysctl.d/99-auxo-zram.conf"):
-            if os.path.exists(R(p)):
-                os.remove(R(p))
+        sv_disable("zramen", now=True)
+        _rm("/etc/sysctl.d/99-auxo-zram.conf")
     write_conf({"ZRAM": args.state})
-    log(f"zram {args.state} (takes effect after reboot)")
+    log(f"zram {args.state}")
 
 
 SERVICES = {
-    "bluetooth": (["bluez", "bluez-utils"], ["bluetooth.service"]),
-    "cups": (["cups", "cups-pdf", "system-config-printer"], ["cups.socket"]),
-    "sshd": (["openssh"], ["sshd.service"]),
-    "ufw": (["ufw"], ["ufw.service"]),
-    "power-profiles": (["power-profiles-daemon"], ["power-profiles-daemon.service"]),
-    "flatpak": (["flatpak"], []),
+    "bluetooth": (["bluez"], ["bluetoothd"]),
+    "cups": (["cups", "cups-filters", "system-config-printer"], ["cupsd"]),
+    "sshd": (["openssh"], ["sshd"]),
+    "power-profiles": (["power-profiles-daemon"], ["power-profiles-daemon"]),
 }
 
 
 def cmd_service(args):
     require_root()
-    pkgs, units = SERVICES[args.name]
+    pkgs, svs = SERVICES[args.name]
     if args.state == "on":
-        pacman("-S", *pkgs)
-        for u in units:
-            systemctl_enable(u, now=True)
-        if args.name == "ufw":
-            run(["ufw", "default", "deny", "incoming"], check=False)
-            run(["ufw", "--force", "enable"], check=False)
+        xbps_install(*pkgs)
+        for sv in svs:
+            sv_enable(sv, now=True)
     else:
-        for u in units:
-            systemctl_disable(u, now=True)
+        for sv in svs:
+            sv_disable(sv, now=True)
     log(f"{args.name} {args.state}")
-
-
-def cmd_aur(args):
-    """Install the paru AUR helper (built as your user, never as root)."""
-    require_root()
-    users = target_users(args)
-    if not users:
-        raise AuxoError("run this with sudo from your normal user, or pass --user")
-    if installed("paru") or installed("paru-bin"):
-        log("paru is already installed")
-        return
-    pacman("-S", "base-devel", "git")
-    u = users[0]
-    d = "/tmp/auxo-paru-build"
-    run(["rm", "-rf", d])
-    run(["install", "-d", "-o", u, d])
-    run(["git", "clone", "--depth", "1", "https://aur.archlinux.org/paru-bin.git", f"{d}/paru-bin"], user=u)
-    run(["bash", "-c", f"cd {d}/paru-bin && makepkg --noconfirm"], user=u)
-    run(["bash", "-c", f"pacman --noconfirm -U {d}/paru-bin/*.pkg.tar.zst"])
-    log("paru installed — try: paru -S <aur-package>")
 
 
 def cmd_info(args):
     c = read_conf()
     acc = auxo_theme.current()
     print(f"{BOLD}Auxo settings{RESET}")
-    for k in ("ACCENT", "DESKTOP", "KERNEL", "SNAPSHOTS", "ZRAM", "GPU"):
+    for k in ("ACCENT", "DESKTOP", "KERNEL", "NVIDIA", "SCHEDULER", "POWER", "FIREWALL", "DNS",
+              "SNAPSHOTS", "ZRAM", "GPU"):
         v = c.get(k, "-")
         if k == "ACCENT":
             v = f"{ansi(ACCENTS[acc][0])}{acc}{RESET}"
@@ -549,32 +753,14 @@ def cmd_session_apply(args):
     auxo_theme.session_apply(args.accent, once=args.once)
 
 
-# ── boot splash (Plymouth) ────────────────────────────────────────────
-MKINITCPIO = "/etc/mkinitcpio.conf"
-
-
-def _hooks_line():
-    import re
-    try:
-        txt = open(R(MKINITCPIO)).read()
-    except FileNotFoundError:
-        return None, None
-    m = re.search(r"^HOOKS=\((.*?)\)", txt, re.M)
-    return txt, (m.group(1).split() if m else None)
-
-
-def _set_hooks(hooks):
-    import re
-    txt, _ = _hooks_line()
-    txt = re.sub(r"^HOOKS=\(.*?\)", "HOOKS=(" + " ".join(hooks) + ")", txt, count=1, flags=re.M)
-    write_file(MKINITCPIO, txt)
+# ── boot splash (Plymouth, built into the initramfs by dracut) ─────────
+DRACUT_SPLASH = "/etc/dracut.conf.d/auxo-splash.conf"
 
 
 def _cmdline(add=(), remove=()):
     """Edit GRUB_CMDLINE_LINUX_DEFAULT; returns True if it changed."""
     if not os.path.exists(R("/etc/default/grub")):
         return False
-    from auxo_core import get_kv
     old = get_kv("/etc/default/grub", "GRUB_CMDLINE_LINUX_DEFAULT", "")
     words = [w for w in old.split() if w not in remove]
     words += [w for w in add if w not in words]
@@ -588,35 +774,27 @@ def _cmdline(add=(), remove=()):
 def cmd_splash(args):
     conf = read_conf()
     if args.state == "status":
-        _, hooks = _hooks_line()
         print(f"  splash      {conf.get('SPLASH', 'off')}")
         print(f"  plymouth    {'installed' if installed('plymouth') else 'not installed'}")
-        print(f"  initramfs   {'plymouth hook present' if hooks and 'plymouth' in hooks else 'no plymouth hook'}")
+        print(f"  initramfs   {'plymouth included' if os.path.exists(R(DRACUT_SPLASH)) else 'no plymouth'}")
         return
     require_root()
     rebuild = regrub = False
     if args.state == "on":
-        pacman("-S", "plymouth")
+        xbps_install("plymouth")
         rebuild |= auxo_theme.apply_splash(auxo_theme.current())
         write_file("/etc/plymouth/plymouthd.conf",
                    "# written by auxo-tweak splash\n[Daemon]\nTheme=auxo\nShowDelay=0\nDeviceTimeout=8\n")
-        _, hooks = _hooks_line()
-        if hooks is not None and "plymouth" not in hooks:
-            # right after udev/systemd, before any encrypt hook, so the passphrase prompt is themed
-            anchor = next((i for i, h in enumerate(hooks) if h in ("systemd", "udev")), 0)
-            hooks.insert(anchor + 1, "plymouth")
-            _set_hooks(hooks)
+        if not os.path.exists(R(DRACUT_SPLASH)):
+            write_file(DRACUT_SPLASH, '# written by auxo-tweak splash\nadd_dracutmodules+=" plymouth "\n')
             rebuild = True
         regrub |= _cmdline(add=("quiet", "splash"))
     else:
-        _, hooks = _hooks_line()
-        if hooks and "plymouth" in hooks:
-            _set_hooks([h for h in hooks if h != "plymouth"])
-            rebuild = True
+        rebuild |= _rm(DRACUT_SPLASH)
         regrub |= _cmdline(remove=("splash",))
     write_conf({"SPLASH": args.state})
     if rebuild and not args.no_initramfs:
-        run(["mkinitcpio", "-P"], check=False)
+        regen_initramfs()
     if regrub and not args.no_grub and have("grub-mkconfig") and os.path.exists(R("/boot/grub")):
         auxo_theme.grub_mkconfig()
     log(f"boot splash {args.state}" + (" (takes effect on next boot)" if args.state == "on" else ""))
@@ -625,7 +803,9 @@ def cmd_splash(args):
 # ── gaming ────────────────────────────────────────────────────────────
 GAMING_SYSCTL = "/etc/sysctl.d/80-auxo-gaming.conf"
 GAMING_MODULES = "/etc/modules-load.d/auxo-gaming.conf"
-GAMING_PKGS = ["gamemode", "lib32-gamemode", "mangohud", "lib32-mangohud", "gamescope"]
+GAMING_PKGS = ["gamemode", "MangoHud", "gamescope"]
+# Steam's 32-bit dependencies, from Void's Steam documentation
+STEAM_PKGS = ["steam", "libgcc-32bit", "libstdc++-32bit", "libdrm-32bit", "libglvnd-32bit", "mesa-dri-32bit"]
 
 
 def cmd_gaming(args):
@@ -638,17 +818,17 @@ def cmd_gaming(args):
         return
     require_root()
     if args.state == "on":
-        if not multilib_enabled():
-            cmd_multilib(argparse.Namespace(state="on"))
-        pkgs = list(GAMING_PKGS) + ([] if args.no_steam else ["steam"])
+        repo_enable("nonfree", "multilib", "multilib-nonfree")
+        pkgs = list(GAMING_PKGS) + ([] if args.no_steam else STEAM_PKGS)
         vendors = {v for v, _, _ in gpu_info()}
         if "1002" in vendors:
-            pkgs += ["vulkan-radeon", "lib32-vulkan-radeon"]
+            pkgs += ["mesa-vulkan-radeon", "mesa-vulkan-radeon-32bit"]
         if "8086" in vendors:
-            pkgs += ["vulkan-intel", "lib32-vulkan-intel"]
-        if "10de" in vendors and nvidia_status() == "open":
-            pkgs += ["lib32-nvidia-utils"]
-        pacman("-S", *pkgs)
+            pkgs += ["mesa-vulkan-intel", "mesa-vulkan-intel-32bit"]
+        branch = nvidia_branch()
+        if branch in ("nvidia", "nvidia580", "nvidia470") and installed(branch):
+            pkgs += [f"{branch}-libs-32bit"]
+        xbps_install(*pkgs)
         write_file(GAMING_SYSCTL,
                    "# written by auxo-tweak gaming — remove with: auxo-tweak gaming off\n"
                    "# more memory maps for games that need them (same value as SteamOS)\n"
@@ -659,29 +839,22 @@ def cmd_gaming(args):
         write_file(GAMING_MODULES, "# written by auxo-tweak gaming\nntsync\n")
         run(["sysctl", "--system"], check=False)
         run(["modprobe", "ntsync"], check=False)
-        for u in target_users(args):
-            run(["usermod", "-aG", "gamemode", u], check=False)
         write_conf({"GAMING": "on"})
         log("gaming on")
         print(f"   {DIM}Steam launch options:{RESET}  gamemoderun mangohud %command%")
-        print(f"   {DIM}Proton-GE:{RESET}             auxo-tweak aur && paru -S protonup-qt")
-        if not any(installed(k) for k in ("linux-zen",)):
-            print(f"   {DIM}Lower latency kernel:{RESET}  auxo-tweak kernel linux-zen")
-        print(f"   {DIM}Log out and back in so GameMode can adjust priorities.{RESET}")
+        print(f"   {DIM}Gaming CPU scheduler:{RESET}  auxo-tweak scheduler lavd --mode gaming")
+        print(f"   {DIM}Proton-GE:{RESET}             auxo-tweak flatpak on && flatpak install flathub net.davidotek.pupgui2")
     else:
         for p in (GAMING_SYSCTL, GAMING_MODULES):
-            if os.path.exists(R(p)):
-                os.remove(R(p))
+            _rm(p)
         run(["sysctl", "--system"], check=False)
         if args.purge:
-            gone = [p for p in GAMING_PKGS if installed(p)]
-            if gone:
-                run(["pacman", "--noconfirm", "-Rns", *gone], check=False)
+            xbps_remove(*[p for p in GAMING_PKGS if installed(p)])
         write_conf({"GAMING": "off"})
         log("gaming off" + ("" if args.purge else " (tweaks removed; games and tools kept — use --purge to remove GameMode/MangoHud/gamescope)"))
 
 
-# ── interactive menu (whiptail) ───────────────────────────────────────
+# ── interactive menu (whiptail, from the newt package) ─────────────────
 def wt(*a):
     r = subprocess.run(["whiptail", "--title", "auxo-tweak", *a], stderr=subprocess.PIPE, text=True)
     return r.stderr.strip() if r.returncode == 0 else None
@@ -693,41 +866,35 @@ def menu():
         return
     me = [sys.executable, os.path.abspath(__file__)]
     while True:
-        choice = wt("--menu", "Climb your own setup — pick something to change", "22", "70", "14",
+        choice = wt("--menu", "Climb your own setup — pick something to change", "24", "72", "17",
                     "accent", "Accent colour", "desktop", "Desktop / window manager", "kernel", "Kernel",
-                    "shell", "Login shell", "snapshots", "Btrfs snapshots", "drivers", "GPU drivers",
-                    "mirrors", "Fastest mirrors", "zram", "Compressed RAM swap", "services", "System services",
-                    "splash", "Boot splash", "gaming", "Gaming mode",
-                    "update", "Update everything (auxo-update)", "quit", "Exit")
+                    "shell", "Login shell", "drivers", "GPU drivers", "nvidia", "NVIDIA driver",
+                    "scheduler", "CPU scheduler (sched-ext)", "power", "Power profile",
+                    "firewall", "Firewall", "dns", "DNS servers", "snapshots", "Btrfs snapshots",
+                    "gaming", "Gaming mode", "flatpak", "Flatpak + Flathub", "cleanup", "Free up disk space",
+                    "mirrors", "Faster mirror", "update", "Update everything (auxo-update)", "quit", "Exit")
         if choice in (None, "quit"):
             return
         cmd = None
-        if choice == "accent":
-            v = wt("--menu", "Accent colour", "18", "50", "8", *sum([[n, a] for n, (a, _) in ACCENTS.items()], []))
-            cmd = ["accent", v] if v else None
-        elif choice == "desktop":
-            v = wt("--menu", "Desktop", "18", "60", "8", *sum([[k, d["name"]] for k, d in DESKTOPS.items()], []))
-            cmd = ["desktop", v] if v else None
-        elif choice == "kernel":
-            v = wt("--menu", "Kernel", "15", "70", "4", *sum([[k, d] for k, d in KERNELS.items()], []))
-            cmd = ["kernel", v] if v else None
-        elif choice == "shell":
-            v = wt("--menu", "Shell", "12", "40", "3", "zsh", "", "fish", "", "bash", "")
-            cmd = ["shell", v] if v else None
-        elif choice == "snapshots":
-            v = wt("--menu", "Snapshots", "12", "50", "3", "on", "enable", "off", "disable", "status", "show")
-            cmd = ["snapshots", v] if v else None
-        elif choice == "zram":
-            v = wt("--menu", "zram", "10", "40", "2", "on", "", "off", "")
-            cmd = ["zram", v] if v else None
-        elif choice in ("splash", "gaming"):
-            v = wt("--menu", "Boot splash" if choice == "splash" else "Gaming mode", "12", "40", "3",
-                   "on", "", "off", "", "status", "")
+        pick = {
+            "accent": ("Accent colour", [[n, a] for n, (a, _) in ACCENTS.items()]),
+            "desktop": ("Desktop", [[k, d["name"]] for k, d in DESKTOPS.items()]),
+            "kernel": ("Kernel", [[k, d] for k, d in KERNELS.items()]),
+            "shell": ("Shell", [["zsh", ""], ["fish", ""], ["bash", ""]]),
+            "nvidia": ("NVIDIA", [["status", "show"], ["on", "install the right driver"],
+                                  ["off", "back to nouveau"], ["prime", "laptop GPU offload"]]),
+            "scheduler": ("CPU scheduler", [[k, v] for k, v in SCHEDULERS.items()] + [["off", "kernel default"], ["status", ""]]),
+            "power": ("Power profile", [["balanced", ""], ["performance", ""], ["power-saver", ""]]),
+            "firewall": ("Firewall", [["on", ""], ["off", ""], ["status", ""]]),
+            "dns": ("DNS", [[k, ", ".join(v[:2])] for k, v in DNS.items()] + [["auto", "from your network"]]),
+            "snapshots": ("Snapshots", [["on", "enable"], ["off", "disable"], ["status", "show"]]),
+            "gaming": ("Gaming mode", [["on", ""], ["off", ""], ["status", ""]]),
+            "flatpak": ("Flatpak", [["on", ""], ["status", ""]]),
+        }
+        if choice in pick:
+            title, items = pick[choice]
+            v = wt("--menu", title, "20", "64", str(min(len(items), 10)), *sum(items, []))
             cmd = [choice, v] if v else None
-        elif choice == "services":
-            v = wt("--menu", "Service", "15", "50", "6", *sum([[k, ""] for k in SERVICES], []))
-            s = v and wt("--menu", v, "10", "40", "2", "on", "", "off", "")
-            cmd = ["service", v, s] if s else None
         elif choice == "update":
             subprocess.run(["auxo-update"])
             continue
@@ -760,10 +927,21 @@ def main():
     s = sub.add_parser("drivers"); s.add_argument("--no-initramfs", action="store_true")
     s.add_argument("--prune", action="store_true", help="remove drivers for hardware that isn't present")
     s.set_defaults(fn=cmd_drivers)
-    s = sub.add_parser("aur"); s.add_argument("--user"); s.set_defaults(fn=cmd_aur)
-    s = sub.add_parser("mirrors"); s.add_argument("--country"); s.set_defaults(fn=cmd_mirrors)
+    s = sub.add_parser("nvidia"); s.add_argument("state", choices=["status", "on", "off", "prime"]); s.set_defaults(fn=cmd_nvidia)
+    s = sub.add_parser("scheduler"); s.add_argument("name", choices=list(SCHEDULERS) + ["list", "status", "off"])
+    s.add_argument("--mode", choices=list(SCX_MODES), default="auto"); s.set_defaults(fn=cmd_scheduler)
+    s = sub.add_parser("power"); s.add_argument("profile", choices=["balanced", "performance", "power-saver"])
+    s.set_defaults(fn=cmd_power)
+    s = sub.add_parser("firewall"); s.add_argument("state", choices=["on", "off", "status"]); s.set_defaults(fn=cmd_firewall)
+    s = sub.add_parser("dns"); s.add_argument("provider", choices=list(DNS) + ["auto"]); s.set_defaults(fn=cmd_dns)
+    s = sub.add_parser("cleanup"); s.add_argument("--user"); s.add_argument("--user-cache", action="store_true",
+                                                                         help="also clear your thumbnail cache")
+    s.set_defaults(fn=cmd_cleanup)
+    s = sub.add_parser("flatpak"); s.add_argument("state", choices=["on", "status"]); s.set_defaults(fn=cmd_flatpak)
+    s = sub.add_parser("mirrors"); s.add_argument("--url"); s.add_argument("--default", action="store_true")
+    s.set_defaults(fn=cmd_mirrors)
     s = sub.add_parser("zram"); s.add_argument("state", choices=["on", "off"]); s.set_defaults(fn=cmd_zram)
-    s = sub.add_parser("multilib"); s.add_argument("state", choices=["on"]); s.set_defaults(fn=cmd_multilib)
+    s = sub.add_parser("repo"); s.add_argument("name", choices=["nonfree", "multilib"]); s.set_defaults(fn=cmd_repo)
     s = sub.add_parser("splash"); s.add_argument("state", choices=["on", "off", "status"])
     s.add_argument("--no-initramfs", action="store_true"); s.add_argument("--no-grub", action="store_true")
     s.set_defaults(fn=cmd_splash)

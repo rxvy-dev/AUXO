@@ -1,0 +1,13 @@
+#!/bin/sh
+# Start whichever polkit authentication agent is installed (paths differ between
+# packages and distros). Used by the Auxo Hyprland, Sway and i3 rices.
+for a in \
+  /usr/libexec/polkit-kde-authentication-agent-1 \
+  /usr/lib/polkit-kde-authentication-agent-1 \
+  /usr/libexec/polkit-gnome-authentication-agent-1 \
+  /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 \
+  /usr/libexec/polkit-mate-authentication-agent-1; do
+  [ -x "$a" ] && exec "$a"
+done
+echo "auxo-polkit-agent: no polkit agent found (install polkit-gnome)" >&2
+exit 1

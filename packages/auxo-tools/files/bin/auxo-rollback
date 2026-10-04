@@ -55,4 +55,4 @@ echo
 echo "Done. The old system is kept as @.before-rollback-$stamp (delete it with"
 echo "  btrfs subvolume delete  once you're happy)."
 read -rp "Reboot now? [Y/n] " ans
-[[ ${ans,,} == n* ]] || systemctl reboot
+[[ ${ans,,} == n* ]] || reboot

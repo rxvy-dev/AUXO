@@ -145,7 +145,7 @@ def greetd_config(accent, cmd=None):
     command = " ".join(args).replace('"', '\\"')
     return ("# written by auxo-tweak — text login (greetd + tuigreet)\n"
             "[terminal]\nvt = 1\n\n"
-            f'[default_session]\ncommand = "{command}"\nuser = "greeter"\n')
+            f'[default_session]\ncommand = "{command}"\nuser = "_greeter"\n')
 
 
 def apply_login(accent):
@@ -160,7 +160,7 @@ def apply_login(accent):
 def apply_sddm(accent):
     """Only used by the live ISO now (installed systems use greetd).
     Never point SDDM at a theme that isn't really installed: a Breeze folder without
-    metadata.desktop makes SDDM try the Qt5 greeter, which Arch doesn't ship → black screen."""
+    metadata.desktop makes SDDM try a greeter that isn't installed → black screen."""
     if not os.path.exists(R("/usr/bin/sddm")):
         return
     wall = f"{WALLDIR}/auxo-{accent}.png"

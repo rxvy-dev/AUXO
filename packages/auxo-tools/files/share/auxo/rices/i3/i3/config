@@ -18,7 +18,7 @@ exec --no-startup-id picom -b
 exec --no-startup-id dunst
 exec --no-startup-id nm-applet
 exec --no-startup-id blueman-applet
-exec --no-startup-id /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+exec --no-startup-id auxo-polkit-agent
 exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -n -c 0b0b10
 exec --no-startup-id auxo-tweak session-apply --once
 

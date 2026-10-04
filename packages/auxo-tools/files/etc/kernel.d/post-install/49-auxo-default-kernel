@@ -1,0 +1,24 @@
+#!/bin/sh
+#
+# Auxo kernel hook: keep the kernel picked with "auxo-tweak kernel" (or in the
+# installer) as the default GRUB entry after kernel updates.
+# Runs before Void's 50-grub hook, which then rebuilds grub.cfg.
+#
+# Arguments passed to this script: $1 pkgname (e.g. linux6.12), $2 version (e.g. 6.12.111_1).
+PKGNAME="$1"
+VERSION="$2"
+CONF=/etc/auxo/auxo.conf
+GRUB=/etc/default/grub
+
+[ -r "$CONF" ] && [ -w "$GRUB" ] || exit 0
+KERNEL=$(sed -n 's/^KERNEL="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$CONF")
+[ -n "$KERNEL" ] || exit 0
+
+# which versioned package does the chosen meta package (linux, linux-lts, ...) pull in?
+SERIES=$(xbps-query -x "$KERNEL" 2>/dev/null | sed -n 's/^\(linux[0-9]*\.[0-9]*\).*/\1/p' | head -n1)
+[ "$SERIES" = "$PKGNAME" ] || exit 0
+[ -e "/boot/vmlinuz-$VERSION" ] || exit 0
+
+sed -i '/^GRUB_TOP_LEVEL=/d' "$GRUB"
+echo "GRUB_TOP_LEVEL=\"/boot/vmlinuz-$VERSION\"" >> "$GRUB"
+exit 0

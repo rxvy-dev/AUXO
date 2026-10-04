@@ -76,9 +76,10 @@ def uptime():
 
 def packages():
     parts = []
-    local = "/var/lib/pacman/local"
-    if os.path.isdir(local):
-        parts.append(f"{len(os.listdir(local)) - 1} (pacman)")
+    if shutil.which("xbps-query"):
+        n = len([l for l in sh(["xbps-query", "-l"]).splitlines() if l.strip()])
+        if n:
+            parts.append(f"{n} (xbps)")
     if shutil.which("flatpak"):
         n = len([l for l in sh(["flatpak", "list", "--app"]).splitlines() if l.strip()])
         if n:

@@ -61,30 +61,71 @@ def have(binary):
     return shutil.which(binary) is not None
 
 
-def pacman(*args, needed=True):
-    """pacman wrapper. For plain installs (-S) packages that are already present are
-    skipped up-front, so this also works offline (e.g. inside the installer, where the
-    sync databases are absent)."""
-    args = list(args)
-    cmd = ["pacman", "--noconfirm"]
-    if args and args[0] == "-S":
-        pkgs = [p for p in dict.fromkeys(args[1:]) if p.startswith("-") or not installed(p)]
-        if not [p for p in pkgs if not p.startswith("-")]:
-            return 0
-        args = ["-S"] + pkgs
-    if needed and args and args[0].startswith("-S"):
-        cmd.append("--needed")
-    return run(cmd + args)
+# ── packages (xbps) ───────────────────────────────────────────────────
+_synced = False
+
+
+def _sync():
+    """Refresh the repo index once per run. xbps refuses to install anything while
+    xbps itself is out of date, so update it first when needed."""
+    global _synced
+    if _synced:
+        return
+    _synced = True
+    run(["xbps-install", "-S"], check=False)
+    run(["xbps-install", "-uy", "xbps"], check=False)
+
+
+def xbps_install(*pkgs):
+    """Install packages that aren't installed yet. Raises AuxoError on failure."""
+    todo = [p for p in dict.fromkeys(pkgs) if p and not installed(p)]
+    if not todo:
+        return 0
+    _sync()
+    rc = run(["xbps-install", "-y"] + todo)
+    if DRY:  # remember what a dry run "installed", like a real system would
+        os.makedirs(R("/var/db/xbps/.auxo-test"), exist_ok=True)
+        for p in todo:
+            open(R(f"/var/db/xbps/.auxo-test/{p}"), "w").close()
+    return rc
+
+
+def xbps_remove(*pkgs, recursive=True):
+    """Remove installed packages (and, by default, dependencies nothing else needs).
+    Never raises: returns the exit code."""
+    todo = [p for p in dict.fromkeys(pkgs) if installed(p) or DRY]
+    if not todo:
+        return 0
+    rc = run(["xbps-remove", "-y"] + (["-R"] if recursive else []) + todo, check=False)
+    if DRY:
+        for p in todo:
+            if os.path.exists(R(f"/var/db/xbps/.auxo-test/{p}")):
+                os.remove(R(f"/var/db/xbps/.auxo-test/{p}"))
+    return rc
 
 
 def installed(pkg):
-    if DRY:
-        return os.path.isdir(R("/var/lib/pacman/local")) and any(
-            d.rsplit("-", 2)[0] == pkg for d in os.listdir(R("/var/lib/pacman/local")))
-    return subprocess.run(["pacman", "-Qq", pkg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    if DRY:  # the test-suite marks packages as installed with empty files
+        return os.path.exists(R(f"/var/db/xbps/.auxo-test/{pkg}"))
+    return subprocess.run(["xbps-query", pkg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
-def online(host="archlinux.org"):
+def repo_enable(*repos):
+    """Enable Void's extra repos: nonfree, multilib, multilib-nonfree."""
+    pkgs = [f"void-repo-{r}" for r in repos]
+    if all(installed(p) for p in pkgs):
+        return
+    xbps_install(*pkgs)
+    global _synced
+    _synced = False  # new repo: index needs a refresh
+
+
+def regen_initramfs():
+    """Rebuild every installed kernel's initramfs (Void uses dracut)."""
+    return run(["dracut", "--regenerate-all", "--force"], check=False)
+
+
+def online(host="repo-default.voidlinux.org"):
     if DRY:
         return True
     import socket
@@ -227,11 +268,42 @@ def invoking_user():
         pwd.getpwuid(os.getuid()).pw_name if os.getuid() != 0 else None)
 
 
-def systemctl_enable(unit, now=False):
-    cmd = ["systemctl", "enable"] + (["--now"] if now else []) + [unit]
-    return run(cmd, check=False)
+# ── services (runit) ──────────────────────────────────────────────────
+# Services live in /etc/sv/<name>; a service is enabled by linking it into the
+# default runlevel. This works the same on a running system and in a chroot.
+SVDIR = "/etc/runit/runsvdir/default"
 
 
-def systemctl_disable(unit, now=False):
-    cmd = ["systemctl", "disable"] + (["--now"] if now else []) + [unit]
-    return run(cmd, check=False)
+def _booted_runit():
+    return not DRY and ROOT == "/" and os.path.isdir("/run/runit")
+
+
+def sv_enabled(name):
+    return os.path.lexists(R(f"{SVDIR}/{name}"))
+
+
+def sv_enable(name, now=False):
+    if not (os.path.isdir(R(f"/etc/sv/{name}")) or DRY):
+        warn(f"service {name} is not installed")
+        return 1
+    link = R(f"{SVDIR}/{name}")
+    os.makedirs(os.path.dirname(link), exist_ok=True)
+    if not os.path.lexists(link):
+        os.symlink(f"/etc/sv/{name}", link)
+    if DRY:
+        print(f"[dry-run] enable service {name}", flush=True)
+    # runsvdir picks a new link up within ~5 s; "now" just waits for it to be up
+    if now and _booted_runit():
+        run(["sv", "-w", "10", "up", name], check=False)
+    return 0
+
+
+def sv_disable(name, now=False):
+    link = R(f"{SVDIR}/{name}")
+    if now and _booted_runit() and os.path.lexists(link):
+        run(["sv", "down", name], check=False)
+    if os.path.lexists(link):
+        os.remove(link)
+    if DRY:
+        print(f"[dry-run] disable service {name}", flush=True)
+    return 0

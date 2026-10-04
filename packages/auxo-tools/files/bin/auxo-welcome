@@ -15,7 +15,8 @@ from PyQt6.QtCore import QUrl  # noqa: E402
 from PyQt6.QtWidgets import (QApplication, QCheckBox, QGridLayout, QHBoxLayout, QLabel, QMainWindow,  # noqa: E402
                              QPushButton, QVBoxLayout, QWidget)
 
-LIVE = os.path.exists("/run/archiso") or os.environ.get("AUXO_WELCOME_LIVE") == "1"
+# the live ISO ships /etc/auxo/live; the installer removes it from the installed system
+LIVE = os.path.exists("/etc/auxo/live") or os.environ.get("AUXO_WELCOME_LIVE") == "1"
 PIX = "/usr/share/pixmaps"
 
 
@@ -87,7 +88,7 @@ class Welcome(QMainWindow):
             inst = QPushButton("  Install Auxo Linux")
             inst.setObjectName("primary")
             inst.setMinimumHeight(64)
-            inst.clicked.connect(lambda: subprocess.Popen(["auxo-install"]))
+            inst.clicked.connect(lambda: terminal("sudo auxo-installer"))
             v.addWidget(inst)
             items = [
                 ("📶  Connect to Wi-Fi / network", lambda: self.net()),
