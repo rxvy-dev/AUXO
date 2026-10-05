@@ -31,7 +31,11 @@ if (( NATIVE )); then
 fi
 
 ENGINE=$(command -v docker || command -v podman || true)
-[[ -n $ENGINE ]] || { echo "Install Docker or Podman (or build on Void with --native)." >&2; exit 1; }
+[[ -n $ENGINE ]] || {
+  echo "Install Docker or Podman (or build on Void with --native)." >&2
+  echo "  Debian 13 / MX / Ubuntu: sudo apt install docker.io docker-cli   (the 'docker' command is in docker-cli)" >&2
+  echo "  Arch: sudo pacman -S docker     Fedora: sudo dnf install podman" >&2
+  exit 1; }
 SUDO=""
 if [[ $(basename "$ENGINE") == docker && $EUID -ne 0 ]] && ! docker info >/dev/null 2>&1; then SUDO="sudo"; fi
 echo ":: building in a Void container ($(basename "$ENGINE"))"
