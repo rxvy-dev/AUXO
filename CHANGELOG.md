@@ -1,7 +1,7 @@
 # Changelog
 
 ## 4.0.0 (in development)
-**Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept under the
+**Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept on the
 `arch` branch.
 
 - Base: Void Linux with runit and xbps (no systemd). Services are runit services;
