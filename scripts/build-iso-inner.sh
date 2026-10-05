@@ -19,8 +19,17 @@ step "Building Auxo packages"
 step "Getting void-mklive ($MKLIVE_REF)"
 MK=$OUT/void-mklive
 if [[ ! -d $MK/.git ]]; then git clone "$MKLIVE_REPO" "$MK"; fi
+git config --global --add safe.directory "$MK"   # the checkout may belong to the host user
 git -C "$MK" fetch --quiet origin
 git -C "$MK" checkout --quiet "$MKLIVE_REF"
+
+# mklive copies the overlay with "cp -p", which keeps the *source* owner on existing
+# folders like /etc and /usr. Give it a root-owned copy so the image stays root-owned.
+INCLUDE=$(mktemp -d)
+cp -a "$SRC/mklive/include/." "$INCLUDE/"
+chown -R root:root "$INCLUDE"
+find "$INCLUDE" -type d -exec chmod 755 {} +
+find "$INCLUDE" -type f -exec chmod go-w {} +
 
 step "Building the live ISO (this takes a while)"
 PKGS=$(grep -v '^\s*#' "$SRC/mklive/packages.txt" | xargs)
@@ -30,7 +39,7 @@ cd "$MK"
   -r "$OUT/repo" \
   -p "$PKGS" \
   -S "$SERVICES" \
-  -I "$SRC/mklive/include" \
+  -I "$INCLUDE" \
   -x "$SRC/mklive/postsetup.sh" \
   -e /bin/bash \
   -T "Auxo Linux" \
@@ -38,6 +47,9 @@ cd "$MK"
 
 cd "$OUT"
 sha256sum "$ISO" > "$ISO.sha256"
-if [[ -n ${HOST_UID:-} ]]; then chown -R "$HOST_UID:${HOST_GID:-$HOST_UID}" "$OUT"; fi
+if [[ -n ${HOST_UID:-} ]]; then  # hand the results (not the mklive checkout) back to the host user
+  chown "$HOST_UID:${HOST_GID:-$HOST_UID}" "$OUT" "$OUT/$ISO" "$OUT/$ISO.sha256"
+  chown -R "$HOST_UID:${HOST_GID:-$HOST_UID}" "$OUT/repo"
+fi
 step "Done: out/$ISO"
 ls -lh "$OUT/$ISO"

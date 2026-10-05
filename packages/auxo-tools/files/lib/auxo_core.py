@@ -38,8 +38,9 @@ def warn(msg):
     print(f"\033[33m!!\033[0m {msg}", file=sys.stderr, flush=True)
 
 
-def run(cmd, check=True, capture=False, user=None, env=None):
-    """Run a command (list). Honors dry-run. Returns stdout when capture=True."""
+def run(cmd, check=True, capture=False, user=None, env=None, input=None):
+    """Run a command (list). Honors dry-run. Returns stdout when capture=True.
+    input: text sent to the command's stdin."""
     if user and user != "root":
         cmd = ["runuser", "-u", user, "--"] + cmd
     if DRY:
@@ -49,9 +50,10 @@ def run(cmd, check=True, capture=False, user=None, env=None):
     if env:
         e.update(env)
     if capture:
-        r = subprocess.run(cmd, check=check, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=e)
+        r = subprocess.run(cmd, check=check, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=e,
+                           input=input)
         return r.stdout
-    r = subprocess.run(cmd, check=False, env=e)
+    r = subprocess.run(cmd, check=False, env=e, text=True, input=input)
     if check and r.returncode != 0:
         raise AuxoError(f"command failed ({r.returncode}): {' '.join(cmd)}")
     return r.returncode
@@ -295,8 +297,13 @@ def sv_enable(name, now=False):
         os.symlink(f"/etc/sv/{name}", link)
     if DRY:
         print(f"[dry-run] enable service {name}", flush=True)
-    # runsvdir picks a new link up within ~5 s; "now" just waits for it to be up
+    # runsvdir only rescans every 5 s: wait for it to supervise the new service first
     if now and _booted_runit():
+        import time
+        for _ in range(16):
+            if os.path.exists(f"/var/service/{name}/supervise/ok"):
+                break
+            time.sleep(0.5)
         run(["sv", "-w", "10", "up", name], check=False)
     return 0
 

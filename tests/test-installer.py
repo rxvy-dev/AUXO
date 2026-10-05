@@ -102,6 +102,8 @@ check("fstab by UUID, subvolumes + EFI", "UUID=UUID-OF-nvme0n1p2 /home btrfs noa
       and "UUID=UUID-OF-nvme0n1p1 /boot/efi vfat" in fstab)
 check("chroot: /run not bound (live services stay out)", has(L, "mount --rbind /dev") and not has(L, "mount --rbind /run"))
 check("live user removed", has(L, "userdel -r anon"))
+check("fresh machine-id for every install", has(L, f"rm -f {T}/etc/machine-id {T}/var/lib/dbus/machine-id")
+      and has(L, "dbus-uuidgen --ensure=/etc/machine-id"))
 check("hostname", open(f"{T}/etc/hostname").read() == "peak\n")
 check("hosts has the computer name", "peak.localdomain peak" in open(f"{T}/etc/hosts").read())
 check("locale uncommented + locale.conf", "de_DE.UTF-8 UTF-8" in open(f"{T}/etc/default/libc-locales").read().replace("#de", "X")
@@ -114,7 +116,8 @@ check("keyboard for X11, Wayland and Plasma", '"XkbLayout" "de"' in open(f"{T}/e
       and "LayoutList=de" in open(f"{T}/etc/xdg/kxkbrc").read())
 check("user gets only groups that exist", has(L, "useradd -m -G wheel,audio,video,input -s /bin/bash -c Alex alex"))
 check("password set via stdin, never logged", has(L, "chpasswd -c SHA512 <<< [hidden]") and not has(L, "alex:pw"))
-check("root locked by default", has(L, "passwd -l root"))
+check("root locked by default (hard step)", has(L, "passwd -l root")
+      and not next(a for st in steps for a in st.actions if getattr(a, "argv", [])[-3:] == ["passwd", "-l", "root"]).soft)
 check("sudo for wheel", "%wheel ALL=(ALL:ALL) ALL" in open(f"{T}/etc/sudoers.d/10-auxo-wheel").read())
 check("auxo-tweak sets accent/splash/shell", has(L, "auxo-tweak accent rose --no-grub --no-initramfs --user alex")
       and has(L, "auxo-tweak splash on") and has(L, "auxo-tweak shell zsh --user alex"))
@@ -128,6 +131,11 @@ check("grub.cfg generated", has(L, "grub-mkconfig -o /boot/grub/grub.cfg"))
 check("first snapshot after boot setup", L.index(next(l for l in L if "snapshots on" in l)) > L.index(next(l for l in L if "grub-install" in l)))
 check("welcome app on first login", os.path.exists(f"{T}/home/alex/.config/autostart/auxo-welcome.desktop"))
 check("unmounted at the end", L[-1].endswith(f"umount -R {T}"))
+
+T2, _, _, L2 = dry_run(InstallConfig(disk="/dev/sda", username="z", password="p", filesystem="xfs"), Env(efi=True),
+                       prepare=lambda T: open(f"{T}/etc/default/live.conf", "w").write("USERNAME=liveguy\n"))
+check("live user name read from live.conf", has(L2, "userdel -r liveguy"))
+check("xfs root: no fsck pass", "/ xfs defaults,noatime 0 0" in open(f"{T2}/etc/fstab").read())
 
 print("▲ plan: offline fallbacks")
 cfg2 = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland", kernel="linux-lts",

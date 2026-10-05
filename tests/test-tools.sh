@@ -80,7 +80,7 @@ check "first theme setup rebuilds grub.cfg under a lock" "echo \"\$out\" | grep 
 echo "▲ desktop hyprland --replace (community repo)"
 out=$("$T" desktop hyprland --user alex --replace 2>&1); echo "$out" | sed 's/^/    /' | head -8
 check "adds the hyprland-void repo"          "grep -q 'repository=https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc' $ROOT/etc/xbps.d/20-hyprland.conf"
-check "accepts the repo key on first sync"   "echo \"\$out\" | grep -q 'xbps-install -Sy\$'"
+check "accepts the repo key on first sync"   "echo \"\$out\" | grep -q 'accepting the signing key' && echo \"\$out\" | grep -q 'xbps-install -S\$'"
 check "installs hyprland + session base"     "echo \"\$out\" | grep -E 'xbps-install -y .*hyprland' | grep -q elogind"
 check "skips packages already installed"     "! echo \"\$out\" | grep -E 'xbps-install -y .* konsole( |$)' >/dev/null"
 check "enables dbus, elogind, NetworkManager" "enabled dbus && enabled elogind && enabled NetworkManager"
@@ -191,6 +191,9 @@ out=$(AUXO_TEST_VIRT=kvm AUXO_TEST_GPU="1234:0001 QXL" "$T" drivers --prune 2>&1
 check "VM prune: keeps qemu tools on KVM"    "enabled qemu-ga && enabled spice-vdagentd && ! echo \"\$out\" | grep -q 'xbps-remove.*qemu-ga'"
 check "VM prune: drops other hypervisors"    "echo \"\$out\" | grep -q 'xbps-remove -y -R virtualbox-ose-guest' && echo \"\$out\" | grep -q 'xbps-remove -y -R open-vm-tools'"
 unmark qemu-ga spice-vdagent virtualbox-ose-guest open-vm-tools
+
+out=$(AUXO_TEST_GPU="8086:a780 Intel UHD" "$T" drivers 2>&1)
+check "drivers still finish if microcode fails" "echo \"\$out\" | grep -q 'drivers done'"
 
 echo "▲ scheduler / power"
 out=$("$T" scheduler lavd --mode gaming 2>&1)

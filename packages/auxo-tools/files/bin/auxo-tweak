@@ -285,11 +285,14 @@ def set_default_session(user, session, dm="greetd"):
 
 
 def add_repo(name, url):
-    """Add a third-party xbps repository (its signing key is accepted on first sync)."""
+    """Add a third-party xbps repository. Its signing key is accepted on the first sync:
+    xbps asks on stdin (-y doesn't answer that question), so the answer is sent along.
+    Only called for a desktop the user picked that needs the repo (Hyprland)."""
     path = f"/etc/xbps.d/20-{name}.conf"
     if not os.path.exists(R(path)):
         write_file(path, f"# added by auxo-tweak\nrepository={url}\n")
-        run(["xbps-install", "-Sy"], check=False)
+        log(f"accepting the signing key of {url}")
+        run(["xbps-install", "-S"], check=False, input="y\n" * 4)
 
 
 def cmd_desktop(args):
@@ -469,8 +472,11 @@ def cmd_drivers(args):
     intel_cpu = DRY or "GenuineIntel" in open("/proc/cpuinfo").read()
     xbps_install("mesa-dri", "vulkan-loader")
     if intel_cpu:
-        repo_enable("nonfree")  # Intel CPU microcode lives in nonfree (AMD's ships with linux-firmware)
-        xbps_install("intel-ucode")
+        try:  # Intel CPU microcode lives in nonfree (AMD's ships with linux-firmware); needs internet
+            repo_enable("nonfree")
+            xbps_install("intel-ucode")
+        except AuxoError as e:
+            warn(f"Intel microcode not installed ({e}); run 'auxo-tweak drivers' again when online")
     if "1002" in vendors:
         xbps_install("mesa-vulkan-radeon", "mesa-vaapi", "libva-utils")
     if "8086" in vendors:

@@ -63,5 +63,7 @@ xbps-create -A noarch -n "auxo-installer-${VERSION}_${REV}" \
   -s "Auxo Linux text installer" \
   -D "auxo-tools>=0 python3>=0 rsync>=0 gptfdisk>=0 parted>=0 btrfs-progs>=0 dosfstools>=0 xfsprogs>=0 e2fsprogs>=0 grub>=0" \
   -H "https://auxolinux.com" -l "GPL-3.0-or-later" -m "rxvy <https://github.com/rxvy-dev>" "$i"
-xbps-rindex -a "$OUT"/*.xbps
+# -f: re-register even if the version is unchanged (otherwise the index keeps the old checksum)
+rm -f "$OUT"/*-repodata
+xbps-rindex -f -a "$OUT"/*.xbps
 echo "packages in $OUT:"; ls -1 "$OUT"/*.xbps

@@ -98,7 +98,8 @@ def _fstab(cfg, layout):
                 lines.append(f"UUID={root_uuid} /{mp} btrfs {BTRFS_OPTS},subvol={sv} 0 0")
         else:
             opts = "defaults,noatime"
-            lines.append(f"UUID={root_uuid} / {cfg.filesystem} {opts} 0 1")
+            passno = 0 if cfg.filesystem == "xfs" else 1   # like Void's installer: no fsck pass for xfs
+            lines.append(f"UUID={root_uuid} / {cfg.filesystem} {opts} 0 {passno}")
         if layout.get("efi"):
             lines.append(f"UUID={ctx.uuid(layout['efi'])} /boot/efi vfat defaults,umask=0077 0 2")
         lines.append("tmpfs /tmp tmpfs defaults,nosuid,nodev 0 0")
@@ -171,11 +172,13 @@ def _useradd(cfg):
 
 
 def _live_user(ctx):
-    """Remove the live session's user (named in /etc/auxo/live on the ISO)."""
+    """Remove the live session's user. void-mklive records it in /etc/default/live.conf
+    (USERNAME=, changeable with the live.user= boot option); /etc/auxo/live is the fallback."""
     user = "anon"
-    for line in ctx.read(f"{ctx.target}/etc/auxo/live").splitlines():
-        if line.startswith("LIVE_USER="):
-            user = line.split("=", 1)[1].strip().strip('"') or user
+    for path, key in ((f"{ctx.target}/etc/auxo/live", "LIVE_USER="), (f"{ctx.target}/etc/default/live.conf", "USERNAME=")):
+        for line in ctx.read(path).splitlines():
+            if line.startswith(key):
+                user = line.split("=", 1)[1].strip().strip('"') or user
     return [Cmd(chroot(ctx.target, "userdel", "-r", user), soft=True)]
 
 
@@ -266,6 +269,10 @@ def build_plan(cfg, env):
                  Cmd(["mount", "--make-rslave", f"{T}/{fs}"], soft=True)]
     acts += [Cmd(["cp", "-L", "/etc/resolv.conf", f"{T}/etc/resolv.conf"], soft=True),
              Py(_live_user, "remove the live user"),
+             # every install needs its own machine id (the ISO's is baked in by dbus at build time)
+             Cmd(["rm", "-f", f"{T}/etc/machine-id", f"{T}/var/lib/dbus/machine-id"]),
+             Cmd(chroot(T, "dbus-uuidgen", "--ensure=/etc/machine-id")),
+             Cmd(["ln", "-sf", "/etc/machine-id", f"{T}/var/lib/dbus/machine-id"], soft=True),
              Cmd(["rm", "-f", *[f"{T}{p}" for p in LIVE_FILES]]),
              Cmd(["sed", "-i", 's/GETTY_ARGS="--noclear -a [^"]*"/GETTY_ARGS="--noclear"/',
                   f"{T}/etc/sv/agetty-tty1/conf"], soft=True),
@@ -293,7 +300,8 @@ def build_plan(cfg, env):
     if cfg.root_password:
         acts.append(Cmd(chroot(T, "chpasswd", "-c", "SHA512"), input=f"root:{cfg.root_password}\n"))
     else:
-        acts.append(Cmd(chroot(T, "passwd", "-l", "root"), soft=True))
+        # the live system's root password ("voidlinux") was copied over: locking root is required
+        acts.append(Cmd(chroot(T, "passwd", "-l", "root")))
     steps.append(Step("users", f"Creating {cfg.username}", acts))
 
     # 8 ── Auxo: the same commands the user can run later
