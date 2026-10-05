@@ -6,7 +6,7 @@
 #   ./scripts/test-vm.sh --bios out/auxo-linux-*.iso   legacy BIOS boot
 #   ./scripts/test-vm.sh --disk                        boot the installed disk (after installing)
 #
-# Needs: qemu-desktop (Arch) / qemu-system-x86 (Debian/Ubuntu), edk2-ovmf / ovmf
+# Needs: qemu-system-x86 + ovmf (Debian/Ubuntu/MX), qemu-desktop + edk2-ovmf (Arch), qemu + edk2-ovmf (Void)
 set -euo pipefail
 
 BIOS=0; DISK_ONLY=0; ISO=""
