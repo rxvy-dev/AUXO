@@ -46,6 +46,15 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
 .grad{background:linear-gradient(100deg,var(--a),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
 
+/* extras grid (6 cards) + discontinued release block */
+.cards5.extras6{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
+.cards5.extras6 .pkgs{margin-top:10px}
+.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy .eyebrow{color:var(--dim)}
+.legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
+.dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
+
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;gap:40px;height:72px}
@@ -174,7 +183,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .L i.pn::after{content:"";position:absolute;top:30%;bottom:30%;left:1.2%;width:14%;background:radial-gradient(circle,var(--a) 42%,transparent 45%) 0 50%/25% 100% repeat-x;opacity:.85}
 .L i.tty{inset:0;border:0;border-radius:0;background:#07070a;display:flex}
 .L i.tty::before{display:none}
-.L i.tty::after{content:"Auxo Linux 3.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
+.L i.tty::after{content:"Auxo Linux 4.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
 .dcmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--line);font:13.5px var(--fm);color:#d4d4dc;background:#0b0b10}
 .dcmd .c{display:none}
 .dcmd .ok{margin-left:auto;color:#4ade80;font-size:12.5px}
@@ -627,7 +636,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </defs></svg>
 <div class="auxo">
 <header class="nav"><div class="wrap">
-<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>3.0</small></a>
+<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="/download/">Get Auxo</a><a href="/#desktops">Desktops</a><a href="/docs/">Docs</a><a href="/download/#releases">Releases</a><a href="https://discord.gg/XbQ66dH5a7" aria-current="page">Community</a></nav>
 <div class="right"><a class="icon-link" href="https://discord.gg/XbQ66dH5a7" aria-label="Auxo Discord"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.7zM8.3 15.4c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></a><a class="btn primary sm" href="/download/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get Auxo</a></div>
 </div></header>
@@ -659,15 +668,15 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <section><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow">Developers</p><h2>Build Auxo from source</h2></div><p>Everything, including the ISO, builds from the repository.</p></div>
   <div class="two">
-    <div class="card rv"><h3>Build the ISO</h3><p>On Arch or an Arch-based distro. Takes 20–40 minutes and about 20 GB of free space.</p>
+    <div class="card rv"><h3>Build the ISO</h3><p>On any Linux distro, no Docker needed. Takes 20–40 minutes and about 15 GB of free space.</p>
       <div class="code"><span class="tm">$ </span>git clone https://github.com/rxvy-dev/AUXO.git
 <span class="tm">$ </span>cd AUXO
-<span class="tm">$ </span>sudo ./build.sh --clean
+<span class="tm">$ </span>./build.sh --clean
 <span class="tm">$ </span>./scripts/test-vm.sh out/auxo-linux-*.iso</div>
-      <p class="muted" style="margin-top:12px">Not on Arch? Use <code>./scripts/build-in-docker.sh</code>.</p></div>
+      <p class="muted" style="margin-top:12px">It sets up a small Void system in <code>out/</code> and builds inside it. The Arch-based Auxo 3 is under the <a class="inl" href="https://github.com/rxvy-dev/AUXO/tree/arch-3.0.4">arch-3.0.4</a> tag.</p></div>
     <div class="card rv"><h3>Run the tests</h3><p>Both suites run anywhere, without root.</p>
       <div class="code"><span class="tm">$ </span>./tests/test-tools.sh
-<span class="tm">$ </span>python3 tests/test-calamares-modules.py</div>
+<span class="tm">$ </span>python3 tests/test-installer.py</div>
       <p class="muted" style="margin-top:12px">Please run both before sending a pull request.</p></div>
   </div>
 </div></section>
@@ -684,13 +693,13 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </main>
 <footer><div class="wrap">
 <div class="fgrid">
-  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
-  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vm">Virtual machines</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
+  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>A rolling distro built on Void Linux. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
+  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vmsetup">Virtual machines</a></li><li><a href="/download/#arch">Auxo 3 (Arch)</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="/#desktops">Desktops</a></li><li><a href="/#software">Software</a></li><li><a href="/download/#releases">Releases</a></li><li><a href="https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
-  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#nvidia">NVIDIA</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
   <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
-<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
+<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
 </div>
 </body>

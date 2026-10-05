@@ -46,6 +46,15 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
 .grad{background:linear-gradient(100deg,var(--a),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
 
+/* extras grid (6 cards) + discontinued release block */
+.cards5.extras6{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
+.cards5.extras6 .pkgs{margin-top:10px}
+.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy .eyebrow{color:var(--dim)}
+.legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
+.dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
+
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;gap:40px;height:72px}
@@ -174,7 +183,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .L i.pn::after{content:"";position:absolute;top:30%;bottom:30%;left:1.2%;width:14%;background:radial-gradient(circle,var(--a) 42%,transparent 45%) 0 50%/25% 100% repeat-x;opacity:.85}
 .L i.tty{inset:0;border:0;border-radius:0;background:#07070a;display:flex}
 .L i.tty::before{display:none}
-.L i.tty::after{content:"Auxo Linux 3.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
+.L i.tty::after{content:"Auxo Linux 4.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
 .dcmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--line);font:13.5px var(--fm);color:#d4d4dc;background:#0b0b10}
 .dcmd .c{display:none}
 .dcmd .ok{margin-left:auto;color:#4ade80;font-size:12.5px}
@@ -627,7 +636,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </defs></svg>
 <div class="auxo">
 <header class="nav"><div class="wrap">
-<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>3.0</small></a>
+<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="/download/">Get Auxo</a><a href="/#desktops" aria-current="page">Desktops</a><a href="/docs/">Docs</a><a href="/download/#releases">Releases</a><a href="https://discord.gg/XbQ66dH5a7">Community</a></nav>
 <div class="right"><a class="icon-link" href="https://discord.gg/XbQ66dH5a7" aria-label="Auxo Discord"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.7zM8.3 15.4c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></a><a class="btn primary sm" href="/download/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get Auxo</a></div>
 </div></header>
@@ -642,18 +651,18 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <div class="wrap"><section class="dsec" id="d-plasma">
   <div class="dsgrid">
     <div class="dtext rv">
-      <p class="eyebrow">Default · Wayland</p><h2>KDE Plasma 6</h2><p class="dl">The default desktop and the live session. A full, familiar desktop with Auxo theming, and the only one that installs without internet.</p>
+      <p class="eyebrow">Default · Wayland</p><h2>KDE Plasma 6</h2><p class="dl">The default desktop and the live session. A full, familiar desktop with the Auxo global theme, and the only one that installs without internet.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop plasma</div>
-      <p class="pkgs"><span>Installs</span>plasma-desktop · konsole · dolphin · kate · ark · spectacle · kde-gtk-config</p>
+      <p class="pkgs"><span>Installs</span>kde-plasma · konsole · dolphin · kate · ark · spectacle · kde-gtk-config</p>
     </div>
     <div class="dvis rv"><div class="screen mini" role="img" aria-label="KDE Plasma 6 on Auxo"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L L-plasma" style="display:block"><img src="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png" alt="" loading="lazy"></div></div></div>
   </div>
 </section><section class="dsec" id="d-hyprland">
   <div class="dsgrid">
     <div class="dtext rv">
-      <p class="eyebrow">Auxo rice · Wayland</p><h2>Hyprland</h2><p class="dl">Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent.</p>
+      <p class="eyebrow">Auxo rice · Wayland</p><h2>Hyprland</h2><p class="dl">Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent. Comes from the hyprland-void community repository.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop hyprland</div>
-      <p class="pkgs"><span>Installs</span>hyprland · hyprpaper · hypridle · hyprlock · waybar · wofi · mako · kitty · grim + slurp + swappy</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice hyprland</code></p>
+      <p class="pkgs"><span>Installs</span>hyprland · hyprpaper · hypridle · hyprlock · Waybar · wofi · mako · kitty · grim + slurp + swappy</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice hyprland</code></p>
     </div>
     <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="pn fl" style="left:1.5%;top:1.5%;width:97%;height:6%"></i><i class="t nt act" style="left:1.5%;top:10%;width:57%;height:88%"></i><i class="nt" style="left:60%;top:10%;width:38.5%;height:43%"></i><i class="t nt" style="left:60%;top:55%;width:38.5%;height:43%"></i></div></div><h4 class="kh">Keybindings</h4><div class="keys"><div><span><kbd>Super</kbd> <kbd>Enter</kbd></span><em>Terminal (kitty)</em></div><div><span><kbd>Super</kbd> <kbd>D</kbd></span><em>App launcher (wofi)</em></div><div><span><kbd>Super</kbd> <kbd>E</kbd></span><em>File manager</em></div><div><span><kbd>Super</kbd> <kbd>T</kbd></span><em>Open auxo-tweak</em></div><div><span><kbd>Super</kbd> <kbd>Q</kbd></span><em>Close window</em></div><div><span><kbd>Super</kbd> <kbd>F</kbd></span><em>Fullscreen</em></div><div><span><kbd>Super</kbd> <kbd>V</kbd></span><em>Toggle floating</em></div><div><span><kbd>Super</kbd> <kbd>L</kbd></span><em>Lock screen</em></div><div><span><kbd>Super</kbd> <kbd>1…9</kbd></span><em>Switch workspace</em></div><div><span><kbd>Print</kbd></span><em>Screenshot a region</em></div><div><span><kbd>Super</kbd> <kbd>Print</kbd></span><em>Screenshot to clipboard</em></div><div><span><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>E</kbd></span><em>Exit Hyprland</em></div></div></div>
   </div>
@@ -662,7 +671,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
     <div class="dtext rv">
       <p class="eyebrow">Auxo rice · Wayland</p><h2>Sway</h2><p class="dl">i3-style tiling on Wayland. Lightweight and predictable, with waybar and your accent on the focused window.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop sway</div>
-      <p class="pkgs"><span>Installs</span>sway · swaybg · swayidle · swaylock · waybar · wofi · mako · foot</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice sway</code></p>
+      <p class="pkgs"><span>Installs</span>sway · swaybg · swayidle · swaylock · Waybar · wofi · mako · foot</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice sway</code></p>
     </div>
     <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="pn" style="left:0%;top:0%;width:100%;height:5.5%"></i><i class="t nt act" style="left:0.8%;top:7%;width:49%;height:92%"></i><i class="nt" style="left:50.6%;top:7%;width:48.6%;height:45.5%"></i><i class="t nt" style="left:50.6%;top:53.5%;width:48.6%;height:45.5%"></i></div></div><h4 class="kh">Keybindings</h4><div class="keys"><div><span><kbd>Super</kbd> <kbd>Enter</kbd></span><em>Terminal (foot)</em></div><div><span><kbd>Super</kbd> <kbd>D</kbd></span><em>App launcher (wofi)</em></div><div><span><kbd>Super</kbd> <kbd>Q</kbd></span><em>Close window</em></div><div><span><kbd>Super</kbd> <kbd>F</kbd></span><em>Fullscreen</em></div><div><span><kbd>Super</kbd> <kbd>L</kbd></span><em>Lock screen</em></div><div><span><kbd>Print</kbd></span><em>Screenshot a region</em></div><div><span><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>E</kbd></span><em>Exit Sway</em></div><div class="kempty"></div></div></div>
   </div>
@@ -671,16 +680,16 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
     <div class="dtext rv">
       <p class="eyebrow">Auxo rice · X11</p><h2>i3</h2><p class="dl">Classic X11 tiling with no wasted space. polybar, rofi and picom are configured to match your accent.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop i3</div>
-      <p class="pkgs"><span>Installs</span>i3-wm · polybar · rofi · picom · dunst · alacritty · feh · maim</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice i3</code></p>
+      <p class="pkgs"><span>Installs</span>i3 · polybar · rofi · picom · dunst · alacritty · feh · maim</p><p class="note2">Changed a config and want the original back? <code>auxo-tweak rice i3</code></p>
     </div>
     <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="t nt act" style="left:0%;top:0%;width:33.4%;height:94%"></i><i class="nt" style="left:33.4%;top:0%;width:33.3%;height:94%"></i><i class="t nt" style="left:66.7%;top:0%;width:33.3%;height:94%"></i><i class="pn" style="left:0%;top:94%;width:100%;height:6%"></i></div></div><h4 class="kh">Keybindings</h4><div class="keys"><div><span><kbd>Super</kbd> <kbd>Enter</kbd></span><em>Terminal (alacritty)</em></div><div><span><kbd>Super</kbd> <kbd>D</kbd></span><em>App launcher (rofi)</em></div><div><span><kbd>Super</kbd> <kbd>Q</kbd></span><em>Close window</em></div><div><span><kbd>Super</kbd> <kbd>F</kbd></span><em>Fullscreen</em></div><div><span><kbd>Super</kbd> <kbd>L</kbd></span><em>Lock screen</em></div><div><span><kbd>Print</kbd></span><em>Screenshot a region to the clipboard</em></div><div><span><kbd>Super</kbd> <kbd>Shift</kbd> <kbd>E</kbd></span><em>Exit i3</em></div><div class="kempty"></div></div></div>
   </div>
 </section><section class="dsec" id="d-gnome">
   <div class="dsgrid">
     <div class="dtext rv">
-      <p class="eyebrow">Wayland</p><h2>GNOME</h2><p class="dl">Stock GNOME with gestures and the activities overview. Your accent is mapped to the nearest GNOME accent colour.</p>
+      <p class="eyebrow">Wayland</p><h2>GNOME</h2><p class="dl">Stock GNOME with gestures and the activities overview, started by its own login screen, GDM. Your accent is mapped to the nearest GNOME accent colour.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop gnome</div>
-      <p class="pkgs"><span>Installs</span>gnome · gnome-tweaks · gnome-console</p><p class="note2">Accent mapping: violet → purple, cyan → teal, emerald → green, amber → yellow, rose → pink, blue → blue, mono → slate.</p>
+      <p class="pkgs"><span>Installs</span>gnome-core · gdm · gnome-tweaks · gnome-console · nautilus</p><p class="note2">Accent mapping: violet → purple, cyan → teal, emerald → green, amber → yellow, rose → pink, blue → blue, mono → slate.</p>
     </div>
     <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="pn" style="left:0%;top:0%;width:100%;height:5%"></i><i class="act" style="left:18%;top:13%;width:64%;height:64%"></i><i class="dock" style="left:33%;top:85%;width:34%;height:10%"></i></div></div></div>
   </div>
@@ -689,7 +698,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
     <div class="dtext rv">
       <p class="eyebrow">X11</p><h2>Xfce</h2><p class="dl">Light, fast and traditional. A good fit for older hardware.</p>
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop xfce</div>
-      <p class="pkgs"><span>Installs</span>xfce4 · xfce4-goodies · network-manager-applet · pavucontrol · papirus-icon-theme</p>
+      <p class="pkgs"><span>Installs</span>xfce4 · xfce4-plugins · network-manager-applet · pavucontrol · papirus-icon-theme</p>
     </div>
     <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="pn" style="left:0%;top:0%;width:100%;height:6%"></i><i class="" style="left:10%;top:14%;width:48%;height:56%"></i><i class="t act" style="left:36%;top:26%;width:50%;height:54%"></i><i class="dock" style="left:34%;top:88%;width:32%;height:9%"></i></div></div></div>
   </div>
@@ -720,13 +729,13 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </main>
 <footer><div class="wrap">
 <div class="fgrid">
-  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
-  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vm">Virtual machines</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
+  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>A rolling distro built on Void Linux. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
+  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vmsetup">Virtual machines</a></li><li><a href="/download/#arch">Auxo 3 (Arch)</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="/#desktops">Desktops</a></li><li><a href="/#software">Software</a></li><li><a href="/download/#releases">Releases</a></li><li><a href="https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
-  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#nvidia">NVIDIA</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
   <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
-<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
+<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
 </div>
 </body>

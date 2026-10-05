@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the Auxo site (v3): index.html (home) and download/index.html.
+"""Builds the Auxo site (v4, Void Linux): home, download, docs and the extra pages.
 
 Usage: python3 build-site.py [--preview]
   --preview  links pages as download.html / index.html so they work as flat files.
@@ -36,12 +36,22 @@ def iso(ident, name):
             "torrent": f"https://archive.org/download/{ident}/{ident}_archive.torrent",
             "details": f"https://archive.org/details/{ident}", "name": name}
 
-STD = dict(iso("auxo-linux-2026.09.27-x86_64", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
-VM = dict(iso("auxo-linux-2026.09.27-x86_64_202609", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
+# Auxo 4 (Void Linux): one image for PCs and virtual machines
+VERSION = "4.0"
+VOID = dict(iso("auxo-linux-VOID", "auxo-linux-2026.10.05-x86_64.iso"), size="", date="2026-10-05")
+# Auxo 3 (Arch Linux): discontinued, still downloadable
+ARCH = dict(iso("auxo-linux-2026.09.27-x86_64", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
+ARCH_VM = dict(iso("auxo-linux-2026.09.27-x86_64_202609", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
+ARCH_SRC = "https://github.com/rxvy-dev/AUXO/tree/arch-3.0.4"
+STD = VOID
 DISCORD = "https://discord.gg/XbQ66dH5a7"
 KDE_SHOT = "https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png"
 
-imgs = json.load(open("assets/screenshots.json"))  # live, desktop, accent, software, installing
+imgs = json.load(open("assets/screenshots.json"))  # Auxo 3 (Arch) Calamares screenshots, no longer used on the pages
+import base64 as _b64e
+def _webp(name):
+    return "data:image/webp;base64," + _b64e.b64encode(open(f"assets/installer/{name}.webp", "rb").read()).decode()
+TUI = {n: _webp(n) for n in ("welcome", "desktop", "accent", "kernel", "extras", "review")}
 
 ACCENTS = [("violet", "#a78bfa", "#22d3ee"), ("cyan", "#22d3ee", "#818cf8"),
            ("emerald", "#34d399", "#a3e635"), ("amber", "#fbbf24", "#fb7185"),
@@ -87,6 +97,16 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .skip:focus{left:12px}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
 .grad{background:linear-gradient(100deg,var(--a),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* extras grid (6 cards) + discontinued release block */
+.cards5.extras6{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
+.cards5.extras6 .pkgs{margin-top:10px}
+.legacy{margin-top:28px;border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy .eyebrow{color:var(--dim)}
+.legacy .top p{margin:10px 0 20px;color:var(--mut)}
+.legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
+.dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
@@ -216,7 +236,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .L i.pn::after{content:"";position:absolute;top:30%;bottom:30%;left:1.2%;width:14%;background:radial-gradient(circle,var(--a) 42%,transparent 45%) 0 50%/25% 100% repeat-x;opacity:.85}
 .L i.tty{inset:0;border:0;border-radius:0;background:#07070a;display:flex}
 .L i.tty::before{display:none}
-.L i.tty::after{content:"Auxo Linux 3.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
+.L i.tty::after{content:"Auxo Linux 4.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
 .dcmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--line);font:13.5px var(--fm);color:#d4d4dc;background:#0b0b10}
 .dcmd .c{display:none}
 .dcmd .ok{margin-left:auto;color:#4ade80;font-size:12.5px}
@@ -745,7 +765,7 @@ def nav(page):
     cur = lambda p: ' aria-current="page"' if p == page else ""
     h = "" if page == "home" else HOME
     return f"""<header class="nav"><div class="wrap">
-<a class="brand" href="{HOME}">{mark()}auxo<small>3.0</small></a>
+<a class="brand" href="{HOME}">{mark()}auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="{DL}"{cur('dl')}>Get Auxo</a><a href="{DESKP}"{cur('desktops')}>Desktops</a><a href="{DOCS}"{cur('docs')}>Docs</a><a href="{RELP}"{cur('releases')}>Releases</a><a href="{COMP}"{cur('community')}>Community</a></nav>
 <div class="right"><a class="icon-link" href="{DISCORD}" aria-label="Auxo Discord">{I['discord']}</a><a class="btn primary sm" href="{DL}">{I['dl']}Get Auxo</a></div>
 </div></header>
@@ -754,13 +774,13 @@ def nav(page):
 def footer():
     return f"""<footer><div class="wrap">
 <div class="fgrid">
-  <div><a class="brand" href="{HOME}">{mark()}auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
-  <div><h4>Get Auxo</h4><ul><li><a href="{DL}#installer">Installer image</a></li><li><a href="{DL}#vm">Virtual machines</a></li><li><a href="{DL}#usb">Make a USB stick</a></li><li><a href="{DL}#verify">Verify a download</a></li></ul></div>
+  <div><a class="brand" href="{HOME}">{mark()}auxo</a><p>A rolling distro built on Void Linux. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
+  <div><h4>Get Auxo</h4><ul><li><a href="{DL}#installer">Installer image</a></li><li><a href="{DL}#vmsetup">Virtual machines</a></li><li><a href="{DL}#arch">Auxo 3 (Arch)</a></li><li><a href="{DL}#usb">Make a USB stick</a></li><li><a href="{DL}#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="{DESKP}">Desktops</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{RELP}">Releases</a></li><li><a href="{CHANGELOG_URL}">Changelog</a></li>{f'<li><a href="{PRESSP}">Press kit</a></li>' if PRESSP else ''}</ul></div>
-  <div><h4>Docs</h4><ul><li><a href="{DOCS}#tweak">auxo-tweak</a></li><li><a href="{DOCS}#snapshots">Snapshots</a></li><li><a href="{DOCS}#gaming">Gaming</a></li><li><a href="{DOCS}#trouble">Troubleshooting</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="{DOCS}#tweak">auxo-tweak</a></li><li><a href="{DOCS}#snapshots">Snapshots</a></li><li><a href="{DOCS}#nvidia">NVIDIA</a></li><li><a href="{DOCS}#gaming">Gaming</a></li><li><a href="{DOCS}#trouble">Troubleshooting</a></li></ul></div>
   <div><h4>Community</h4><ul>{f'<li><a href="{COMP}">Get involved</a></li>' if EXTRA_PAGES else ''}<li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
-<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
+<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
 </div>
 </body>
@@ -770,19 +790,15 @@ def footer():
 def checks(items):
     return '<ul class="checks">' + "".join(f"<li>{I['check']}<span>{t}</span></li>" for t in items) + "</ul>"
 
-def shot(src, alt, title="Auxo 3.0"):
+def shot(src, alt, title="Auxo 4.0"):
     return f'<div class="shot rv"><div class="bar mute"><i></i><i></i><i></i><b>{title}</b></div><img src="{src}" alt="{alt}" loading="lazy"></div>'
 
-NOTICE_DATE = "Wednesday, October 7, 2026"
 ALERT_ICO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>'
 def alertbar():
     return (f'<div class="alertbar" role="note"><div class="wrap">{ALERT_ICO}<span>'
-            f'<b>Before you install:</b> pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell in the installer. '
-            f'Some users have hit errors with the other options. '
-            f'<b>Known issue:</b> GNOME may fail to start after install, so pick KDE Plasma, Hyprland, Sway or i3 for now. '
-            f'A fix is expected around {NOTICE_DATE}.</span></div></div>')
+            f'<b>Auxo 4.0 is here, now built on Void Linux.</b> The Arch-based Auxo 3 is discontinued, '
+            f'but you can <a class="inl" href="{DL}#arch">still download it</a>.</span></div></div>')
 
-REC_LONG = "<b>Recommended:</b> in the installer, pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell. They're the best-tested combination, and some users have hit errors with the other options."
 # ================= HOME =================
 swatches = "".join(
     f'<input class="vh" type="radio" name="acc" id="acc-{n}"{" checked" if n == "amber" else ""} aria-label="{n} accent">'
@@ -798,45 +814,47 @@ d_caps = "".join(f'<p class="dcap dcap-{k}">{cap}</p>' for k, n, s, r, cap, lay 
 
 bento = f"""
 <div class="s4 wide rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></svg></div>
- <h3>Every update is a restore point</h3><p>Before each update, Auxo takes a btrfs snapshot. If something breaks, pick an older snapshot in the GRUB menu, boot it, and keep it with <code>auxo-rollback</code>. Your /home is never touched.</p>
+ <h3>Every update is a restore point</h3><p>Before each <code>auxo-update</code>, Auxo takes a btrfs snapshot, plus one every hour. If something breaks, pick an older snapshot in the GRUB menu, boot it, and keep it with <code>auxo-rollback</code>. Your /home is never touched.</p>
  <div class="snaps"><span>▸ before update · today <b>booted</b></span><span>▸ before update · yesterday</span><span>▸ before update · last week</span></div></div>
 <div class="s2 rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7 10h4v4H7zM15 10h2M15 14h2"/></svg></div>
- <h3>GPU drivers, detected</h3><p>The installer checks your graphics card and sets up the right drivers.</p>
- <div class="gpus"><span>NVIDIA · nvidia-open</span><span>AMD · Vulkan</span><span>Intel · Vulkan</span></div></div>
+ <h3>GPU drivers, detected</h3><p>The installer checks your graphics card, and <code>auxo-tweak nvidia on</code> picks the right NVIDIA driver for your card.</p>
+ <div class="gpus"><span>NVIDIA · nvidia</span><span>AMD · Vulkan</span><span>Intel · Vulkan</span></div></div>
 <div class="s2 rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M6 11h4M8 9v4"/><path d="M7 5h10a5 5 0 0 1 5 5v2a5 5 0 0 1-9 3h-2a5 5 0 0 1-9-3v-2a5 5 0 0 1 5-5z"/></svg></div>
- <h3>One-command gaming</h3><p>Steam, GameMode, MangoHud and Gamescope, plus the kernel tweaks games expect.</p>
+ <h3>One-command gaming</h3><p>Steam with its 32-bit libraries, GameMode, MangoHud and gamescope, plus the kernel tweaks games expect.</p>
  <div class="mini"><span class="ta">❯</span> auxo-tweak gaming on</div></div>
 <div class="s2 rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg></div>
- <h3>Safe dual boot</h3><p>Installs alongside Windows or another Linux and reuses your existing EFI partition.</p></div>
+ <h3>Dual boot</h3><p>Install on partitions you already made, alongside Windows or another Linux, and reuse your EFI partition.</p></div>
 <div class="s2 rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg></div>
- <h3>Installs offline</h3><p>No internet still gets you a complete Plasma desktop. You're told what was skipped.</p></div>
+ <h3>Installs offline</h3><p>No internet still gets you a complete Plasma desktop. Other desktops download what they need.</p></div>
 <div class="s3 wide rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6M12 19h8"/></svg></div>
- <h3>Updates that read the news first</h3><p><code>auxo-update</code> checks Arch news for manual steps, takes a snapshot, then updates packages, AUR and Flatpak together.</p>
+ <h3>One command to update</h3><p><code>auxo-update</code> takes a snapshot, updates xbps itself and then every package and Flatpak, and tells you about new config files and whether to reboot.</p>
  <div class="mini"><span class="ta">❯</span> auxo-update
-<span class="tm">:: arch news · nothing needs attention</span>
 <span class="tm">:: snapshot · before update</span>
+<span class="tm">:: xbps · flatpak</span>
 <span class="tg">✓</span> 42 packages updated</div></div>
 <div class="s3 wide rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></div>
- <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, and a fast text login screen that works everywhere, including VMs.</p>
+ <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, and one-line commands for a firewall, private DNS and sched-ext CPU schedulers.</p>
  <div class="mini"><span class="ta">❯</span> auxo-fetch --json | jq .accent
 <span class="tm">"</span><span class="accname"></span><span class="tm">"</span></div></div>
 """
 
 compare_rows = [
-    ("Installer", "Graphical, guided", "Command line, by hand"),
+    ("Installer", "Text installer with a review screen", "void-installer, then set up by hand"),
     ("Desktop at first boot", "Ready, themed, configured", "You install and configure it"),
     ("GPU drivers", "Detected and installed", "You pick and install them"),
     ("Snapshots", "Before every update, bootable from GRUB", "Set up yourself if you want them"),
-    ("Change desktop later", "One command", "Install, configure, clean up"),
-    ("Packages", "Arch repos, AUR, Flatpak", "Arch repos, AUR, Flatpak"),
+    ("Change desktop later", "One command", "Install, configure, enable services"),
+    ("Packages", "Void repos and Flatpak", "Void repos and Flatpak"),
 ]
 compare_html = "".join(f'<tr><td>{a}</td><td class="us">{I["check"]}{b}</td><td>{c}</td></tr>' for a, b, c in compare_rows)
 
 faqs = [
-    ("Is Auxo really Arch?", "Yes. Auxo uses the official Arch Linux repositories and pacman, and it follows Arch's rolling release. Auxo adds an installer, themes and its own tools on top. You can use the Arch Wiki and the AUR as normal."),
-    ("Can I switch desktops without breaking things?", "That's the point of <code>auxo-tweak</code>. It installs the new desktop, applies the Auxo setup, keeps your old config files as <code>*.auxo-bak</code>, and sets the login screen to the new desktop. If anything goes wrong, boot an earlier snapshot from GRUB."),
-    ("Does it work in VirtualBox or other VMs?", "Yes. Use the VM image from the download page, set VirtualBox graphics to VMSVGA with 3D acceleration off, and choose <b>Boot existing OS</b> after installing."),
-    ("Will it work with my NVIDIA card?", "The installer detects your GPU. Recent NVIDIA cards get the open NVIDIA kernel modules with modesetting on, and AMD and Intel get Mesa with Vulkan and video acceleration."),
+    ("Is Auxo really Void?", "Yes. Auxo uses the official Void Linux repositories, xbps and runit, and it follows Void's rolling release. Auxo adds an installer, themes and its own tools on top, and the Void docs apply as normal."),
+    ("What happened to the Arch version?", "Auxo 3 was based on Arch Linux. It's discontinued: there won't be new Auxo 3 images or tool updates. Its last images are still on the <a class=\"inl\" href=\"" + DL + "#arch\">download page</a>, and systems already installed from it keep getting Arch package updates through pacman."),
+    ("Can I switch desktops without breaking things?", "That's the point of <code>auxo-tweak</code>. It installs the new desktop, applies the Auxo setup, keeps your old config files as <code>*.auxo-bak</code> and points the login screen at the new desktop. If anything goes wrong, boot an earlier snapshot from GRUB."),
+    ("Does it work in VirtualBox or other VMs?", "Yes, from the same image. Set VirtualBox graphics to VMSVGA with 3D acceleration off, and remove the image from the virtual drive after installing."),
+    ("Will it work with my NVIDIA card?", "Run <code>auxo-tweak nvidia on</code>. It picks the right driver for your card from Void's nonfree repository: <code>nvidia</code> for Turing and newer, <code>nvidia580</code> for Maxwell to Volta, <code>nvidia470</code> for Kepler."),
+    ("Is there an AUR?", "No, that's an Arch thing. Void's repositories are large, Flatpak is one command away (<code>auxo-tweak flatpak on</code>), and Void's own xbps-src builds anything else."),
     ("Does Secure Boot work?", "Not yet. Turn Secure Boot off in your firmware settings before booting the USB stick."),
     ("Is it free?", "Yes. Auxo is free to download and use."),
 ]
@@ -849,7 +867,7 @@ d_layers_k = _re.sub(r'<div class="L L-plasma">.*?</div>', f'<div class="L L-pla
 
 IC = {
  "time": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
- "arch": '<svg viewBox="0 0 24 24"><path d="M12 3L4 21h3.5L12 11l4.5 10H20z"/></svg>',
+ "base": '<svg viewBox="0 0 24 24"><path d="M12 3L4 21h3.5L12 11l4.5 10H20z"/></svg>',
  "swap": '<svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>',
  "undo": '<svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>',
  "people": '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5a5 5 0 0 1 5.5 5"/></svg>',
@@ -858,6 +876,17 @@ IC = {
  "vm": '<svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="14" rx="2"/><rect x="6" y="8" width="8" height="6" rx="1"/><path d="M8 21h8"/></svg>',
  "dual": '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>',
 }
+
+
+EXTRAS_CARDS = [
+ ("snap", "Snapshots", "Bootable btrfs snapshots before every update, with snapper and grub-btrfs.", "on by default"),
+ ("zram", "zram swap", "Compressed swap in RAM, so the system stays responsive when memory is tight.", "on by default"),
+ ("gpu", "GPU drivers", "The right driver for your NVIDIA, AMD or Intel graphics.", "on by default"),
+ ("fw", "Firewall", "ufw, set to block incoming connections and allow outgoing.", "optional"),
+ ("flat", "Flatpak", "Flatpak with Flathub, for apps that aren't in Void's repositories.", "optional · needs internet"),
+ ("game", "Gaming", "Steam, GameMode, MangoHud and gamescope, with Void's nonfree and multilib repos.", "optional · needs internet"),
+]
+extras_html = "".join(f'<div class="rv"><h3>{t}</h3><p>{d}</p><p class="pkgs"><span>{tag}</span></p></div>' for k, t, d, tag in EXTRAS_CARDS)
 
 home = None
 ICONS2 = json.load(open("assets/icons.json"))
@@ -891,24 +920,24 @@ soft_panels = "".join(
     f'<p class="pkgs"><span>Packages</span>{pk}</p></div>' for k, t, d, pk in SOFT)
 
 HERO_SHOT = (f'<figure class="heroshot" aria-label="The Auxo Linux KDE Plasma 6 desktop">'
-             f'<div class="bar mute"><i></i><i></i><i></i><b>Auxo Linux 3.0 · KDE Plasma 6</b></div>'
+             f'<div class="bar mute"><i></i><i></i><i></i><b>Auxo Linux · KDE Plasma 6</b></div>'
              f'<div class="shotwrap" style="background-image:url({imgs[0]})"><img src="{KDE_SHOT}" alt="" loading="eager"></div></figure>')
 
-home = head("Auxo Linux — Arch, set up the way you want it",
-            "Auxo Linux is an Arch-based rolling distro. Pick your desktop, kernel, shell and accent colour in a graphical installer, and change any of them later with one command.",
+home = head("Auxo Linux — Void Linux, set up the way you want it",
+            "Auxo Linux is a rolling distro built on Void Linux. Pick your desktop, kernel, shell and accent colour in a fast text installer, and change any of them later with one command.",
             "https://auxolinux.com/") + nav("home") + f"""
 <main id="main">{alertbar()}
 <section class="khero v7">{RIDGE.replace('class="ridge"','class="hridge"')}<div class="wrap hgrid">
   <div>
-    <a class="badge rise" href="{DL}#releases"><b>.</b>Auxo Linux 3.0 is now available →</a>
-    <h1 class="rise r1">Arch Linux, set up the way you want it.</h1>
-    <p class="lede rise r2">An open-source, Arch-based distribution with a graphical installer. Pick your desktop, kernel, shell and accent colour, then change any of them later with one command. No reinstall.</p>
+    <a class="badge rise" href="{DL}#releases"><b>.</b>Auxo Linux 4.0: now built on Void Linux →</a>
+    <h1 class="rise r1">Void Linux, set up the way you want it.</h1>
+    <p class="lede rise r2">An open-source distribution built on Void Linux, with a fast, keyboard-driven installer. Pick your desktop, kernel, shell and accent colour, then change any of them later with one command. No systemd, no reinstall.</p>
     <div class="cta rise r3">
-      <a class="btn primary lg" href="{DL}">{I['dl']}Download Auxo 3.0</a>
+      <a class="btn primary lg" href="{DL}">{I['dl']}Download Auxo 4.0</a>
       <a class="btn lg" href="{DOCS}">Read the docs</a>
     </div>
-    <p class="meta-line rise r4"><span>{I['check']}Free and open source</span><span>{I['check']}Arch repos and AUR</span><span>{I['check']}UEFI and BIOS</span><span>{I['check']}VM image</span></p>
-    <p class="relline rise r4">Latest release <b>3.0</b> · {STD['date']} · {STD['size']} · <a class="inl" href="{DL}#releases">Release notes</a></p>
+    <p class="meta-line rise r4"><span>{I['check']}Free and open source</span><span>{I['check']}runit, no systemd</span><span>{I['check']}xbps and Flatpak</span><span>{I['check']}UEFI and BIOS</span></p>
+    <p class="relline rise r4">Latest release <b>4.0</b> · {VOID['date']} · <a class="inl" href="{DL}#releases">Release notes</a> · <a class="inl" href="{DL}#arch">Looking for the Arch version?</a></p>
   </div>
   <div class="rise r2">{HERO_SHOT}</div>
 </div></section>
@@ -916,17 +945,17 @@ home = head("Auxo Linux — Arch, set up the way you want it",
 <div class="strip"><div class="wrap">
   <div><b>8</b><span>desktops, three pre-riced</span></div>
   <div><b>7</b><span>accent colours</span></div>
-  <div><b>4</b><span>kernels to choose from</span></div>
+  <div><b>3</b><span>kernels to choose from</span></div>
   <div><b>1</b><span>command to change it all</span></div>
 </div></div>
 
 <section id="features"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Why Auxo</p><h2>Arch, without the weekend of setup</h2></div><p>Everything you'd normally configure by hand after installing Arch, done during install and still yours to change.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Why Auxo</p><h2>Void, without the evening of setup</h2></div><p>Everything you'd normally configure by hand after installing Void, done during install and still yours to change.</p></div>
   <div class="cards5">
-    <div class="rv">{IC['time']}<h3>Ready in minutes</h3><p>A guided installer sets up your desktop, drivers, snapshots and dual boot in one go.</p></div>
-    <div class="rv">{IC['arch']}<h3>Still pure Arch</h3><p>Official Arch repositories, pacman, the AUR and the Arch Wiki all work as normal.</p></div>
+    <div class="rv">{IC['time']}<h3>Ready in minutes</h3><p>A guided text installer sets up your desktop, drivers, snapshots and dual boot in one go.</p></div>
+    <div class="rv">{IC['base']}<h3>Still pure Void</h3><p>Official Void repositories, xbps, runit and the Void docs all work as normal.</p></div>
     <div class="rv">{IC['swap']}<h3>Change anything later</h3><p><code>auxo-tweak</code> swaps your desktop, kernel, shell or accent colour without reinstalling.</p></div>
-    <div class="rv">{IC['undo']}<h3>Undo bad updates</h3><p>Every pacman transaction takes a btrfs snapshot you can boot from GRUB and roll back to.</p></div>
+    <div class="rv">{IC['undo']}<h3>Undo bad updates</h3><p>Every <code>auxo-update</code> takes a btrfs snapshot you can boot from GRUB and roll back to.</p></div>
   </div>
 </div></section>
 
@@ -946,57 +975,52 @@ home = head("Auxo Linux — Arch, set up the way you want it",
 <section id="how"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">03</span> How it works</p><h2>Install once. Change anything. Undo mistakes.</h2></div><p>Three tools cover the whole life of your system. <a class="inl" href="{DOCS}">Full command reference →</a></p></div>
   <div class="how3">
-    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A guided installer. Pick your desktop, accent, kernel, shell and extra software, and Auxo sets up drivers, snapshots and dual boot. We recommend <b>linux-zen</b> and <b>zsh</b>.</p>
+    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A keyboard-driven text installer. Pick your desktop, accent, kernel, shell and extras. It shows you a summary and changes nothing until you press Install.</p>
       <div class="term"><pre><span class="tm"># in the live session</span>
-<span class="ta">❯</span> auxo-welcome
-<span class="tg">✓</span> Install Auxo Linux</pre></div></div>
-    <div class="rv"><span class="num">2</span><h3>Change anything</h3><p><code>auxo-tweak</code> runs the same code as the installer, so a change later gives the same result as a fresh install.</p>
+<span class="ta">❯</span> sudo auxo-installer
+<span class="tg">✓</span> Auxo is installed</pre></div></div>
+    <div class="rv"><span class="num">2</span><h3>Change anything</h3><p><code>auxo-tweak</code> runs the same commands as the installer, so a change later gives the same result as a fresh install.</p>
       <div class="term"><pre><span class="ta">❯</span> auxo-tweak desktop hyprland
-<span class="ta">❯</span> auxo-tweak kernel linux-zen
+<span class="ta">❯</span> auxo-tweak kernel linux-lts
 <span class="ta">❯</span> auxo-tweak accent <span class="accname"></span></pre></div></div>
-    <div class="rv"><span class="num">3</span><h3>Undo mistakes</h3><p>Snapshots are taken before and after every pacman run. Boot one from GRUB, then make it permanent.</p>
+    <div class="rv"><span class="num">3</span><h3>Undo mistakes</h3><p>A snapshot is taken before every update. Boot one from GRUB, then make it permanent.</p>
       <div class="term"><pre><span class="ta">❯</span> auxo-update
-<span class="tm">:: news · snapshot · repo · AUR · Flatpak</span>
+<span class="tm">:: snapshot · xbps · flatpak</span>
 <span class="ta">❯</span> auxo-rollback --list</pre></div></div>
   </div>
 </div></section>
 
 <section class="alt" id="software"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Software</p><h2>Everything you need, one checkbox away</h2></div><p>These are the installer's real software bundles. Tick what you want during setup, or install it later with pacman.</p></div>
-  {soft_radios}
-  <div class="softtabs rv">
-    <div class="stl" role="tablist">{soft_labels}</div>
-    {soft_panels}
-  </div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Extras</p><h2>The extras, one checkbox away</h2></div><p>These are the installer's real Extras. Tick what you want during setup, or turn any of them on later with <code>auxo-tweak</code>. Everything else is an <code>xbps-install</code> away.</p></div>
+  <div class="cards5 extras6">{extras_html}</div>
 </div></section>
 
 <section id="tour"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">05</span> Installer</p><h2>A guided install, start to finish</h2></div><p>Real screenshots from Auxo 3.0.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">05</span> Installer</p><h2>A fast, keyboard-driven install</h2></div><p>Real screenshots of the Auxo 4.0 installer. Arrow keys, type to search, Enter to pick, Esc to go back.</p></div>
   <div class="shots3">
-    <figure class="rv"><img src="{imgs[0]}" alt="Auxo live session with the welcome app" loading="lazy"><figcaption><b>Try it live</b><span>Boot the USB stick and the Auxo welcome app opens.</span></figcaption></figure>
-    <figure class="rv"><img src="{imgs[1]}" alt="Choosing a desktop in the Auxo installer" loading="lazy"><figcaption><b>Pick your desktop</b><span>Plasma, GNOME, Xfce, Cinnamon, or a ready-made Hyprland, Sway or i3 setup.</span></figcaption></figure>
-    <figure class="rv"><img src="{imgs[2]}" alt="Choosing an accent colour in the Auxo installer" loading="lazy"><figcaption><b>Choose an accent</b><span>One colour for the boot menu, login, prompt, terminal and bars.</span></figcaption></figure>
+    <figure class="rv"><img src="{TUI['desktop']}" alt="Choosing a desktop in the Auxo installer" loading="eager"><figcaption><b>Pick your desktop</b><span>Plasma, GNOME, Xfce, Cinnamon, or a ready-made Hyprland, Sway or i3 setup.</span></figcaption></figure>
+    <figure class="rv"><img src="{TUI['accent']}" alt="Choosing an accent colour in the Auxo installer" loading="eager"><figcaption><b>Choose an accent</b><span>One colour for the boot menu, login screen, prompt, terminal and bars.</span></figcaption></figure>
+    <figure class="rv"><img src="{TUI['review']}" alt="The Auxo installer's review screen" loading="eager"><figcaption><b>Check, then install</b><span>A summary of every choice. Nothing on your disk changes until you press Install.</span></figcaption></figure>
   </div>
-  <div class="note" style="margin-top:24px">{I['info']}<span>{REC_LONG}</span></div>
   <div class="sec-foot picker-row"><span class="hint">Try an accent on this page:</span><div class="swatches" role="radiogroup" aria-label="Accent colour">{swatches}</div></div>
 </div></section>
 
 <section class="alt" id="everywhere"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">06</span> Platforms</p><h2>Auxo everywhere</h2></div><p>Install it on your PC, run it from a USB stick, or try it in a virtual machine.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">06</span> Platforms</p><h2>Auxo everywhere</h2></div><p>Install it on your PC, run it from a USB stick, or try it in a virtual machine. It's all one image.</p></div>
   <div class="every">
-    <a class="rv" href="{DL}#installer">{IC['metal']}<h3>Bare metal</h3><p>Install on your PC or laptop with full access to your hardware.</p><span class="more">Get the installer →</span></a>
+    <a class="rv" href="{DL}#installer">{IC['metal']}<h3>Bare metal</h3><p>Install on your PC or laptop with full access to your hardware.</p><span class="more">Get the image →</span></a>
     <a class="rv" href="{DL}#usb">{IC['usb']}<h3>Live USB</h3><p>Boot a full KDE Plasma desktop without touching your drive.</p><span class="more">Make a USB stick →</span></a>
-    <a class="rv" href="{DL}#vm">{IC['vm']}<h3>Virtual machines</h3><p>VirtualBox, QEMU/KVM and VMware, with a dedicated VM image.</p><span class="more">Get the VM image →</span></a>
-    <a class="rv" href="{DL}#installer">{IC['dual']}<h3>Dual boot</h3><p>Install alongside Windows or another Linux and pick at startup.</p><span class="more">Get the installer →</span></a>
+    <a class="rv" href="{DL}#vmsetup">{IC['vm']}<h3>Virtual machines</h3><p>VirtualBox, QEMU/KVM and VMware, from the same image.</p><span class="more">VM setup →</span></a>
+    <a class="rv" href="{DL}#installer">{IC['dual']}<h3>Dual boot</h3><p>Install alongside Windows or another Linux and pick at startup.</p><span class="more">Get the image →</span></a>
   </div>
 </div></section>
 
 <section id="news"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">07</span> News</p><h2>Latest news</h2></div><p>Releases and announcements.</p></div>
   <div class="news">
-    <a class="rv" href="{DL}"><time>2026-09-26</time><h3>Auxo Linux 3.0 released</h3><p>One-command desktop switching with auxo-tweak, ready-made Hyprland, Sway and i3 setups, and bootable snapshots.</p><span class="more">Download 3.0 →</span></a>
-    <a class="rv" href="{DL}#vm"><time>2026-09-27</time><h3>A dedicated VM image</h3><p>A separate image for VirtualBox, QEMU/KVM and VMware, plus step-by-step VM setup instructions.</p><span class="more">VM setup →</span></a>
-    <a class="rv" href="{DOCS}"><time>2026-09-27</time><h3>New: the Auxo docs</h3><p>Every auxo-tweak command, snapshots and rollback, gaming setup and troubleshooting, in one place.</p><span class="more">Read the docs →</span></a>
+    <a class="rv" href="{DL}"><time>{VOID['date']}</time><h3>Auxo Linux 4.0: now on Void Linux</h3><p>A new base with runit and xbps, a fast text installer, NVIDIA and sched-ext commands, and bootable snapshots before every update.</p><span class="more">Download 4.0 →</span></a>
+    <a class="rv" href="{DL}#arch"><time>{VOID['date']}</time><h3>Auxo 3 (Arch) is discontinued</h3><p>The Arch-based Auxo 3 won't get new images or tool updates. Its final images stay available for download.</p><span class="more">Auxo 3 downloads →</span></a>
+    <a class="rv" href="{DOCS}"><time>{VOID['date']}</time><h3>The docs, updated for 4.0</h3><p>Every auxo-tweak command on Void: desktops, NVIDIA, snapshots and rollback, gaming and troubleshooting.</p><span class="more">Read the docs →</span></a>
   </div>
 </div></section>
 
@@ -1013,14 +1037,14 @@ home = head("Auxo Linux — Arch, set up the way you want it",
 def dlrow(f, title, desc):
     return f"""<div class="dlrow">
   <span class="arch">x86_64</span>
-  <div class="dlinfo"><b>{title}</b><em>{desc}</em><span>{f['name']} · {f['size']} · {f['date']}</span></div>
+  <div class="dlinfo"><b>{title}</b><em>{desc}</em><span>{" · ".join(x for x in (f['name'], f['size'], f['date']) if x)}</span></div>
   <div class="dlacts"><a class="btn primary" href="{f['url']}">{I['dl']}Download</a><a class="btn" href="{f['torrent']}">{I['mag']}Torrent</a><a class="btn" href="{f['details']}" title="MD5 and SHA-1 are listed on the Internet Archive page">{I['shield']}Checksums</a></div>
 </div>"""
 
 def radios(grp, keys):
     return "".join(f'<input class="vh" type="radio" name="t-{grp}" id="t-{grp}-{k}"{" checked" if i == 0 else ""}>' for i, k in enumerate(keys))
 
-N = STD["name"]
+N = VOID["name"]
 os_tabs = f"""{radios('os', TABSETS['os'])}
 <div class="tabs rv">
  <div class="tablist" role="tablist"><label for="t-os-win">{I['win']}Windows</label><label for="t-os-mac">{I['apple']}macOS</label><label for="t-os-lin">{I['tux']}Linux</label></div>
@@ -1044,18 +1068,18 @@ os_tabs = f"""{radios('os', TABSETS['os'])}
  </ol></div>
 </div>"""
 
-VMN = VM["name"]
+VMN = VOID["name"]
 vm_tabs = f"""{radios('vm', TABSETS['vm'])}
 <div class="tabs rv">
  <div class="tablist" role="tablist"><label for="t-vm-vbox">{I['vbox']}VirtualBox</label><label for="t-vm-qemu">{I['tux']}QEMU / KVM</label><label for="t-vm-vmw">{I['vbox']}VMware</label></div>
  <div class="panel p-vm-vbox"><ol class="steps">
-  <li><span>New VM: type <b>Linux</b>, version <b>Arch Linux (64-bit)</b> or <b>Other Linux (64-bit)</b>. Give it at least <b>4 GB</b> RAM, 2 CPUs and a <b>25 GB</b> disk.</span></li>
+  <li><span>New VM: type <b>Linux</b>, version <b>Other Linux (64-bit)</b>. Give it at least <b>4 GB</b> RAM, 2 CPUs and a <b>25 GB</b> disk. Tick <b>Enable EFI</b> if you want a UEFI install.</span></li>
   <li><span>Settings → Display: graphics controller <b>VMSVGA</b>, video memory <b>128 MB</b>, <b>3D acceleration off</b>.</span></li>
-  <li><span>Attach the VM image as the optical drive, start the VM and install as normal.</span></li>
-  <li><span>After the restart, the boot menu appears again. Choose <code>Boot existing OS</code>, or remove the image from the optical drive.</span></li>
+  <li><span>Attach the Auxo image as the optical drive, start the VM and install as normal.</span></li>
+  <li><span>When the installer says <b>Auxo is installed</b>, power off, remove the image from the optical drive, and start the VM again.</span></li>
  </ol></div>
  <div class="panel p-vm-qemu"><ol class="steps">
-  <li><span>With <b>virt-manager</b>: create a VM from the image, choose <b>Arch Linux</b> as the OS, 4 GB RAM and a 25 GB disk. Video: <b>Virtio</b>.</span></li>
+  <li><span>With <b>virt-manager</b>: create a VM from the image, choose <b>Generic Linux</b> as the OS, 4 GB RAM and a 25 GB disk. Video: <b>Virtio</b>.</span></li>
   <li><span>Or from a terminal:<div class="code"><span class="tm">$ </span>qemu-img create -f qcow2 auxo.qcow2 25G
 <span class="tm">$ </span>qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 4G \\
     -drive file=auxo.qcow2,if=virtio -cdrom {VMN} \\
@@ -1064,29 +1088,28 @@ vm_tabs = f"""{radios('vm', TABSETS['vm'])}
  </ol></div>
  <div class="panel p-vm-vmw"><ol class="steps">
   <li><span>New VM: guest OS <b>Linux</b>, version <b>Other Linux 6.x kernel 64-bit</b>. 4 GB RAM, 2 CPUs, 25 GB disk.</span></li>
-  <li><span>Point the CD/DVD drive at the VM image and install as normal.</span></li>
-  <li><span>When it restarts, choose <code>Boot existing OS</code>, or disconnect the CD/DVD drive.</span></li>
+  <li><span>Point the CD/DVD drive at the Auxo image and install as normal.</span></li>
+  <li><span>After installing, disconnect the CD/DVD drive and restart.</span></li>
  </ol></div>
 </div>
-<div class="note">{I['info']}<span><b>Using a VM?</b> After installing, choose <b>Boot existing OS</b> in the boot menu, or the installer just starts again.</span></div>"""
+<div class="note">{I['info']}<span><b>Using a VM?</b> Remove the image from the virtual drive after installing, or the VM boots the live session again.</span></div>"""
 
 dl = head("Get Auxo Linux — Download",
-          "Download Auxo Linux 3.0: the installer image for your PC, or the VM image for VirtualBox, QEMU/KVM and VMware.",
+          "Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.",
           "https://auxolinux.com/download/") + nav("dl") + f"""
 <main id="main">{alertbar()}
 <div class="phead"><div class="wrap pgrid">
   <div>
-    <p class="eyebrow rise">Auxo Linux 3.0</p>
+    <p class="eyebrow rise">Auxo Linux 4.0</p>
     <h1 class="rise r1">Get Auxo Linux</h1>
     <p class="rise r2">Four steps from download to desktop. Most installs take about ten minutes.</p>
-    <div class="chips rise r3"><span><b>3.0</b> latest</span><span><b>x86_64</b></span><span><b>UEFI</b> + BIOS</span><span>Hosted on the <b>Internet Archive</b></span></div>
+    <div class="chips rise r3"><span><b>4.0</b> latest</span><span><b>Void Linux</b> base</span><span><b>x86_64</b></span><span><b>UEFI</b> + BIOS</span><span>Hosted on the <b>Internet Archive</b></span></div>
   </div>
   <div class="qd rise r2">
-    <div class="qtop">{mark()}<div><b>Auxo Linux 3.0</b><span>x86_64 · {STD['size']} · {STD['date']}</span></div></div>
-    <a class="btn primary lg" href="{STD['url']}">{I['dl']}Download for PC</a>
-    <a class="btn lg" href="{VM['url']}">{I['dl']}Download for virtual machines</a>
-    <p class="qrec">Installing? We recommend the <b>linux-zen</b> kernel and <b>zsh</b> shell.</p>
-    <p class="qlinks"><a href="{STD['torrent']}">Torrent</a><a href="{STD['details']}">Checksums</a><a href="#choose">Which one do I need?</a></p>
+    <div class="qtop">{mark()}<div><b>Auxo Linux 4.0</b><span>x86_64 · Void Linux · {VOID['date']}</span></div></div>
+    <a class="btn primary lg" href="{VOID['url']}">{I['dl']}Download Auxo 4.0</a>
+    <p class="qrec">One image for PCs, live USB and virtual machines.</p>
+    <p class="qlinks"><a href="{VOID['torrent']}">Torrent</a><a href="{VOID['details']}">Checksums</a><a href="#arch">Auxo 3 (Arch)</a></p>
   </div>
 </div></div>
 
@@ -1095,25 +1118,25 @@ dl = head("Get Auxo Linux — Download",
 </div></nav>
 
 <section id="choose" style="padding-top:72px;padding-bottom:48px"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Step one</p><h2>Choose your platform</h2></div><p>Every image is the same Auxo. Pick the one that fits where you're installing it.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Step one</p><h2>Choose your platform</h2></div><p>It's the same image everywhere. Pick where you want to run it.</p></div>
   <div class="platforms">
-    <a class="plat rec rv" href="#installer">
+    <a class="plat rec rv" href="#usb">
       <div class="art"><span class="rtag">Recommended</span>{ART_PC}</div>
-      <div class="body"><h2>Installer image</h2><p class="sub">Install Auxo on your PC or laptop from a USB stick.</p>
+      <div class="body"><h2>Install on a PC</h2><p class="sub">Install Auxo on your PC or laptop from a USB stick.</p>
         <ul class="pc"><li class="p">Direct access to your hardware and GPU</li><li class="p">Dual boot with Windows or Linux</li><li class="p">Full speed, full desktop</li><li class="m">Needs a USB stick and a reboot</li></ul>
-        <div class="go"><span class="btn primary">{I['dl']}Get the installer</span></div></div>
+        <div class="go"><span class="btn primary">{I['dl']}Make a USB stick</span></div></div>
     </a>
-    <a class="plat rv" href="#vm">
+    <a class="plat rv" href="#vmsetup">
       <div class="art">{ART_VM}</div>
       <div class="body"><h2>Virtual machines</h2><p class="sub">Run Auxo inside VirtualBox, QEMU/KVM or VMware.</p>
-        <ul class="pc"><li class="p">Try it without touching your PC</li><li class="p">Works on Windows, macOS and Linux hosts</li><li class="p">Built with the VM boot fixes</li><li class="m">Slower graphics than real hardware</li></ul>
-        <div class="go"><span class="btn">{I['dl']}Get the VM image</span></div></div>
+        <ul class="pc"><li class="p">Try it without touching your PC</li><li class="p">Works on Windows, macOS and Linux hosts</li><li class="p">Same image as for PCs</li><li class="m">Slower graphics than real hardware</li></ul>
+        <div class="go"><span class="btn">VM setup</span></div></div>
     </a>
-    <a class="plat rv" href="#installer">
+    <a class="plat rv" href="#usb">
       <div class="art">{ART_USB}</div>
       <div class="body"><h2>Live boot</h2><p class="sub">Run Auxo from a USB stick without installing.</p>
         <ul class="pc"><li class="p">Nothing changes on your drive</li><li class="p">Full KDE Plasma desktop to try</li><li class="p">Install from it whenever you're ready</li><li class="m">Changes are lost when you shut down</li></ul>
-        <div class="go"><span class="btn">{I['dl']}Uses the installer image</span></div></div>
+        <div class="go"><span class="btn">Make a USB stick</span></div></div>
     </a>
   </div>
   <div class="reqs compact rv">
@@ -1127,14 +1150,15 @@ dl = head("Get Auxo Linux — Download",
 <section id="get" class="alt"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">02</span> Step two</p><h2>Download the image</h2></div><p>Images are hosted on the Internet Archive. Use the torrent if the direct download is slow.</p></div>
   <div class="dlsec rv" id="installer">
-    <div class="top"><div><p class="eyebrow">Installer image</p><h2>Bare metal and live boot</h2><p>Write it to a USB stick, boot it, and try Auxo live or install it.</p></div><a class="doclink" href="#usb">Make a USB stick →</a></div>
-    <div class="dltable">{dlrow(STD, "Auxo Linux 3.0 — Installer", "Live KDE Plasma session with the graphical installer")}</div>
+    <div class="top"><div><p class="eyebrow">Auxo Linux 4.0 · Void Linux</p><h2>PCs, live USB and virtual machines</h2><p>Write it to a USB stick or attach it to a VM, boot it, and try Auxo live or install it.</p></div><a class="doclink" href="#usb">Make a USB stick →</a></div>
+    <div class="dltable">{dlrow(VOID, "Auxo Linux 4.0", "Live KDE Plasma session with the Auxo text installer")}</div>
   </div>
-  <div class="dlsec rv" id="vm">
-    <div class="top"><div><p class="eyebrow">Virtual machines</p><h2>VirtualBox, QEMU/KVM and VMware</h2><p>Attach it to a new VM as an optical drive and install as normal.</p></div><a class="doclink" href="#vmsetup">VM setup →</a></div>
-    <div class="dltable">{dlrow(VM, "Auxo Linux 3.0 — VM", "The same installer, built for virtual machines")}</div>
+  <div class="legacy rv" id="arch">
+    <div class="top"><div><p class="eyebrow">Discontinued</p><h2>Auxo 3 (Arch Linux) <span class="dtag">No longer updated</span></h2>
+      <p>Auxo 3 was based on Arch Linux and used the Calamares installer. It's no longer developed: there won't be new Auxo 3 images or updates to its Auxo tools. Systems you install from it still get Arch package updates through pacman. <b>For new installs, use Auxo 4.</b></p></div></div>
+    <div class="dltable">{dlrow(ARCH, "Auxo Linux 3.0 (Arch) — Installer", "Final Arch-based image: live KDE Plasma with the graphical installer")}{dlrow(ARCH_VM, "Auxo Linux 3.0 (Arch) — VM", "The same, built for virtual machines")}</div>
+    <p class="subtle" style="margin-top:14px">The Auxo 3 source code is kept on GitHub under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p>
   </div>
-  <p class="subtle">Looking for an older version? See <a href="#releases">all releases</a>.</p>
 </div></section>
 
 <section id="usb"><div class="wrap">
@@ -1148,18 +1172,17 @@ dl = head("Get Auxo Linux — Download",
 </div></section>
 
 <section class="alt" id="step4"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Step four</p><h2>Verify and install</h2></div><p>Check the download, boot it, and click <b>Install Auxo Linux</b> in the welcome app.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Step four</p><h2>Verify and install</h2></div><p>Check the download, boot it, and start the installer from the welcome app.</p></div>
   <div class="two">
     <div class="card rv" id="install"><h3>Install Auxo</h3><p>Boot the USB stick or VM, then:</p>
       <ol class="steps">
         <li><span>Choose <b>Auxo Linux</b> in the boot menu. The live KDE Plasma desktop starts.</span></li>
-        <li><span>Connect to Wi-Fi from the welcome app if you want the extra software.</span></li>
-        <li><span>Click <b>Install Auxo Linux</b>. Pick your language, keyboard and disk (erase, or install alongside another OS).</span></li>
-        <li><span>Choose your desktop and accent, then pick <b>linux-zen</b> as the kernel and <b>zsh</b> as the shell (recommended). Add any extra software and create your user.</span></li>
-        <li><span>Check the summary and click <b>Install</b>. It takes a few minutes.</span></li>
-        <li><span>When it says <b>All done</b>, restart and remove the USB stick. In a VM, choose <b>Boot existing OS</b>.</span></li>
-      </ol>
-      <div class="note">{I['info']}<span>{REC_LONG}</span></div></div>
+        <li><span>Click <b>Install Auxo Linux</b> in the welcome app, or run <code>sudo auxo-installer</code> in a terminal. For Wi-Fi, press <b>N</b> on the installer's first page.</span></li>
+        <li><span>Use the arrow keys, type to search, <b>Enter</b> to pick and <b>Esc</b> to go back. Choose your keyboard, language, time zone and disk: erase a disk, or use partitions you made to dual boot.</span></li>
+        <li><span>Choose your desktop, accent colour, kernel and shell, create your account, and tick any extras.</span></li>
+        <li><span>Check the summary and press <b>Install</b>. Nothing on your disk changes before this step.</span></li>
+        <li><span>When it says <b>Auxo is installed</b>, restart and remove the USB stick.</span></li>
+      </ol></div>
     <div class="card rv" id="verify"><h3>Verify your download</h3><p>Make sure the image downloaded completely before you write it. Compare the result with the SHA-1 on the file's <b>Checksums</b> page.</p>
       <div class="code"><span class="tm"># Linux</span>
 <span class="tm">$ </span>sha1sum {N}
@@ -1171,26 +1194,25 @@ dl = head("Get Auxo Linux — Download",
   </div>
 </div></section>
 
-
-
 <section id="releases"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow">Releases</p><h2>Release notes and older versions</h2></div><p>Auxo is a rolling release: once installed, <code>auxo-update</code> keeps you current. You don't need to reinstall for new versions.</p></div>
   <div class="two">
-    <div class="card rv"><h3>What's new in 3.0</h3><p>The biggest Auxo release so far.</p>
+    <div class="card rv"><h3>What's new in 4.0</h3><p>Auxo moves from Arch Linux to Void Linux.</p>
       <ul class="rel">
-        <li><b class="new">New</b><span><code>auxo-tweak</code> switches desktop, kernel, shell and accent without reinstalling</span></li>
-        <li><b class="new">New</b><span>Ready-made Hyprland, Sway and i3 setups</span></li>
-        <li><b class="new">New</b><span>Animated boot splash in your accent colour</span></li>
-        <li><b class="new">New</b><span><code>auxo-tweak gaming on</code> for Steam, GameMode, MangoHud and Gamescope</span></li>
-        <li><b class="fix">Fix</b><span>A fast text login screen that works on every desktop and in VMs</span></li>
-        <li><b class="fix">Fix</b><span>Installed systems boot reliably in VirtualBox</span></li>
+        <li><b class="new">New</b><span>Built on Void Linux, with runit and xbps instead of systemd and pacman</span></li>
+        <li><b class="new">New</b><span>A fast, keyboard-driven text installer with a review screen, for UEFI and BIOS, erase or dual boot</span></li>
+        <li><b class="new">New</b><span><code>auxo-tweak nvidia</code> picks the right NVIDIA driver; <code>scheduler</code>, <code>power</code>, <code>firewall</code>, <code>dns</code> and <code>cleanup</code> commands</span></li>
+        <li><b class="new">New</b><span>Kernels: Void's <code>linux</code>, <code>linux-lts</code> and <code>linux-mainline</code></span></li>
+        <li><b class="new">New</b><span>Snapshots before every <code>auxo-update</code> and every hour, bootable from GRUB</span></li>
+        <li><b class="fix">Changed</b><span>No boot splash: Auxo boots straight to the login screen</span></li>
       </ul></div>
     <div class="card rv"><h3>All releases</h3><p>Every image is kept on the Internet Archive.</p>
       <div class="rtable">
-        <a href="{STD['details']}"><b>3.0</b><span>2026-09-27</span><em>Latest</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.09.26-x86_64"><b>3.0</b><span>2026-09-26</span><em>First 3.0 build</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64"><b>2.0</b><span>2026-07-19</span><em>Older</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.07.09-x86_64"><b>1.0</b><span>2026-07-09</span><em>Older</em></a>
+        <a href="{VOID['details']}"><b>4.0</b><span>{VOID['date']}</span><em>Latest · Void Linux</em></a>
+        <a href="{ARCH['details']}"><b>3.0</b><span>2026-09-27</span><em>Arch · discontinued</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.09.26-x86_64"><b>3.0</b><span>2026-09-26</span><em>Arch · first 3.0 build</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64"><b>2.0</b><span>2026-07-19</span><em>Arch</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.07.09-x86_64"><b>1.0</b><span>2026-07-09</span><em>Arch</em></a>
       </div></div>
   </div>
 </div></section>
@@ -1213,33 +1235,40 @@ TWEAK = [
  ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the login screen, prompt, terminals and bars. With no name, lists the colours."),
  ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
  ("auxo-tweak rice NAME", "Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
- ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code>, <code>linux-zen</code> or <code>linux-hardened</code>."),
+ ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code> or <code>linux-mainline</code>. It stays the default boot entry after updates."),
  ("auxo-tweak shell NAME", "Change your shell to <code>zsh</code>, <code>fish</code> or <code>bash</code>."),
- ("auxo-tweak snapshots on|off|status", "Bootable btrfs snapshots with snapper, snap-pac and grub-btrfs."),
  ("auxo-tweak drivers", "Detect your GPU and install the right driver. <code>--prune</code> removes drivers and VM guest tools for hardware that isn't there."),
- ("auxo-tweak gaming on|off|status", "Steam, GameMode, MangoHud, Gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>."),
- ("auxo-tweak mirrors", "Rank the fastest mirrors with reflector. <code>--country</code> limits the search."),
+ ("auxo-tweak nvidia status|on|off|prime", "The right NVIDIA driver for your card, back to nouveau with <code>off</code>, and <code>prime-run</code> for laptops with <code>prime</code>."),
+ ("auxo-tweak scheduler list|status|off|NAME", "sched-ext CPU schedulers: <code>lavd</code>, <code>bpfland</code>, <code>flash</code>, <code>cosmos</code>, <code>rusty</code>. Add <code>--mode gaming</code>, <code>lowlatency</code> or <code>powersave</code>."),
+ ("auxo-tweak power balanced|performance|power-saver", "Set the power profile."),
+ ("auxo-tweak firewall on|off|status", "ufw: block incoming connections, allow outgoing."),
+ ("auxo-tweak dns cloudflare|quad9|google|auto", "DNS servers for every NetworkManager connection. <code>auto</code> goes back to your network's DNS."),
+ ("auxo-tweak snapshots on|off|status", "Bootable btrfs snapshots with snapper and grub-btrfs."),
+ ("auxo-tweak gaming on|off|status", "Steam, GameMode, MangoHud, gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>."),
+ ("auxo-tweak flatpak on|status", "Install Flatpak and add Flathub."),
+ ("auxo-tweak cleanup", "Clear the package cache, remove orphaned packages and old kernels."),
+ ("auxo-tweak mirrors", "Pick a faster Void mirror. <code>--url</code> sets one directly, <code>--default</code> goes back."),
  ("auxo-tweak zram on|off", "Compressed swap in RAM."),
- ("auxo-tweak multilib on", "Enable the 32-bit repository (needed for Steam and Wine)."),
- ("auxo-tweak aur", "Install the paru AUR helper."),
- ("auxo-tweak service NAME on|off", "Turn <code>bluetooth</code>, <code>cups</code>, <code>sshd</code>, <code>ufw</code> or <code>power-profiles</code> on or off."),
+ ("auxo-tweak repo nonfree|multilib", "Enable Void's extra repositories (needed for NVIDIA, Steam and Wine)."),
+ ("auxo-tweak service NAME on|off", "Turn <code>bluetooth</code>, <code>cups</code>, <code>sshd</code> or <code>power-profiles</code> on or off."),
 ]
 tweak_table = "".join(cmdrow(c, d) for c, d in TWEAK)
 acc_list = "".join(f'<span class="accchip"><i style="background:linear-gradient(135deg,{a},{b})"></i>{n}</span>' for n, a, b in ACCENTS)
 
 DOC_NAV = [("start", "Getting started"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("accents", "Accent colours"),
-           ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("gaming", "Gaming"), ("fetch", "auxo-fetch"),
+           ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("packages", "Packages and services"),
+           ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("fetch", "auxo-fetch"),
            ("vm", "Virtual machines"), ("trouble", "Troubleshooting"), ("faq", "FAQ")]
 doc_nav = "".join(f'<a href="#{k}">{t}</a>' for k, t in DOC_NAV)
 
 docs = head("Auxo Linux documentation",
-            "Documentation for Auxo Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, gaming and troubleshooting.",
+            "Documentation for Auxo Linux 4.0 on Void Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, NVIDIA, gaming and troubleshooting.",
             "https://auxolinux.com/docs/") + nav("docs") + f"""
 <main id="main">
 <div class="phead"><div class="wrap">
   <p class="eyebrow rise">Documentation</p>
   <h1 class="rise r1">Auxo Linux docs</h1>
-  <p class="rise r2">Everything you can do after installing, from switching desktops to rolling back a bad update. Auxo is Arch underneath, so the <a class="inl" href="https://wiki.archlinux.org/">Arch Wiki</a> applies too.</p>
+  <p class="rise r2">Everything you can do after installing, from switching desktops to rolling back a bad update. Auxo is Void underneath, so the <a class="inl" href="https://docs.voidlinux.org/">Void Linux Handbook</a> applies too. These docs are for Auxo 4. The Arch-based Auxo 3 is <a class="inl" href="{DL}#arch">discontinued</a>.</p>
 </div></div>
 
 <div class="wrap docs">
@@ -1263,25 +1292,25 @@ docs = head("Auxo Linux documentation",
 <div class="code"><span class="ta">❯</span> auxo-tweak desktop hyprland</div>
 <p>Auxo installs the desktop, applies its setup, points the login screen at the new desktop and keeps your previous config files as <code>*.auxo-bak</code>. Log out to start using it.</p>
 <ul class="dl">
-<li><b>KDE Plasma 6</b>: the default desktop and the live session. It installs even without internet.</li>
-<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty.</li>
+<li><b>KDE Plasma 6</b>: the default desktop and the live session, with the Auxo global theme. It installs even without internet.</li>
+<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty. Void doesn't package Hyprland, so it comes from the <a class="inl" href="https://github.com/Makrennel/hyprland-void">hyprland-void</a> community repository, which Auxo adds for you.</li>
 <li><b>Sway</b> (Auxo rice): waybar, foot and mako.</li>
 <li><b>i3</b> (Auxo rice): polybar, rofi and picom.</li>
 <li><b>GNOME</b>, <b>Xfce</b> and <b>Cinnamon</b>: the standard desktops with your accent applied.</li>
 <li><b>none</b>: a text login only. Add a desktop later.</li>
 </ul>
-<p>Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
+<p>Most desktops start from a fast text login screen (greetd) in your accent colour. GNOME uses its own login screen, GDM. Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
 
 <h2 id="accents">Accent colours</h2>
-<p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars.</p>
+<p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars, and changes the wallpaper straight away.</p>
 <div class="accs">{acc_list}</div>
 <div class="code"><span class="ta">❯</span> auxo-tweak accent rose</div>
 
 <h2 id="snapshots">Snapshots and rollback</h2>
-<p>On btrfs installs, snapshots are turned on during setup. snap-pac takes a snapshot before and after every pacman transaction, and grub-btrfs adds them to the boot menu under <b>Auxo snapshots</b>. The first snapshot is called <i>Fresh Auxo install</i>.</p>
+<p>On btrfs installs with <b>Snapshots</b> ticked, snapper takes a snapshot before every <code>auxo-update</code> and once an hour, and grub-btrfs adds them to the boot menu. The first snapshot is taken at the end of the install.</p>
 <p><b>If an update breaks something:</b></p>
 <ol class="dsteps">
-<li>Restart and pick <b>Auxo snapshots</b> in the GRUB menu.</li>
+<li>Restart and pick the snapshots entry in the GRUB menu.</li>
 <li>Boot a snapshot from before the problem. It starts read-only.</li>
 <li>Run <code>auxo-rollback</code> and choose that snapshot to make it your system again.</li>
 </ol>
@@ -1290,26 +1319,43 @@ docs = head("Auxo Linux documentation",
 <p>Rollback only replaces the system subvolume. <b>Your /home is never touched.</b> Turn snapshots on or off with <code>auxo-tweak snapshots on|off</code>.</p>
 
 <h2 id="updating">Updating</h2>
-<p><code>auxo-update</code> is a safer way to run a full update. It:</p>
+<p><code>auxo-update</code> is the safe way to run a full update. It:</p>
 <ol class="dsteps">
-<li>Warns you about Arch news that needs manual steps.</li>
 <li>Takes a btrfs snapshot, if snapshots are on.</li>
-<li>Updates repo packages, AUR packages (paru or yay) and Flatpaks.</li>
-<li>Reports .pacnew files, orphaned packages and whether you need to reboot.</li>
+<li>Updates xbps itself first, then every package.</li>
+<li>Updates your Flatpak apps.</li>
+<li>Reports new config files, orphaned packages and whether you need to reboot.</li>
 </ol>
 <div class="code"><span class="ta">❯</span> auxo-update            <span class="tm"># interactive</span>
-<span class="ta">❯</span> auxo-update -y         <span class="tm"># don't ask for confirmation</span>
-<span class="ta">❯</span> auxo-update --no-news  <span class="tm"># skip the Arch news check</span></div>
-<p>Plain <code>sudo pacman -Syu</code> works too, and snapshots are still taken automatically.</p>
+<span class="ta">❯</span> auxo-update -y         <span class="tm"># don't ask for confirmation</span></div>
+<p>Plain <code>sudo xbps-install -Su</code> works too, but only <code>auxo-update</code> takes a snapshot first.</p>
+
+<h2 id="packages">Packages and services</h2>
+<p>Auxo uses Void's package manager, xbps, and Void's init system, runit. There's no systemd.</p>
+<div class="code"><span class="ta">❯</span> xbps-query -Rs firefox          <span class="tm"># search</span>
+<span class="ta">❯</span> sudo xbps-install firefox       <span class="tm"># install</span>
+<span class="ta">❯</span> sudo xbps-remove -R firefox     <span class="tm"># remove, with unneeded dependencies</span>
+<span class="ta">❯</span> sudo sv status NetworkManager   <span class="tm"># check a service</span></div>
+<p>Services live in <code>/etc/sv</code> and are turned on by linking them into <code>/var/service</code>. <code>auxo-tweak service NAME on|off</code> does that for common ones. Apps that aren't in Void's repositories are usually on Flathub: run <code>auxo-tweak flatpak on</code> first.</p>
+
+<h2 id="nvidia">NVIDIA</h2>
+<div class="code"><span class="ta">❯</span> auxo-tweak nvidia on</div>
+<p>This enables Void's nonfree repository and picks the driver for your card: <code>nvidia</code> for Turing (GTX 16 / RTX 20) and newer, <code>nvidia580</code> for Maxwell to Volta, and <code>nvidia470</code> for Kepler. It's built with DKMS for every installed kernel. On laptops with two GPUs, <code>auxo-tweak nvidia prime</code> adds <code>prime-run</code>. <code>auxo-tweak nvidia off</code> goes back to the open-source nouveau driver.</p>
+
+<h2 id="performance">Performance</h2>
+<p>sched-ext CPU schedulers change how the kernel shares CPU time between programs, without rebooting:</p>
+<div class="code"><span class="ta">❯</span> auxo-tweak scheduler list
+<span class="ta">❯</span> auxo-tweak scheduler lavd --mode gaming
+<span class="ta">❯</span> auxo-tweak scheduler off</div>
+<p>Pick a power profile with <code>auxo-tweak power balanced|performance|power-saver</code>, and turn on compressed RAM swap with <code>auxo-tweak zram on</code>.</p>
 
 <h2 id="gaming">Gaming</h2>
 <div class="code"><span class="ta">❯</span> auxo-tweak gaming on</div>
-<p>This enables multilib and installs Steam, GameMode, MangoHud and Gamescope (with their 32-bit versions), plus the right 32-bit Vulkan driver for your GPU. It also:</p>
+<p>This enables Void's nonfree and multilib repositories and installs Steam with its 32-bit libraries, GameMode, MangoHud and gamescope, plus the right 32-bit Vulkan driver for your GPU. It also:</p>
 <ul class="dl">
 <li>sets <code>vm.max_map_count = 2147483642</code>, which some games need to avoid crashing</li>
-<li>sets <code>kernel.split_lock_mitigate = 0</code> to avoid split-lock slowdowns</li>
+<li>turns off split-lock mitigation, which can slow some games down</li>
 <li>loads the <code>ntsync</code> module at boot, for Wine and Proton builds that support it</li>
-<li>adds your user to the <code>gamemode</code> group</li>
 </ul>
 <p><code>auxo-tweak gaming off</code> removes the tweaks, and adding <code>--purge</code> removes the packages as well. Use <code>--no-steam</code> to skip Steam.</p>
 
@@ -1321,22 +1367,21 @@ docs = head("Auxo Linux documentation",
 <span class="ta">❯</span> auxo-fetch --json       <span class="tm"># for scripts</span></div>
 
 <h2 id="vm">Virtual machines</h2>
-<p>Use the <a class="inl" href="{DL}#vm">VM image</a>. In VirtualBox, set the graphics controller to <b>VMSVGA</b> with <b>128 MB</b> of video memory and <b>3D acceleration off</b>. After installing, the image's boot menu appears again. Choose <b>Boot existing OS</b>, or remove the image from the virtual drive.</p>
+<p>Use the same image as for PCs. In VirtualBox, set the graphics controller to <b>VMSVGA</b> with <b>128 MB</b> of video memory and <b>3D acceleration off</b>. After installing, remove the image from the virtual drive, or the VM boots the live session again. See the <a class="inl" href="{DL}#vmsetup">VM setup steps</a>.</p>
 <p>Guest tools for other hypervisors can be removed with <code>auxo-tweak drivers --prune</code>.</p>
 
 <h2 id="trouble">Troubleshooting</h2>
 <div class="faq">
-<details><summary>The installer starts again after installing in a VM</summary><p>The VM is still booting from the ISO. Choose <b>Boot existing OS</b> in the boot menu, or remove the ISO from the VM's optical drive.</p></details>
-<details><summary>Black screen after boot in VirtualBox</summary><p>Set the graphics controller to VMSVGA and turn 3D acceleration off. Auxo 3.0 uses a text login screen that works without 3D.</p></details>
-<details><summary>The system won't boot after an update</summary><p>Pick <b>Auxo snapshots</b> in the GRUB menu, boot a snapshot from before the update, then run <code>auxo-rollback</code>. See <a class="inl" href="#snapshots">Snapshots and rollback</a>.</p></details>
+<details><summary>The live session starts again after installing in a VM</summary><p>The VM is still booting from the image. Power off and remove it from the VM's optical drive.</p></details>
+<details><summary>Black screen or a text console instead of the login screen</summary><p>Press <b>Ctrl+Alt+F2</b>, log in, and run <code>sudo sv status greetd elogind dbus</code> (or <code>gdm</code> for GNOME). Each should say <code>run</code>. Post the output in the Discord if one doesn't. With an NVIDIA card, run <code>auxo-tweak nvidia on</code> and reboot.</p></details>
+<details><summary>The system won't boot after an update</summary><p>Pick the snapshots entry in the GRUB menu, boot a snapshot from before the update, then run <code>auxo-rollback</code>. See <a class="inl" href="#snapshots">Snapshots and rollback</a>.</p></details>
 <details><summary>The USB stick won't boot</summary><p>Turn Secure Boot off in your firmware settings, and write the image in DD mode if you use Rufus.</p></details>
-<details><summary>My NVIDIA card isn't using the NVIDIA driver</summary><p>Run <code>auxo-tweak drivers</code>. It detects the card and installs the right driver, then rebuilds the initramfs.</p></details>
+<details><summary>No Wi-Fi in the installer</summary><p>Press <b>N</b> on the installer's first page to connect, or run <code>nmtui</code> in a terminal. Without internet you still get a complete Plasma desktop.</p></details>
 </div>
 
 <h2 id="faq">FAQ</h2>
 <div class="faq">
-<details><summary>Is Auxo really Arch?</summary><p>Yes. Auxo uses the official Arch repositories and pacman, follows Arch's rolling release, and works with the AUR and the Arch Wiki. It adds an installer, themes and its own tools on top.</p></details>
-<details><summary>Does Secure Boot work?</summary><p>Not yet. Turn Secure Boot off before booting the USB stick.</p></details>
+{faq_html}
 <details><summary>Where can I get help?</summary><p>Ask in the <a class="inl" href="{DISCORD}">Auxo Discord</a>.</p></details>
 </div>
 
@@ -1377,18 +1422,18 @@ KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (r
            ("Super+L", "Lock screen"), ("Print", "Screenshot a region to the clipboard"), ("Super+Shift+E", "Exit i3")]
 
 DPAGE = [
- ("plasma", "KDE Plasma 6", "Default · Wayland", "The default desktop and the live session. A full, familiar desktop with Auxo theming, and the only one that installs without internet.",
-  ["plasma-desktop", "konsole", "dolphin", "kate", "ark", "spectacle", "kde-gtk-config"], None),
- ("hyprland", "Hyprland", "Auxo rice · Wayland", "Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent.",
-  ["hyprland", "hyprpaper", "hypridle", "hyprlock", "waybar", "wofi", "mako", "kitty", "grim + slurp + swappy"], KEYS_HYPR),
+ ("plasma", "KDE Plasma 6", "Default · Wayland", "The default desktop and the live session. A full, familiar desktop with the Auxo global theme, and the only one that installs without internet.",
+  ["kde-plasma", "konsole", "dolphin", "kate", "ark", "spectacle", "kde-gtk-config"], None),
+ ("hyprland", "Hyprland", "Auxo rice · Wayland", "Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent. Comes from the hyprland-void community repository.",
+  ["hyprland", "hyprpaper", "hypridle", "hyprlock", "Waybar", "wofi", "mako", "kitty", "grim + slurp + swappy"], KEYS_HYPR),
  ("sway", "Sway", "Auxo rice · Wayland", "i3-style tiling on Wayland. Lightweight and predictable, with waybar and your accent on the focused window.",
-  ["sway", "swaybg", "swayidle", "swaylock", "waybar", "wofi", "mako", "foot"], KEYS_SWAY),
+  ["sway", "swaybg", "swayidle", "swaylock", "Waybar", "wofi", "mako", "foot"], KEYS_SWAY),
  ("i3", "i3", "Auxo rice · X11", "Classic X11 tiling with no wasted space. polybar, rofi and picom are configured to match your accent.",
-  ["i3-wm", "polybar", "rofi", "picom", "dunst", "alacritty", "feh", "maim"], KEYS_I3),
- ("gnome", "GNOME", "Wayland", "Stock GNOME with gestures and the activities overview. Your accent is mapped to the nearest GNOME accent colour.",
-  ["gnome", "gnome-tweaks", "gnome-console"], None),
+  ["i3", "polybar", "rofi", "picom", "dunst", "alacritty", "feh", "maim"], KEYS_I3),
+ ("gnome", "GNOME", "Wayland", "Stock GNOME with gestures and the activities overview, started by its own login screen, GDM. Your accent is mapped to the nearest GNOME accent colour.",
+  ["gnome-core", "gdm", "gnome-tweaks", "gnome-console", "nautilus"], None),
  ("xfce", "Xfce", "X11", "Light, fast and traditional. A good fit for older hardware.",
-  ["xfce4", "xfce4-goodies", "network-manager-applet", "pavucontrol", "papirus-icon-theme"], None),
+  ["xfce4", "xfce4-plugins", "network-manager-applet", "pavucontrol", "papirus-icon-theme"], None),
  ("cinnamon", "Cinnamon", "X11", "A traditional layout with a full-width bottom panel, menu and system tray.",
   ["cinnamon", "nemo", "gnome-terminal", "xed", "papirus-icon-theme"], None),
  ("none", "No desktop", "Text only", "Just the text login and a shell. Useful for servers, or for building your own setup from scratch. Add a desktop at any time.",
@@ -1433,24 +1478,36 @@ desk_page = head("Desktops — Auxo Linux",
 
 # ---------- releases ----------
 REL = [
- ("3.0.3", "Latest", "Login fix for every desktop", [
+ ("4.0", "2026-10-05", "Now built on Void Linux", [
+   ("new", "Auxo moves from Arch Linux to Void Linux: runit and xbps, no systemd. Void's repositories and docs work as normal."),
+   ("new", "A new text installer: keyboard-driven, with a review screen. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot; btrfs with subvolumes, ext4 or xfs."),
+   ("new", "<code>auxo-tweak nvidia</code> picks <code>nvidia</code>, <code>nvidia580</code> or <code>nvidia470</code> for your card. New <code>scheduler</code> (sched-ext), <code>power</code>, <code>firewall</code>, <code>dns</code>, <code>cleanup</code>, <code>flatpak</code> and <code>repo</code> commands."),
+   ("new", "Kernels: Void's <code>linux</code>, <code>linux-lts</code> and <code>linux-mainline</code>. Your pick stays the default boot entry after updates."),
+   ("new", "Snapshots before every <code>auxo-update</code> and every hour, bootable from GRUB."),
+   ("fix", "No boot splash: Auxo boots straight to the login screen."),
+ ]),
+]
+REL_ARCH = [
+ ("3.0.4", "", "GNOME and the Auxo Plasma theme", [
+   ("fix", "GNOME starts again after install: it now uses its own login screen, GDM."),
+   ("new", "The Auxo global theme for KDE Plasma: Auxo Dark colours with your accent, and a floating dock-style panel."),
+   ("fix", "Installs no longer fail at the GRUB step with kernels other than linux-zen or shells other than zsh."),
+ ]),
+ ("3.0.3", "", "Login fix for every desktop", [
    ("fix", "Fixed a black screen after install when a desktop other than KDE Plasma was chosen, on VMs and real hardware."),
    ("new", "Installed systems now use a text login screen (greetd + tuigreet) in your accent colour. It starts the desktop you picked, and F3 switches session."),
-   ("fix", "The login screen is never pointed at a theme that isn't installed."),
  ]),
  ("3.0.2", "", "Boot splash and gaming", [
-   ("new", "Animated boot splash: the Auxo mark in your accent with a climber running up the trail, plus a progress bar. <code>auxo-tweak splash on|off|status</code>"),
-   ("new", "<code>auxo-tweak gaming on|off|status</code>: Steam, GameMode, MangoHud, Gamescope, 32-bit Vulkan drivers, vm.max_map_count and split-lock tweaks, and ntsync for Wine and Proton."),
+   ("new", "Animated boot splash in your accent colour."),
+   ("new", "<code>auxo-tweak gaming on|off|status</code>: Steam, GameMode, MangoHud, Gamescope and gaming tweaks."),
  ]),
  ("3.0.1", "", "Virtual machine fixes", [
-   ("fix", "Installed systems now boot in VirtualBox and other VMs. <code>/boot</code> is no longer btrfs-compressed, so GRUB can always read the kernel."),
-   ("fix", "Everything is flushed to disk before the install finishes."),
-   ("new", "<code>auxo-tweak drivers --prune</code> keeps only the guest tools for the hypervisor you're on, and removes them on real hardware."),
+   ("fix", "Installed systems now boot in VirtualBox and other VMs."),
+   ("new", "<code>auxo-tweak drivers --prune</code> keeps only the guest tools for the hypervisor you're on."),
  ]),
  ("3.0", "2026-09-26", "First public release", [
    ("new", "Calamares installer with Desktop, Accent, Kernel, Shell and Software pages."),
    ("new", "<code>auxo-tweak</code>, <code>auxo-update</code>, <code>auxo-rollback</code>, <code>auxo-fetch</code> and the welcome app."),
-   ("new", "Ready-made Hyprland, Sway and i3 setups, seven accent colours, and bootable btrfs snapshots."),
  ]),
 ]
 def relcard(v, date, title, items):
@@ -1462,11 +1519,13 @@ rel_page = head("Releases — Auxo Linux",
                 "Auxo Linux release notes: what changed in each version, and links to every image on the Internet Archive.",
                 "https://auxolinux.com/releases/") + nav("releases") + f"""
 <main id="main">
-{page_head("Releases", "What's new in Auxo", "Auxo is a rolling release. Once it's installed, <code>auxo-update</code> keeps you current, so you never need to reinstall for a new version.",
+{page_head("Releases", "What's new in Auxo", "Auxo is a rolling release. Once it's installed, <code>auxo-update</code> keeps you current, so you never need to reinstall for a new version. Auxo 4 is built on Void Linux; Auxo 1 to 3 were built on Arch Linux and are discontinued.",
   f'<div class="cta rise r3" style="margin-top:28px"><a class="btn primary lg" href="{DL}">{I["dl"]}Download the latest</a><a class="btn lg" href="https://github.com/rxvy-dev/AUXO">Source on GitHub</a></div>')}
 <section><div class="wrap">
   <div class="timeline">
     {"".join(relcard(*r) for r in REL)}
+    <article class="tl rv" id="arch"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 3 (Arch Linux)</h2><span class="rbadge">Discontinued</span></header><p class="tlt">The Arch-based line ends here</p><p class="muted">Auxo 3 won't get new images or tool updates. Its final images are still on the <a class="inl" href="{DL}#arch">download page</a>, and the source is on GitHub under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p></div></article>
+    {"".join(relcard(*r) for r in REL_ARCH)}
     <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 2</h2><span class="rbadge">2026-07-19</span></header><p class="tlt">Earlier release</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64">View on archive.org</a></p></div></article>
     <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 1</h2><span class="rbadge">2026-07-09</span></header><p class="tlt">The first Auxo image</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.09-x86_64">View on archive.org</a></p></div></article>
   </div>
@@ -1501,15 +1560,15 @@ com_page = head("Community — Auxo Linux",
 <section><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow">Developers</p><h2>Build Auxo from source</h2></div><p>Everything, including the ISO, builds from the repository.</p></div>
   <div class="two">
-    <div class="card rv"><h3>Build the ISO</h3><p>On Arch or an Arch-based distro. Takes 20–40 minutes and about 20 GB of free space.</p>
+    <div class="card rv"><h3>Build the ISO</h3><p>On any Linux distro, no Docker needed. Takes 20–40 minutes and about 15 GB of free space.</p>
       <div class="code"><span class="tm">$ </span>git clone https://github.com/rxvy-dev/AUXO.git
 <span class="tm">$ </span>cd AUXO
-<span class="tm">$ </span>sudo ./build.sh --clean
+<span class="tm">$ </span>./build.sh --clean
 <span class="tm">$ </span>./scripts/test-vm.sh out/auxo-linux-*.iso</div>
-      <p class="muted" style="margin-top:12px">Not on Arch? Use <code>./scripts/build-in-docker.sh</code>.</p></div>
+      <p class="muted" style="margin-top:12px">It sets up a small Void system in <code>out/</code> and builds inside it. The Arch-based Auxo 3 is under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p></div>
     <div class="card rv"><h3>Run the tests</h3><p>Both suites run anywhere, without root.</p>
       <div class="code"><span class="tm">$ </span>./tests/test-tools.sh
-<span class="tm">$ </span>python3 tests/test-calamares-modules.py</div>
+<span class="tm">$ </span>python3 tests/test-installer.py</div>
       <p class="muted" style="margin-top:12px">Please run both before sending a pull request.</p></div>
   </div>
 </div></section>
@@ -1532,25 +1591,26 @@ lg_svg = _datauri(os.path.join(LOGO_DIR, "auxo-mark.svg"), "image/svg+xml")
 lg_word = _datauri(os.path.join(LOGO_DIR, "auxo-logo-wordmark.png"), "image/png")
 lg_icon = _datauri(os.path.join(LOGO_DIR, "auxo-logo-icon-512.png"), "image/png")
 
-FACTS = [("Name", "Auxo Linux"), ("Based on", "Arch Linux"), ("Release model", "Rolling"), ("Latest version", "3.0.3"),
-         ("Architecture", "x86_64"), ("Installer", "Calamares, with Auxo's own pages"), ("Default desktop", "KDE Plasma 6"),
+FACTS = [("Name", "Auxo Linux"), ("Based on", "Void Linux (Auxo 1–3: Arch Linux)"), ("Init system", "runit"), ("Release model", "Rolling"), ("Latest version", "4.0"),
+         ("Architecture", "x86_64"), ("Installer", "Auxo's own text installer"), ("Default desktop", "KDE Plasma 6"),
          ("Desktops", "Plasma, GNOME, Xfce, Cinnamon, Hyprland, Sway, i3"), ("Developer", "rxvy"),
          ("Website", '<a class="inl" href="https://auxolinux.com">auxolinux.com</a>'), ("Source", '<a class="inl" href="https://github.com/rxvy-dev/AUXO">github.com/rxvy-dev/AUXO</a>')]
 facts_html = "".join(f"<tr><th>{a}</th><td>{b}</td></tr>" for a, b in FACTS)
 
-BLURB_S = "Auxo Linux is an Arch-based distro where you can switch your whole desktop with one command, without reinstalling."
-BLURB_M = ("Auxo Linux is an Arch-based rolling distribution with a graphical installer. Users pick their desktop, kernel, shell and "
-           "accent colour during install, and can change any of them later with a single command, auxo-tweak. Every update takes a "
-           "bootable btrfs snapshot, so a bad update can be rolled back from the boot menu.")
-BLURB_L = ("Auxo Linux is an independent, Arch-based rolling distribution built around one idea: your setup should be easy to change. "
-           "Its Calamares installer lets users choose between KDE Plasma 6, GNOME, Xfce, Cinnamon, or ready-made Hyprland, Sway and i3 "
-           "setups, along with a kernel, shell and one of seven accent colours that theme everything from the boot menu to the terminal. "
-           "After installing, the auxo-tweak tool changes any of those choices with one command, using the same code the installer runs. "
-           "Snapper and grub-btrfs take a snapshot on every package transaction, and auxo-rollback restores one if something breaks. "
-           "Auxo uses the official Arch repositories, so the AUR and the Arch Wiki work as normal.")
+BLURB_S = "Auxo Linux is a Void-based distro where you can switch your whole desktop with one command, without reinstalling."
+BLURB_M = ("Auxo Linux is a rolling distribution built on Void Linux, with runit and no systemd. Users pick their desktop, kernel, shell "
+           "and accent colour in a fast text installer, and can change any of them later with a single command, auxo-tweak. Every "
+           "update takes a bootable btrfs snapshot, so a bad update can be rolled back from the boot menu.")
+BLURB_L = ("Auxo Linux is an independent rolling distribution built on Void Linux around one idea: your setup should be easy to change. "
+           "Its keyboard-driven text installer lets users choose between KDE Plasma 6, GNOME, Xfce, Cinnamon, or ready-made Hyprland, "
+           "Sway and i3 setups, along with a kernel, shell and one of seven accent colours that theme everything from the boot menu to "
+           "the terminal, and it changes nothing until the user confirms a summary. After installing, the auxo-tweak tool changes any of "
+           "those choices with one command, using the same code the installer runs, and handles NVIDIA drivers, sched-ext CPU "
+           "schedulers, firewall and DNS. Snapper takes a snapshot before every update, and auxo-rollback restores one if something breaks. "
+           "Auxo uses the official Void repositories, xbps and runit. Versions 1 to 3 were based on Arch Linux.")
 
-shots_dl = [(KDE_SHOT, "KDE Plasma 6 desktop", False)] + [(imgs[i], t, True) for i, t in
-            [(0, "Live session and welcome app"), (1, "Installer: pick a desktop"), (2, "Installer: pick an accent"), (3, "Installer: extra software"), (4, "Installer: installing")]]
+shots_dl = [(KDE_SHOT, "KDE Plasma 6 desktop", False)] + [(TUI[k], t, True) for k, t in
+            [("welcome", "Installer: welcome"), ("desktop", "Installer: pick a desktop"), ("accent", "Installer: pick an accent"), ("extras", "Installer: extras"), ("review", "Installer: review and install")]]
 shots_html = "".join(
     f'<figure class="rv"><img src="{src}" alt="{t}" loading="lazy"><figcaption><span>{t}</span></figcaption></figure>'
     for n, (src, t, embedded) in enumerate(shots_dl))
@@ -1590,7 +1650,7 @@ press_page = head("Press kit — Auxo Linux",
 </div></section>
 
 <section><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow">Media</p><h2>Screenshots</h2></div><p>Real screenshots from Auxo 3.0, free to use in coverage. Right-click an image and choose <b>Save image as</b>.</p></div>
+  <div class="sec-head"><div><p class="eyebrow">Media</p><h2>Screenshots</h2></div><p>Real screenshots from Auxo 4.0, free to use in coverage. Right-click an image and choose <b>Save image as</b>.</p></div>
   <div class="pshots">{shots_html}</div>
 </div></section>
 

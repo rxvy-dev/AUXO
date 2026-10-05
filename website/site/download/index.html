@@ -4,19 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Get Auxo Linux — Download</title>
-<meta name="description" content="Download Auxo Linux 3.0: the installer image for your PC, or the VM image for VirtualBox, QEMU/KVM and VMware.">
+<meta name="description" content="Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.">
 <link rel="canonical" href="https://auxolinux.com/download/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23fbbf24'/%3E%3Cstop offset='1' stop-color='%23fb7185'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='128' height='128' rx='28' fill='%230b0b10'/%3E%3Cg fill='none' stroke='url(%23g)' stroke-linecap='round' stroke-linejoin='round' transform='translate(14 14) scale(.78)'%3E%3Cpath d='M16 112 L64 22 L112 112' stroke-width='13'/%3E%3Cpath d='M40 96 L56 78 L68 90 L86 68' stroke-width='8'/%3E%3Ccircle cx='64' cy='9' r='6.5' fill='url(%23g)' stroke='none'/%3E%3C/g%3E%3C/svg%3E">
 <meta name="theme-color" content="#08080b">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Auxo Linux">
 <meta property="og:title" content="Get Auxo Linux — Download">
-<meta property="og:description" content="Download Auxo Linux 3.0: the installer image for your PC, or the VM image for VirtualBox, QEMU/KVM and VMware.">
+<meta property="og:description" content="Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.">
 <meta property="og:url" content="https://auxolinux.com/download/">
 <meta property="og:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Get Auxo Linux — Download">
-<meta name="twitter:description" content="Download Auxo Linux 3.0: the installer image for your PC, or the VM image for VirtualBox, QEMU/KVM and VMware.">
+<meta name="twitter:description" content="Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.">
 <meta name="twitter:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +45,15 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .skip:focus{left:12px}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
 .grad{background:linear-gradient(100deg,var(--a),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* extras grid (6 cards) + discontinued release block */
+.cards5.extras6{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
+.cards5.extras6 .pkgs{margin-top:10px}
+.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy .eyebrow{color:var(--dim)}
+.legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
+.dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
@@ -174,7 +183,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .L i.pn::after{content:"";position:absolute;top:30%;bottom:30%;left:1.2%;width:14%;background:radial-gradient(circle,var(--a) 42%,transparent 45%) 0 50%/25% 100% repeat-x;opacity:.85}
 .L i.tty{inset:0;border:0;border-radius:0;background:#07070a;display:flex}
 .L i.tty::before{display:none}
-.L i.tty::after{content:"Auxo Linux 3.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
+.L i.tty::after{content:"Auxo Linux 4.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
 .dcmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--line);font:13.5px var(--fm);color:#d4d4dc;background:#0b0b10}
 .dcmd .c{display:none}
 .dcmd .ok{margin-left:auto;color:#4ade80;font-size:12.5px}
@@ -627,25 +636,24 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </defs></svg>
 <div class="auxo">
 <header class="nav"><div class="wrap">
-<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>3.0</small></a>
+<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="/download/" aria-current="page">Get Auxo</a><a href="/#desktops">Desktops</a><a href="/docs/">Docs</a><a href="/download/#releases">Releases</a><a href="https://discord.gg/XbQ66dH5a7">Community</a></nav>
 <div class="right"><a class="icon-link" href="https://discord.gg/XbQ66dH5a7" aria-label="Auxo Discord"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.7zM8.3 15.4c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></a><a class="btn primary sm" href="/download/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get Auxo</a></div>
 </div></header>
 
-<main id="main"><div class="alertbar" role="note"><div class="wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span><b>Before you install:</b> pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell in the installer. Some users have hit errors with the other options. <b>Known issue:</b> GNOME may fail to start after install, so pick KDE Plasma, Hyprland, Sway or i3 for now. A fix is expected around Wednesday, October 7, 2026.</span></div></div>
+<main id="main"><div class="alertbar" role="note"><div class="wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/></svg><span><b>Auxo 4.0 is here, now built on Void Linux.</b> The Arch-based Auxo 3 is discontinued, but you can <a class="inl" href="/download/#arch">still download it</a>.</span></div></div>
 <div class="phead"><div class="wrap pgrid">
   <div>
-    <p class="eyebrow rise">Auxo Linux 3.0</p>
+    <p class="eyebrow rise">Auxo Linux 4.0</p>
     <h1 class="rise r1">Get Auxo Linux</h1>
     <p class="rise r2">Four steps from download to desktop. Most installs take about ten minutes.</p>
-    <div class="chips rise r3"><span><b>3.0</b> latest</span><span><b>x86_64</b></span><span><b>UEFI</b> + BIOS</span><span>Hosted on the <b>Internet Archive</b></span></div>
+    <div class="chips rise r3"><span><b>4.0</b> latest</span><span><b>Void Linux</b> base</span><span><b>x86_64</b></span><span><b>UEFI</b> + BIOS</span><span>Hosted on the <b>Internet Archive</b></span></div>
   </div>
   <div class="qd rise r2">
-    <div class="qtop"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg><div><b>Auxo Linux 3.0</b><span>x86_64 · 2.8 GB · 2026-09-27</span></div></div>
-    <a class="btn primary lg" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download for PC</a>
-    <a class="btn lg" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64_202609/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download for virtual machines</a>
-    <p class="qrec">Installing? We recommend the <b>linux-zen</b> kernel and <b>zsh</b> shell.</p>
-    <p class="qlinks"><a href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64_archive.torrent">Torrent</a><a href="https://archive.org/details/auxo-linux-2026.09.27-x86_64">Checksums</a><a href="#choose">Which one do I need?</a></p>
+    <div class="qtop"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg><div><b>Auxo Linux 4.0</b><span>x86_64 · Void Linux · 2026-10-05</span></div></div>
+    <a class="btn primary lg" href="https://archive.org/download/auxo-linux-VOID/auxo-linux-2026.10.05-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download Auxo 4.0</a>
+    <p class="qrec">One image for PCs, live USB and virtual machines.</p>
+    <p class="qlinks"><a href="https://archive.org/download/auxo-linux-VOID/auxo-linux-VOID_archive.torrent">Torrent</a><a href="https://archive.org/details/auxo-linux-VOID">Checksums</a><a href="#arch">Auxo 3 (Arch)</a></p>
   </div>
 </div></div>
 
@@ -654,25 +662,25 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </div></nav>
 
 <section id="choose" style="padding-top:72px;padding-bottom:48px"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Step one</p><h2>Choose your platform</h2></div><p>Every image is the same Auxo. Pick the one that fits where you're installing it.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Step one</p><h2>Choose your platform</h2></div><p>It's the same image everywhere. Pick where you want to run it.</p></div>
   <div class="platforms">
-    <a class="plat rec rv" href="#installer">
+    <a class="plat rec rv" href="#usb">
       <div class="art"><span class="rtag">Recommended</span><svg viewBox="0 0 200 140" aria-hidden="true"><rect x="22" y="10" width="156" height="98" rx="8" fill="#15151d" stroke="#34344a" stroke-width="2"/><rect x="30" y="18" width="140" height="82" rx="4" fill="#0b0b10"/><g transform="translate(78 30) scale(0.34)"><g fill="none" stroke="url(#lg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#lg)" stroke="none"/></g></g><path d="M84 108h32l6 18H78z" fill="#1b1b25" stroke="#34344a" stroke-width="2"/><rect x="64" y="126" width="72" height="6" rx="3" fill="#2a2a38"/></svg></div>
-      <div class="body"><h2>Installer image</h2><p class="sub">Install Auxo on your PC or laptop from a USB stick.</p>
+      <div class="body"><h2>Install on a PC</h2><p class="sub">Install Auxo on your PC or laptop from a USB stick.</p>
         <ul class="pc"><li class="p">Direct access to your hardware and GPU</li><li class="p">Dual boot with Windows or Linux</li><li class="p">Full speed, full desktop</li><li class="m">Needs a USB stick and a reboot</li></ul>
-        <div class="go"><span class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get the installer</span></div></div>
+        <div class="go"><span class="btn primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Make a USB stick</span></div></div>
     </a>
-    <a class="plat rv" href="#vm">
+    <a class="plat rv" href="#vmsetup">
       <div class="art"><svg viewBox="0 0 200 140" aria-hidden="true"><rect x="46" y="8" width="132" height="92" rx="8" fill="#121219" stroke="#2c2c3c" stroke-width="2"/><rect x="34" y="20" width="132" height="92" rx="8" fill="#15151d" stroke="#34344a" stroke-width="2"/><rect x="22" y="32" width="132" height="98" rx="8" fill="#17171f" stroke="#3a3a52" stroke-width="2"/><path d="M22 48h132" stroke="#3a3a52" stroke-width="2"/><circle cx="34" cy="40" r="3" fill="#3a3a52"/><circle cx="44" cy="40" r="3" fill="#3a3a52"/><circle cx="54" cy="40" r="3" fill="#3a3a52"/><g transform="translate(66 56) scale(0.34)"><g fill="none" stroke="url(#lg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#lg)" stroke="none"/></g></g></svg></div>
       <div class="body"><h2>Virtual machines</h2><p class="sub">Run Auxo inside VirtualBox, QEMU/KVM or VMware.</p>
-        <ul class="pc"><li class="p">Try it without touching your PC</li><li class="p">Works on Windows, macOS and Linux hosts</li><li class="p">Built with the VM boot fixes</li><li class="m">Slower graphics than real hardware</li></ul>
-        <div class="go"><span class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get the VM image</span></div></div>
+        <ul class="pc"><li class="p">Try it without touching your PC</li><li class="p">Works on Windows, macOS and Linux hosts</li><li class="p">Same image as for PCs</li><li class="m">Slower graphics than real hardware</li></ul>
+        <div class="go"><span class="btn">VM setup</span></div></div>
     </a>
-    <a class="plat rv" href="#installer">
+    <a class="plat rv" href="#usb">
       <div class="art"><svg viewBox="0 0 200 140" aria-hidden="true"><rect x="118" y="52" width="46" height="36" rx="4" fill="#1b1b25" stroke="#34344a" stroke-width="2"/><rect x="128" y="62" width="8" height="6" rx="1" fill="#34344a"/><rect x="146" y="62" width="8" height="6" rx="1" fill="#34344a"/><rect x="128" y="72" width="8" height="6" rx="1" fill="#34344a"/><rect x="146" y="72" width="8" height="6" rx="1" fill="#34344a"/><rect x="30" y="36" width="92" height="68" rx="12" fill="#15151d" stroke="#3a3a52" stroke-width="2"/><g transform="translate(56 46) scale(0.32)"><g fill="none" stroke="url(#lg)" stroke-linecap="round" stroke-linejoin="round"><path d="M16 112 L64 22 L112 112" stroke-width="13"/><path d="M40 96 L56 78 L68 90 L86 68" stroke-width="8"/><circle cx="64" cy="9" r="6.5" fill="url(#lg)" stroke="none"/></g></g></svg></div>
       <div class="body"><h2>Live boot</h2><p class="sub">Run Auxo from a USB stick without installing.</p>
         <ul class="pc"><li class="p">Nothing changes on your drive</li><li class="p">Full KDE Plasma desktop to try</li><li class="p">Install from it whenever you're ready</li><li class="m">Changes are lost when you shut down</li></ul>
-        <div class="go"><span class="btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Uses the installer image</span></div></div>
+        <div class="go"><span class="btn">Make a USB stick</span></div></div>
     </a>
   </div>
   <div class="reqs compact rv">
@@ -686,22 +694,27 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <section id="get" class="alt"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">02</span> Step two</p><h2>Download the image</h2></div><p>Images are hosted on the Internet Archive. Use the torrent if the direct download is slow.</p></div>
   <div class="dlsec rv" id="installer">
-    <div class="top"><div><p class="eyebrow">Installer image</p><h2>Bare metal and live boot</h2><p>Write it to a USB stick, boot it, and try Auxo live or install it.</p></div><a class="doclink" href="#usb">Make a USB stick →</a></div>
+    <div class="top"><div><p class="eyebrow">Auxo Linux 4.0 · Void Linux</p><h2>PCs, live USB and virtual machines</h2><p>Write it to a USB stick or attach it to a VM, boot it, and try Auxo live or install it.</p></div><a class="doclink" href="#usb">Make a USB stick →</a></div>
     <div class="dltable"><div class="dlrow">
   <span class="arch">x86_64</span>
-  <div class="dlinfo"><b>Auxo Linux 3.0 — Installer</b><em>Live KDE Plasma session with the graphical installer</em><span>auxo-linux-2026.09.27-x86_64.iso · 2.8 GB · 2026-09-27</span></div>
-  <div class="dlacts"><a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download</a><a class="btn" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64_archive.torrent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></svg>Torrent</a><a class="btn" href="https://archive.org/details/auxo-linux-2026.09.27-x86_64" title="MD5 and SHA-1 are listed on the Internet Archive page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Checksums</a></div>
+  <div class="dlinfo"><b>Auxo Linux 4.0</b><em>Live KDE Plasma session with the Auxo text installer</em><span>auxo-linux-2026.10.05-x86_64.iso · 2026-10-05</span></div>
+  <div class="dlacts"><a class="btn primary" href="https://archive.org/download/auxo-linux-VOID/auxo-linux-2026.10.05-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download</a><a class="btn" href="https://archive.org/download/auxo-linux-VOID/auxo-linux-VOID_archive.torrent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></svg>Torrent</a><a class="btn" href="https://archive.org/details/auxo-linux-VOID" title="MD5 and SHA-1 are listed on the Internet Archive page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Checksums</a></div>
 </div></div>
   </div>
-  <div class="dlsec rv" id="vm">
-    <div class="top"><div><p class="eyebrow">Virtual machines</p><h2>VirtualBox, QEMU/KVM and VMware</h2><p>Attach it to a new VM as an optical drive and install as normal.</p></div><a class="doclink" href="#vmsetup">VM setup →</a></div>
+  <div class="legacy rv" id="arch">
+    <div class="top"><div><p class="eyebrow">Discontinued</p><h2>Auxo 3 (Arch Linux) <span class="dtag">No longer updated</span></h2>
+      <p>Auxo 3 was based on Arch Linux and used the Calamares installer. It's no longer developed: there won't be new Auxo 3 images or updates to its Auxo tools. Systems you install from it still get Arch package updates through pacman. <b>For new installs, use Auxo 4.</b></p></div></div>
     <div class="dltable"><div class="dlrow">
   <span class="arch">x86_64</span>
-  <div class="dlinfo"><b>Auxo Linux 3.0 — VM</b><em>The same installer, built for virtual machines</em><span>auxo-linux-2026.09.27-x86_64.iso · 2.8 GB · 2026-09-27</span></div>
+  <div class="dlinfo"><b>Auxo Linux 3.0 (Arch) — Installer</b><em>Final Arch-based image: live KDE Plasma with the graphical installer</em><span>auxo-linux-2026.09.27-x86_64.iso · 2.8 GB · 2026-09-27</span></div>
+  <div class="dlacts"><a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download</a><a class="btn" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64/auxo-linux-2026.09.27-x86_64_archive.torrent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></svg>Torrent</a><a class="btn" href="https://archive.org/details/auxo-linux-2026.09.27-x86_64" title="MD5 and SHA-1 are listed on the Internet Archive page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Checksums</a></div>
+</div><div class="dlrow">
+  <span class="arch">x86_64</span>
+  <div class="dlinfo"><b>Auxo Linux 3.0 (Arch) — VM</b><em>The same, built for virtual machines</em><span>auxo-linux-2026.09.27-x86_64.iso · 2.8 GB · 2026-09-27</span></div>
   <div class="dlacts"><a class="btn primary" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64_202609/auxo-linux-2026.09.27-x86_64.iso"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Download</a><a class="btn" href="https://archive.org/download/auxo-linux-2026.09.27-x86_64_202609/auxo-linux-2026.09.27-x86_64_202609_archive.torrent"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.2 10.8l7.6-3.6M8.2 13.2l7.6 3.6"/></svg>Torrent</a><a class="btn" href="https://archive.org/details/auxo-linux-2026.09.27-x86_64_202609" title="MD5 and SHA-1 are listed on the Internet Archive page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.2-8 9-4.6-.8-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>Checksums</a></div>
 </div></div>
+    <p class="subtle" style="margin-top:14px">The Auxo 3 source code is kept on GitHub under the <a class="inl" href="https://github.com/rxvy-dev/AUXO/tree/arch-3.0.4">arch-3.0.4</a> tag.</p>
   </div>
-  <p class="subtle">Looking for an older version? See <a href="#releases">all releases</a>.</p>
 </div></section>
 
 <section id="usb"><div class="wrap">
@@ -718,13 +731,13 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
   <li><span>Download <b>balenaEtcher</b>, choose the Auxo image and your USB stick, then click <b>Flash</b>. Or use the Terminal:</span></li>
   <li><span>Find the stick, unmount it and write the image (replace <code>diskN</code> with your stick):<div class="code"><span class="tm">$ </span>diskutil list
 <span class="tm">$ </span>diskutil unmountDisk /dev/diskN
-<span class="tm">$ </span>sudo dd if=auxo-linux-2026.09.27-x86_64.iso of=/dev/rdiskN bs=4m</div></span></li>
+<span class="tm">$ </span>sudo dd if=auxo-linux-2026.10.05-x86_64.iso of=/dev/rdiskN bs=4m</div></span></li>
   <li><span>Intel Macs: hold <b>Option</b> at startup and pick the USB stick. Apple Silicon Macs can't boot Auxo, because it's built for x86_64.</span></li>
  </ol></div>
  <div class="panel p-os-lin"><ol class="steps">
   <li><span>Use <b>Fedora Media Writer</b>, <b>GNOME Disks</b> (Restore Disk Image) or <b>Ventoy</b>, or write it with dd:</span></li>
   <li><span>Find your USB stick and write the image (replace <code>sdX</code> with your stick, not a partition):<div class="code"><span class="tm">$ </span>lsblk
-<span class="tm">$ </span>sudo dd if=auxo-linux-2026.09.27-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync</div></span></li>
+<span class="tm">$ </span>sudo dd if=auxo-linux-2026.10.05-x86_64.iso of=/dev/sdX bs=4M status=progress oflag=sync</div></span></li>
   <li><span>Reboot, open your boot menu and choose the USB stick.</span></li>
  </ol></div>
 </div>
@@ -736,72 +749,70 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <div class="tabs rv">
  <div class="tablist" role="tablist"><label for="t-vm-vbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12M21 7l-9 5-9-5"/></svg>VirtualBox</label><label for="t-vm-qemu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c-2.2 0-3.5 1.8-3.5 4.2 0 1.2.2 2-.6 3.3C6.6 12.3 5 14.6 5 17c0 1.5.8 2.6 2 3h10c1.2-.4 2-1.5 2-3 0-2.4-1.6-4.7-2.9-6.5-.8-1.3-.6-2.1-.6-3.3C15.5 4.8 14.2 3 12 3z"/><path d="M10 8h.01M14 8h.01M11 10.5h2"/></svg>QEMU / KVM</label><label for="t-vm-vmw"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12M21 7l-9 5-9-5"/></svg>VMware</label></div>
  <div class="panel p-vm-vbox"><ol class="steps">
-  <li><span>New VM: type <b>Linux</b>, version <b>Arch Linux (64-bit)</b> or <b>Other Linux (64-bit)</b>. Give it at least <b>4 GB</b> RAM, 2 CPUs and a <b>25 GB</b> disk.</span></li>
+  <li><span>New VM: type <b>Linux</b>, version <b>Other Linux (64-bit)</b>. Give it at least <b>4 GB</b> RAM, 2 CPUs and a <b>25 GB</b> disk. Tick <b>Enable EFI</b> if you want a UEFI install.</span></li>
   <li><span>Settings → Display: graphics controller <b>VMSVGA</b>, video memory <b>128 MB</b>, <b>3D acceleration off</b>.</span></li>
-  <li><span>Attach the VM image as the optical drive, start the VM and install as normal.</span></li>
-  <li><span>After the restart, the boot menu appears again. Choose <code>Boot existing OS</code>, or remove the image from the optical drive.</span></li>
+  <li><span>Attach the Auxo image as the optical drive, start the VM and install as normal.</span></li>
+  <li><span>When the installer says <b>Auxo is installed</b>, power off, remove the image from the optical drive, and start the VM again.</span></li>
  </ol></div>
  <div class="panel p-vm-qemu"><ol class="steps">
-  <li><span>With <b>virt-manager</b>: create a VM from the image, choose <b>Arch Linux</b> as the OS, 4 GB RAM and a 25 GB disk. Video: <b>Virtio</b>.</span></li>
+  <li><span>With <b>virt-manager</b>: create a VM from the image, choose <b>Generic Linux</b> as the OS, 4 GB RAM and a 25 GB disk. Video: <b>Virtio</b>.</span></li>
   <li><span>Or from a terminal:<div class="code"><span class="tm">$ </span>qemu-img create -f qcow2 auxo.qcow2 25G
 <span class="tm">$ </span>qemu-system-x86_64 -enable-kvm -cpu host -smp 2 -m 4G \
-    -drive file=auxo.qcow2,if=virtio -cdrom auxo-linux-2026.09.27-x86_64.iso \
+    -drive file=auxo.qcow2,if=virtio -cdrom auxo-linux-2026.10.05-x86_64.iso \
     -boot d -vga virtio</div></span></li>
   <li><span>After installing, start it again without <code>-cdrom</code> and <code>-boot d</code>.</span></li>
  </ol></div>
  <div class="panel p-vm-vmw"><ol class="steps">
   <li><span>New VM: guest OS <b>Linux</b>, version <b>Other Linux 6.x kernel 64-bit</b>. 4 GB RAM, 2 CPUs, 25 GB disk.</span></li>
-  <li><span>Point the CD/DVD drive at the VM image and install as normal.</span></li>
-  <li><span>When it restarts, choose <code>Boot existing OS</code>, or disconnect the CD/DVD drive.</span></li>
+  <li><span>Point the CD/DVD drive at the Auxo image and install as normal.</span></li>
+  <li><span>After installing, disconnect the CD/DVD drive and restart.</span></li>
  </ol></div>
 </div>
-<div class="note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span><b>Using a VM?</b> After installing, choose <b>Boot existing OS</b> in the boot menu, or the installer just starts again.</span></div>
+<div class="note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span><b>Using a VM?</b> Remove the image from the virtual drive after installing, or the VM boots the live session again.</span></div>
 </div></section>
 
 <section class="alt" id="step4"><div class="wrap">
-  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Step four</p><h2>Verify and install</h2></div><p>Check the download, boot it, and click <b>Install Auxo Linux</b> in the welcome app.</p></div>
+  <div class="sec-head"><div><p class="eyebrow"><span class="n">04</span> Step four</p><h2>Verify and install</h2></div><p>Check the download, boot it, and start the installer from the welcome app.</p></div>
   <div class="two">
     <div class="card rv" id="install"><h3>Install Auxo</h3><p>Boot the USB stick or VM, then:</p>
       <ol class="steps">
         <li><span>Choose <b>Auxo Linux</b> in the boot menu. The live KDE Plasma desktop starts.</span></li>
-        <li><span>Connect to Wi-Fi from the welcome app if you want the extra software.</span></li>
-        <li><span>Click <b>Install Auxo Linux</b>. Pick your language, keyboard and disk (erase, or install alongside another OS).</span></li>
-        <li><span>Choose your desktop and accent, then pick <b>linux-zen</b> as the kernel and <b>zsh</b> as the shell (recommended). Add any extra software and create your user.</span></li>
-        <li><span>Check the summary and click <b>Install</b>. It takes a few minutes.</span></li>
-        <li><span>When it says <b>All done</b>, restart and remove the USB stick. In a VM, choose <b>Boot existing OS</b>.</span></li>
-      </ol>
-      <div class="note"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span><b>Recommended:</b> in the installer, pick <code>linux-zen</code> as your kernel and <code>zsh</code> as your shell. They're the best-tested combination, and some users have hit errors with the other options.</span></div></div>
+        <li><span>Click <b>Install Auxo Linux</b> in the welcome app, or run <code>sudo auxo-installer</code> in a terminal. For Wi-Fi, press <b>N</b> on the installer's first page.</span></li>
+        <li><span>Use the arrow keys, type to search, <b>Enter</b> to pick and <b>Esc</b> to go back. Choose your keyboard, language, time zone and disk: erase a disk, or use partitions you made to dual boot.</span></li>
+        <li><span>Choose your desktop, accent colour, kernel and shell, create your account, and tick any extras.</span></li>
+        <li><span>Check the summary and press <b>Install</b>. Nothing on your disk changes before this step.</span></li>
+        <li><span>When it says <b>Auxo is installed</b>, restart and remove the USB stick.</span></li>
+      </ol></div>
     <div class="card rv" id="verify"><h3>Verify your download</h3><p>Make sure the image downloaded completely before you write it. Compare the result with the SHA-1 on the file's <b>Checksums</b> page.</p>
       <div class="code"><span class="tm"># Linux</span>
-<span class="tm">$ </span>sha1sum auxo-linux-2026.09.27-x86_64.iso
+<span class="tm">$ </span>sha1sum auxo-linux-2026.10.05-x86_64.iso
 <span class="tm"># macOS</span>
-<span class="tm">$ </span>shasum -a 1 auxo-linux-2026.09.27-x86_64.iso
+<span class="tm">$ </span>shasum -a 1 auxo-linux-2026.10.05-x86_64.iso
 <span class="tm"># Windows (PowerShell)</span>
-<span class="tm">&gt; </span>Get-FileHash auxo-linux-2026.09.27-x86_64.iso -Algorithm SHA1</div>
+<span class="tm">&gt; </span>Get-FileHash auxo-linux-2026.10.05-x86_64.iso -Algorithm SHA1</div>
       <p class="subtle" style="margin-top:14px">A mismatch means the download was cut off or corrupted. Download it again, or use the torrent.</p></div>
   </div>
 </div></section>
 
-
-
 <section id="releases"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow">Releases</p><h2>Release notes and older versions</h2></div><p>Auxo is a rolling release: once installed, <code>auxo-update</code> keeps you current. You don't need to reinstall for new versions.</p></div>
   <div class="two">
-    <div class="card rv"><h3>What's new in 3.0</h3><p>The biggest Auxo release so far.</p>
+    <div class="card rv"><h3>What's new in 4.0</h3><p>Auxo moves from Arch Linux to Void Linux.</p>
       <ul class="rel">
-        <li><b class="new">New</b><span><code>auxo-tweak</code> switches desktop, kernel, shell and accent without reinstalling</span></li>
-        <li><b class="new">New</b><span>Ready-made Hyprland, Sway and i3 setups</span></li>
-        <li><b class="new">New</b><span>Animated boot splash in your accent colour</span></li>
-        <li><b class="new">New</b><span><code>auxo-tweak gaming on</code> for Steam, GameMode, MangoHud and Gamescope</span></li>
-        <li><b class="fix">Fix</b><span>A fast text login screen that works on every desktop and in VMs</span></li>
-        <li><b class="fix">Fix</b><span>Installed systems boot reliably in VirtualBox</span></li>
+        <li><b class="new">New</b><span>Built on Void Linux, with runit and xbps instead of systemd and pacman</span></li>
+        <li><b class="new">New</b><span>A fast, keyboard-driven text installer with a review screen, for UEFI and BIOS, erase or dual boot</span></li>
+        <li><b class="new">New</b><span><code>auxo-tweak nvidia</code> picks the right NVIDIA driver; <code>scheduler</code>, <code>power</code>, <code>firewall</code>, <code>dns</code> and <code>cleanup</code> commands</span></li>
+        <li><b class="new">New</b><span>Kernels: Void's <code>linux</code>, <code>linux-lts</code> and <code>linux-mainline</code></span></li>
+        <li><b class="new">New</b><span>Snapshots before every <code>auxo-update</code> and every hour, bootable from GRUB</span></li>
+        <li><b class="fix">Changed</b><span>No boot splash: Auxo boots straight to the login screen</span></li>
       </ul></div>
     <div class="card rv"><h3>All releases</h3><p>Every image is kept on the Internet Archive.</p>
       <div class="rtable">
-        <a href="https://archive.org/details/auxo-linux-2026.09.27-x86_64"><b>3.0</b><span>2026-09-27</span><em>Latest</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.09.26-x86_64"><b>3.0</b><span>2026-09-26</span><em>First 3.0 build</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64"><b>2.0</b><span>2026-07-19</span><em>Older</em></a>
-        <a href="https://archive.org/details/auxo-linux-2026.07.09-x86_64"><b>1.0</b><span>2026-07-09</span><em>Older</em></a>
+        <a href="https://archive.org/details/auxo-linux-VOID"><b>4.0</b><span>2026-10-05</span><em>Latest · Void Linux</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.09.27-x86_64"><b>3.0</b><span>2026-09-27</span><em>Arch · discontinued</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.09.26-x86_64"><b>3.0</b><span>2026-09-26</span><em>Arch · first 3.0 build</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64"><b>2.0</b><span>2026-07-19</span><em>Arch</em></a>
+        <a href="https://archive.org/details/auxo-linux-2026.07.09-x86_64"><b>1.0</b><span>2026-07-09</span><em>Arch</em></a>
       </div></div>
   </div>
 </div></section>
@@ -814,13 +825,13 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </main>
 <footer><div class="wrap">
 <div class="fgrid">
-  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
-  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vm">Virtual machines</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
+  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>A rolling distro built on Void Linux. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
+  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vmsetup">Virtual machines</a></li><li><a href="/download/#arch">Auxo 3 (Arch)</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="/#desktops">Desktops</a></li><li><a href="/#software">Software</a></li><li><a href="/download/#releases">Releases</a></li><li><a href="https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
-  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#nvidia">NVIDIA</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
   <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
-<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
+<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
 </div>
 </body>

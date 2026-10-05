@@ -4,19 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Auxo Linux documentation</title>
-<meta name="description" content="Documentation for Auxo Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, gaming and troubleshooting.">
+<meta name="description" content="Documentation for Auxo Linux 4.0 on Void Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, NVIDIA, gaming and troubleshooting.">
 <link rel="canonical" href="https://auxolinux.com/docs/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23fbbf24'/%3E%3Cstop offset='1' stop-color='%23fb7185'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='128' height='128' rx='28' fill='%230b0b10'/%3E%3Cg fill='none' stroke='url(%23g)' stroke-linecap='round' stroke-linejoin='round' transform='translate(14 14) scale(.78)'%3E%3Cpath d='M16 112 L64 22 L112 112' stroke-width='13'/%3E%3Cpath d='M40 96 L56 78 L68 90 L86 68' stroke-width='8'/%3E%3Ccircle cx='64' cy='9' r='6.5' fill='url(%23g)' stroke='none'/%3E%3C/g%3E%3C/svg%3E">
 <meta name="theme-color" content="#08080b">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Auxo Linux">
 <meta property="og:title" content="Auxo Linux documentation">
-<meta property="og:description" content="Documentation for Auxo Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, gaming and troubleshooting.">
+<meta property="og:description" content="Documentation for Auxo Linux 4.0 on Void Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, NVIDIA, gaming and troubleshooting.">
 <meta property="og:url" content="https://auxolinux.com/docs/">
 <meta property="og:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Auxo Linux documentation">
-<meta name="twitter:description" content="Documentation for Auxo Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, gaming and troubleshooting.">
+<meta name="twitter:description" content="Documentation for Auxo Linux 4.0 on Void Linux: every auxo-tweak command, desktops, accent colours, snapshots and rollback, updating, NVIDIA, gaming and troubleshooting.">
 <meta name="twitter:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -45,6 +45,15 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .skip:focus{left:12px}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:6px}
 .grad{background:linear-gradient(100deg,var(--a),var(--a2));-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* extras grid (6 cards) + discontinued release block */
+.cards5.extras6{grid-template-columns:repeat(3,1fr)}
+@media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
+.cards5.extras6 .pkgs{margin-top:10px}
+.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy .eyebrow{color:var(--dim)}
+.legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
+.dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
@@ -174,7 +183,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .L i.pn::after{content:"";position:absolute;top:30%;bottom:30%;left:1.2%;width:14%;background:radial-gradient(circle,var(--a) 42%,transparent 45%) 0 50%/25% 100% repeat-x;opacity:.85}
 .L i.tty{inset:0;border:0;border-radius:0;background:#07070a;display:flex}
 .L i.tty::before{display:none}
-.L i.tty::after{content:"Auxo Linux 3.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
+.L i.tty::after{content:"Auxo Linux 4.0 (tty1)\A\A auxo login: _";white-space:pre;inset:8% auto auto 5%;background:none;font:clamp(10px,1.4vw,15px)/1.6 var(--fm);color:#cfcfd8}
 .dcmd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:14px 18px;border-top:1px solid var(--line);font:13.5px var(--fm);color:#d4d4dc;background:#0b0b10}
 .dcmd .c{display:none}
 .dcmd .ok{margin-left:auto;color:#4ade80;font-size:12.5px}
@@ -627,7 +636,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </defs></svg>
 <div class="auxo">
 <header class="nav"><div class="wrap">
-<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>3.0</small></a>
+<a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="/download/">Get Auxo</a><a href="/#desktops">Desktops</a><a href="/docs/" aria-current="page">Docs</a><a href="/download/#releases">Releases</a><a href="https://discord.gg/XbQ66dH5a7">Community</a></nav>
 <div class="right"><a class="icon-link" href="https://discord.gg/XbQ66dH5a7" aria-label="Auxo Discord"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.3 4.4A19.6 19.6 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.5 19.5 0 0 0-4.9 1.4C.6 9 0 13.6.3 18.1a19.8 19.8 0 0 0 6 3l1.3-2.1a12.8 12.8 0 0 1-2-1l.5-.4a14 14 0 0 0 12 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.7 19.7 0 0 0 6-3c.5-5.2-.8-9.8-3.6-13.7zM8.3 15.4c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7.4 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg></a><a class="btn primary sm" href="/download/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M6 11l6 6 6-6M5 20h14"/></svg>Get Auxo</a></div>
 </div></header>
@@ -636,11 +645,11 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <div class="phead"><div class="wrap">
   <p class="eyebrow rise">Documentation</p>
   <h1 class="rise r1">Auxo Linux docs</h1>
-  <p class="rise r2">Everything you can do after installing, from switching desktops to rolling back a bad update. Auxo is Arch underneath, so the <a class="inl" href="https://wiki.archlinux.org/">Arch Wiki</a> applies too.</p>
+  <p class="rise r2">Everything you can do after installing, from switching desktops to rolling back a bad update. Auxo is Void underneath, so the <a class="inl" href="https://docs.voidlinux.org/">Void Linux Handbook</a> applies too. These docs are for Auxo 4. The Arch-based Auxo 3 is <a class="inl" href="/download/#arch">discontinued</a>.</p>
 </div></div>
 
 <div class="wrap docs">
-  <aside class="dnav"><p>On this page</p><a href="#start">Getting started</a><a href="#tweak">auxo-tweak</a><a href="#desktops">Desktops and rices</a><a href="#accents">Accent colours</a><a href="#snapshots">Snapshots and rollback</a><a href="#updating">Updating</a><a href="#gaming">Gaming</a><a href="#fetch">auxo-fetch</a><a href="#vm">Virtual machines</a><a href="#trouble">Troubleshooting</a><a href="#faq">FAQ</a></aside>
+  <aside class="dnav"><p>On this page</p><a href="#start">Getting started</a><a href="#tweak">auxo-tweak</a><a href="#desktops">Desktops and rices</a><a href="#accents">Accent colours</a><a href="#snapshots">Snapshots and rollback</a><a href="#updating">Updating</a><a href="#packages">Packages and services</a><a href="#nvidia">NVIDIA</a><a href="#performance">Performance</a><a href="#gaming">Gaming</a><a href="#fetch">auxo-fetch</a><a href="#vm">Virtual machines</a><a href="#trouble">Troubleshooting</a><a href="#faq">FAQ</a></aside>
   <article class="dbody">
 
 <h2 id="start">Getting started</h2>
@@ -653,32 +662,32 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 
 <h2 id="tweak">auxo-tweak</h2>
 <p>Run <code>auxo-tweak</code> on its own for an interactive menu, or use a command directly. The installer runs these same commands, so changing something later gives the same result as choosing it during install.</p>
-<div class="dtable"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>auxo-tweak</code></td><td>Open the interactive menu.</td></tr><tr><td><code>auxo-tweak info</code></td><td>Show your current Auxo settings.</td></tr><tr><td><code>auxo-tweak accent [NAME]</code></td><td>Set the accent colour for GRUB, the boot splash, login screen, prompt, terminals and bars. With no name, lists the colours.</td></tr><tr><td><code>auxo-tweak desktop NAME</code></td><td>Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop.</td></tr><tr><td><code>auxo-tweak rice NAME</code></td><td>Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back.</td></tr><tr><td><code>auxo-tweak kernel NAME</code></td><td>Switch to <code>linux</code>, <code>linux-lts</code>, <code>linux-zen</code> or <code>linux-hardened</code>.</td></tr><tr><td><code>auxo-tweak shell NAME</code></td><td>Change your shell to <code>zsh</code>, <code>fish</code> or <code>bash</code>.</td></tr><tr><td><code>auxo-tweak snapshots on|off|status</code></td><td>Bootable btrfs snapshots with snapper, snap-pac and grub-btrfs.</td></tr><tr><td><code>auxo-tweak drivers</code></td><td>Detect your GPU and install the right driver. <code>--prune</code> removes drivers and VM guest tools for hardware that isn't there.</td></tr><tr><td><code>auxo-tweak gaming on|off|status</code></td><td>Steam, GameMode, MangoHud, Gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>.</td></tr><tr><td><code>auxo-tweak splash on|off|status</code></td><td>The animated Auxo boot splash (Plymouth) in your accent colour.</td></tr><tr><td><code>auxo-tweak mirrors</code></td><td>Rank the fastest mirrors with reflector. <code>--country</code> limits the search.</td></tr><tr><td><code>auxo-tweak zram on|off</code></td><td>Compressed swap in RAM.</td></tr><tr><td><code>auxo-tweak multilib on</code></td><td>Enable the 32-bit repository (needed for Steam and Wine).</td></tr><tr><td><code>auxo-tweak aur</code></td><td>Install the paru AUR helper.</td></tr><tr><td><code>auxo-tweak service NAME on|off</code></td><td>Turn <code>bluetooth</code>, <code>cups</code>, <code>sshd</code>, <code>ufw</code> or <code>power-profiles</code> on or off.</td></tr></tbody></table></div>
+<div class="dtable"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>auxo-tweak</code></td><td>Open the interactive menu.</td></tr><tr><td><code>auxo-tweak info</code></td><td>Show your current Auxo settings.</td></tr><tr><td><code>auxo-tweak accent [NAME]</code></td><td>Set the accent colour for GRUB, the login screen, prompt, terminals and bars. With no name, lists the colours.</td></tr><tr><td><code>auxo-tweak desktop NAME</code></td><td>Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop.</td></tr><tr><td><code>auxo-tweak rice NAME</code></td><td>Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back.</td></tr><tr><td><code>auxo-tweak kernel NAME</code></td><td>Switch to <code>linux</code>, <code>linux-lts</code> or <code>linux-mainline</code>. It stays the default boot entry after updates.</td></tr><tr><td><code>auxo-tweak shell NAME</code></td><td>Change your shell to <code>zsh</code>, <code>fish</code> or <code>bash</code>.</td></tr><tr><td><code>auxo-tweak drivers</code></td><td>Detect your GPU and install the right driver. <code>--prune</code> removes drivers and VM guest tools for hardware that isn't there.</td></tr><tr><td><code>auxo-tweak nvidia status|on|off|prime</code></td><td>The right NVIDIA driver for your card, back to nouveau with <code>off</code>, and <code>prime-run</code> for laptops with <code>prime</code>.</td></tr><tr><td><code>auxo-tweak scheduler list|status|off|NAME</code></td><td>sched-ext CPU schedulers: <code>lavd</code>, <code>bpfland</code>, <code>flash</code>, <code>cosmos</code>, <code>rusty</code>. Add <code>--mode gaming</code>, <code>lowlatency</code> or <code>powersave</code>.</td></tr><tr><td><code>auxo-tweak power balanced|performance|power-saver</code></td><td>Set the power profile.</td></tr><tr><td><code>auxo-tweak firewall on|off|status</code></td><td>ufw: block incoming connections, allow outgoing.</td></tr><tr><td><code>auxo-tweak dns cloudflare|quad9|google|auto</code></td><td>DNS servers for every NetworkManager connection. <code>auto</code> goes back to your network's DNS.</td></tr><tr><td><code>auxo-tweak snapshots on|off|status</code></td><td>Bootable btrfs snapshots with snapper and grub-btrfs.</td></tr><tr><td><code>auxo-tweak gaming on|off|status</code></td><td>Steam, GameMode, MangoHud, gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>.</td></tr><tr><td><code>auxo-tweak flatpak on|status</code></td><td>Install Flatpak and add Flathub.</td></tr><tr><td><code>auxo-tweak cleanup</code></td><td>Clear the package cache, remove orphaned packages and old kernels.</td></tr><tr><td><code>auxo-tweak mirrors</code></td><td>Pick a faster Void mirror. <code>--url</code> sets one directly, <code>--default</code> goes back.</td></tr><tr><td><code>auxo-tweak zram on|off</code></td><td>Compressed swap in RAM.</td></tr><tr><td><code>auxo-tweak repo nonfree|multilib</code></td><td>Enable Void's extra repositories (needed for NVIDIA, Steam and Wine).</td></tr><tr><td><code>auxo-tweak service NAME on|off</code></td><td>Turn <code>bluetooth</code>, <code>cups</code>, <code>sshd</code> or <code>power-profiles</code> on or off.</td></tr></tbody></table></div>
 
 <h2 id="desktops">Desktops and rices</h2>
 <p>Switch desktops at any time:</p>
 <div class="code"><span class="ta">❯</span> auxo-tweak desktop hyprland</div>
 <p>Auxo installs the desktop, applies its setup, points the login screen at the new desktop and keeps your previous config files as <code>*.auxo-bak</code>. Log out to start using it.</p>
 <ul class="dl">
-<li><b>KDE Plasma 6</b>: the default desktop and the live session. It installs even without internet.</li>
-<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty.</li>
+<li><b>KDE Plasma 6</b>: the default desktop and the live session, with the Auxo global theme. It installs even without internet.</li>
+<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty. Void doesn't package Hyprland, so it comes from the <a class="inl" href="https://github.com/Makrennel/hyprland-void">hyprland-void</a> community repository, which Auxo adds for you.</li>
 <li><b>Sway</b> (Auxo rice): waybar, foot and mako.</li>
 <li><b>i3</b> (Auxo rice): polybar, rofi and picom.</li>
 <li><b>GNOME</b>, <b>Xfce</b> and <b>Cinnamon</b>: the standard desktops with your accent applied.</li>
 <li><b>none</b>: a text login only. Add a desktop later.</li>
 </ul>
-<p>Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
+<p>Most desktops start from a fast text login screen (greetd) in your accent colour. GNOME uses its own login screen, GDM. Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
 
 <h2 id="accents">Accent colours</h2>
-<p>One setting colours the GRUB menu, the boot splash, the login screen, your prompt, terminals and bars.</p>
+<p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars, and changes the wallpaper straight away.</p>
 <div class="accs"><span class="accchip"><i style="background:linear-gradient(135deg,#a78bfa,#22d3ee)"></i>violet</span><span class="accchip"><i style="background:linear-gradient(135deg,#22d3ee,#818cf8)"></i>cyan</span><span class="accchip"><i style="background:linear-gradient(135deg,#34d399,#a3e635)"></i>emerald</span><span class="accchip"><i style="background:linear-gradient(135deg,#fbbf24,#fb7185)"></i>amber</span><span class="accchip"><i style="background:linear-gradient(135deg,#fb7185,#c084fc)"></i>rose</span><span class="accchip"><i style="background:linear-gradient(135deg,#60a5fa,#34d399)"></i>blue</span><span class="accchip"><i style="background:linear-gradient(135deg,#e5e7eb,#9ca3af)"></i>mono</span></div>
 <div class="code"><span class="ta">❯</span> auxo-tweak accent rose</div>
 
 <h2 id="snapshots">Snapshots and rollback</h2>
-<p>On btrfs installs, snapshots are turned on during setup. snap-pac takes a snapshot before and after every pacman transaction, and grub-btrfs adds them to the boot menu under <b>Auxo snapshots</b>. The first snapshot is called <i>Fresh Auxo install</i>.</p>
+<p>On btrfs installs with <b>Snapshots</b> ticked, snapper takes a snapshot before every <code>auxo-update</code> and once an hour, and grub-btrfs adds them to the boot menu. The first snapshot is taken at the end of the install.</p>
 <p><b>If an update breaks something:</b></p>
 <ol class="dsteps">
-<li>Restart and pick <b>Auxo snapshots</b> in the GRUB menu.</li>
+<li>Restart and pick the snapshots entry in the GRUB menu.</li>
 <li>Boot a snapshot from before the problem. It starts read-only.</li>
 <li>Run <code>auxo-rollback</code> and choose that snapshot to make it your system again.</li>
 </ol>
@@ -687,26 +696,43 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <p>Rollback only replaces the system subvolume. <b>Your /home is never touched.</b> Turn snapshots on or off with <code>auxo-tweak snapshots on|off</code>.</p>
 
 <h2 id="updating">Updating</h2>
-<p><code>auxo-update</code> is a safer way to run a full update. It:</p>
+<p><code>auxo-update</code> is the safe way to run a full update. It:</p>
 <ol class="dsteps">
-<li>Warns you about Arch news that needs manual steps.</li>
 <li>Takes a btrfs snapshot, if snapshots are on.</li>
-<li>Updates repo packages, AUR packages (paru or yay) and Flatpaks.</li>
-<li>Reports .pacnew files, orphaned packages and whether you need to reboot.</li>
+<li>Updates xbps itself first, then every package.</li>
+<li>Updates your Flatpak apps.</li>
+<li>Reports new config files, orphaned packages and whether you need to reboot.</li>
 </ol>
 <div class="code"><span class="ta">❯</span> auxo-update            <span class="tm"># interactive</span>
-<span class="ta">❯</span> auxo-update -y         <span class="tm"># don't ask for confirmation</span>
-<span class="ta">❯</span> auxo-update --no-news  <span class="tm"># skip the Arch news check</span></div>
-<p>Plain <code>sudo pacman -Syu</code> works too, and snapshots are still taken automatically.</p>
+<span class="ta">❯</span> auxo-update -y         <span class="tm"># don't ask for confirmation</span></div>
+<p>Plain <code>sudo xbps-install -Su</code> works too, but only <code>auxo-update</code> takes a snapshot first.</p>
+
+<h2 id="packages">Packages and services</h2>
+<p>Auxo uses Void's package manager, xbps, and Void's init system, runit. There's no systemd.</p>
+<div class="code"><span class="ta">❯</span> xbps-query -Rs firefox          <span class="tm"># search</span>
+<span class="ta">❯</span> sudo xbps-install firefox       <span class="tm"># install</span>
+<span class="ta">❯</span> sudo xbps-remove -R firefox     <span class="tm"># remove, with unneeded dependencies</span>
+<span class="ta">❯</span> sudo sv status NetworkManager   <span class="tm"># check a service</span></div>
+<p>Services live in <code>/etc/sv</code> and are turned on by linking them into <code>/var/service</code>. <code>auxo-tweak service NAME on|off</code> does that for common ones. Apps that aren't in Void's repositories are usually on Flathub: run <code>auxo-tweak flatpak on</code> first.</p>
+
+<h2 id="nvidia">NVIDIA</h2>
+<div class="code"><span class="ta">❯</span> auxo-tweak nvidia on</div>
+<p>This enables Void's nonfree repository and picks the driver for your card: <code>nvidia</code> for Turing (GTX 16 / RTX 20) and newer, <code>nvidia580</code> for Maxwell to Volta, and <code>nvidia470</code> for Kepler. It's built with DKMS for every installed kernel. On laptops with two GPUs, <code>auxo-tweak nvidia prime</code> adds <code>prime-run</code>. <code>auxo-tweak nvidia off</code> goes back to the open-source nouveau driver.</p>
+
+<h2 id="performance">Performance</h2>
+<p>sched-ext CPU schedulers change how the kernel shares CPU time between programs, without rebooting:</p>
+<div class="code"><span class="ta">❯</span> auxo-tweak scheduler list
+<span class="ta">❯</span> auxo-tweak scheduler lavd --mode gaming
+<span class="ta">❯</span> auxo-tweak scheduler off</div>
+<p>Pick a power profile with <code>auxo-tweak power balanced|performance|power-saver</code>, and turn on compressed RAM swap with <code>auxo-tweak zram on</code>.</p>
 
 <h2 id="gaming">Gaming</h2>
 <div class="code"><span class="ta">❯</span> auxo-tweak gaming on</div>
-<p>This enables multilib and installs Steam, GameMode, MangoHud and Gamescope (with their 32-bit versions), plus the right 32-bit Vulkan driver for your GPU. It also:</p>
+<p>This enables Void's nonfree and multilib repositories and installs Steam with its 32-bit libraries, GameMode, MangoHud and gamescope, plus the right 32-bit Vulkan driver for your GPU. It also:</p>
 <ul class="dl">
 <li>sets <code>vm.max_map_count = 2147483642</code>, which some games need to avoid crashing</li>
-<li>sets <code>kernel.split_lock_mitigate = 0</code> to avoid split-lock slowdowns</li>
+<li>turns off split-lock mitigation, which can slow some games down</li>
 <li>loads the <code>ntsync</code> module at boot, for Wine and Proton builds that support it</li>
-<li>adds your user to the <code>gamemode</code> group</li>
 </ul>
 <p><code>auxo-tweak gaming off</code> removes the tweaks, and adding <code>--purge</code> removes the packages as well. Use <code>--no-steam</code> to skip Steam.</p>
 
@@ -718,22 +744,21 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 <span class="ta">❯</span> auxo-fetch --json       <span class="tm"># for scripts</span></div>
 
 <h2 id="vm">Virtual machines</h2>
-<p>Use the <a class="inl" href="/download/#vm">VM image</a>. In VirtualBox, set the graphics controller to <b>VMSVGA</b> with <b>128 MB</b> of video memory and <b>3D acceleration off</b>. After installing, the image's boot menu appears again. Choose <b>Boot existing OS</b>, or remove the image from the virtual drive.</p>
+<p>Use the same image as for PCs. In VirtualBox, set the graphics controller to <b>VMSVGA</b> with <b>128 MB</b> of video memory and <b>3D acceleration off</b>. After installing, remove the image from the virtual drive, or the VM boots the live session again. See the <a class="inl" href="/download/#vmsetup">VM setup steps</a>.</p>
 <p>Guest tools for other hypervisors can be removed with <code>auxo-tweak drivers --prune</code>.</p>
 
 <h2 id="trouble">Troubleshooting</h2>
 <div class="faq">
-<details><summary>The installer starts again after installing in a VM</summary><p>The VM is still booting from the ISO. Choose <b>Boot existing OS</b> in the boot menu, or remove the ISO from the VM's optical drive.</p></details>
-<details><summary>Black screen after boot in VirtualBox</summary><p>Set the graphics controller to VMSVGA and turn 3D acceleration off. Auxo 3.0 uses a text login screen that works without 3D.</p></details>
-<details><summary>The system won't boot after an update</summary><p>Pick <b>Auxo snapshots</b> in the GRUB menu, boot a snapshot from before the update, then run <code>auxo-rollback</code>. See <a class="inl" href="#snapshots">Snapshots and rollback</a>.</p></details>
+<details><summary>The live session starts again after installing in a VM</summary><p>The VM is still booting from the image. Power off and remove it from the VM's optical drive.</p></details>
+<details><summary>Black screen or a text console instead of the login screen</summary><p>Press <b>Ctrl+Alt+F2</b>, log in, and run <code>sudo sv status greetd elogind dbus</code> (or <code>gdm</code> for GNOME). Each should say <code>run</code>. Post the output in the Discord if one doesn't. With an NVIDIA card, run <code>auxo-tweak nvidia on</code> and reboot.</p></details>
+<details><summary>The system won't boot after an update</summary><p>Pick the snapshots entry in the GRUB menu, boot a snapshot from before the update, then run <code>auxo-rollback</code>. See <a class="inl" href="#snapshots">Snapshots and rollback</a>.</p></details>
 <details><summary>The USB stick won't boot</summary><p>Turn Secure Boot off in your firmware settings, and write the image in DD mode if you use Rufus.</p></details>
-<details><summary>My NVIDIA card isn't using the NVIDIA driver</summary><p>Run <code>auxo-tweak drivers</code>. It detects the card and installs the right driver, then rebuilds the initramfs.</p></details>
+<details><summary>No Wi-Fi in the installer</summary><p>Press <b>N</b> on the installer's first page to connect, or run <code>nmtui</code> in a terminal. Without internet you still get a complete Plasma desktop.</p></details>
 </div>
 
 <h2 id="faq">FAQ</h2>
 <div class="faq">
-<details><summary>Is Auxo really Arch?</summary><p>Yes. Auxo uses the official Arch repositories and pacman, follows Arch's rolling release, and works with the AUR and the Arch Wiki. It adds an installer, themes and its own tools on top.</p></details>
-<details><summary>Does Secure Boot work?</summary><p>Not yet. Turn Secure Boot off before booting the USB stick.</p></details>
+<details><summary>Is Auxo really Void?</summary><p>Yes. Auxo uses the official Void Linux repositories, xbps and runit, and it follows Void's rolling release. Auxo adds an installer, themes and its own tools on top, and the Void docs apply as normal.</p></details><details><summary>What happened to the Arch version?</summary><p>Auxo 3 was based on Arch Linux. It's discontinued: there won't be new Auxo 3 images or tool updates. Its last images are still on the <a class="inl" href="/download/#arch">download page</a>, and systems already installed from it keep getting Arch package updates through pacman.</p></details><details><summary>Can I switch desktops without breaking things?</summary><p>That's the point of <code>auxo-tweak</code>. It installs the new desktop, applies the Auxo setup, keeps your old config files as <code>*.auxo-bak</code> and points the login screen at the new desktop. If anything goes wrong, boot an earlier snapshot from GRUB.</p></details><details><summary>Does it work in VirtualBox or other VMs?</summary><p>Yes, from the same image. Set VirtualBox graphics to VMSVGA with 3D acceleration off, and remove the image from the virtual drive after installing.</p></details><details><summary>Will it work with my NVIDIA card?</summary><p>Run <code>auxo-tweak nvidia on</code>. It picks the right driver for your card from Void's nonfree repository: <code>nvidia</code> for Turing and newer, <code>nvidia580</code> for Maxwell to Volta, <code>nvidia470</code> for Kepler.</p></details><details><summary>Is there an AUR?</summary><p>No, that's an Arch thing. Void's repositories are large, Flatpak is one command away (<code>auxo-tweak flatpak on</code>), and Void's own xbps-src builds anything else.</p></details><details><summary>Does Secure Boot work?</summary><p>Not yet. Turn Secure Boot off in your firmware settings before booting the USB stick.</p></details><details><summary>Is it free?</summary><p>Yes. Auxo is free to download and use.</p></details>
 <details><summary>Where can I get help?</summary><p>Ask in the <a class="inl" href="https://discord.gg/XbQ66dH5a7">Auxo Discord</a>.</p></details>
 </div>
 
@@ -742,13 +767,13 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
 </main>
 <footer><div class="wrap">
 <div class="fgrid">
-  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>An Arch-based rolling distro. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
-  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vm">Virtual machines</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
+  <div><a class="brand" href="/"><svg class="mk" viewBox="0 0 128 128" aria-hidden="true"><use href="#mark"/></svg>auxo</a><p>A rolling distro built on Void Linux. Pick your desktop, kernel, shell and colour when you install, and change them later without reinstalling.</p></div>
+  <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vmsetup">Virtual machines</a></li><li><a href="/download/#arch">Auxo 3 (Arch)</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="/#desktops">Desktops</a></li><li><a href="/#software">Software</a></li><li><a href="/download/#releases">Releases</a></li><li><a href="https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
-  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
+  <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#nvidia">NVIDIA</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
   <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
-<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Arch Linux. Not affiliated with the Arch Linux project.</span></div>
+<div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
 </div>
 </body>
