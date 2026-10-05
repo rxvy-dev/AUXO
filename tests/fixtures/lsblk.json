@@ -1,0 +1,11 @@
+{"blockdevices": [
+ {"name":"nvme0n1","path":"/dev/nvme0n1","size":1000204886016,"type":"disk","fstype":null,"mountpoint":null,"model":"Samsung SSD 980 PRO 1TB","tran":"nvme","rm":false,"ro":false,"pttype":"gpt","label":null,
+  "children":[
+   {"name":"nvme0n1p1","path":"/dev/nvme0n1p1","size":104857600,"type":"part","fstype":"vfat","mountpoint":null,"label":"SYSTEM","partlabel":"EFI system partition"},
+   {"name":"nvme0n1p2","path":"/dev/nvme0n1p2","size":499000000000,"type":"part","fstype":"ntfs","mountpoint":null,"label":"Windows","partlabel":null},
+   {"name":"nvme0n1p3","path":"/dev/nvme0n1p3","size":500000000000,"type":"part","fstype":null,"mountpoint":null,"label":null,"partlabel":null}]},
+ {"name":"sda","path":"/dev/sda","size":2000398934016,"type":"disk","fstype":null,"mountpoint":null,"model":"ST2000DM008","tran":"sata","rm":false,"ro":false,"pttype":"gpt","label":null,"children":[]},
+ {"name":"sdb","path":"/dev/sdb","size":15376318464,"type":"disk","fstype":"iso9660","mountpoint":null,"model":"SanDisk Ultra","tran":"usb","rm":true,"ro":false,"pttype":"dos","label":"AUXO_LIVE","children":[
+   {"name":"sdb1","path":"/dev/sdb1","size":3000000000,"type":"part","fstype":"iso9660","mountpoint":"/run/initramfs/live","label":"AUXO_LIVE","partlabel":null}]},
+ {"name":"zram0","path":"/dev/zram0","size":8000000000,"type":"disk","fstype":"swap","mountpoint":"[SWAP]","model":null,"tran":null,"rm":false,"ro":false,"pttype":null,"label":null}
+]}

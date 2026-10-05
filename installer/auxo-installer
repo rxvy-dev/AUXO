@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""auxo-installer — install Auxo Linux from the live system.
+
+  sudo auxo-installer                     the text installer
+  auxo-installer --dry-run                walk through it without touching any disk
+  sudo auxo-installer --config my.json    unattended install from a saved config
+  auxo-installer --dry-run --config my.json --no-tui   print every step and exit
+"""
+import argparse
+import json
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+for p in (HERE, "/usr/lib/auxo-installer"):
+    if os.path.isdir(os.path.join(p, "auxo_install")):
+        sys.path.insert(0, p)
+        break
+
+from auxo_install.config import InstallConfig, validate  # noqa: E402
+from auxo_install import disks  # noqa: E402
+from auxo_install.plan import build_plan, Env, TARGET  # noqa: E402
+from auxo_install.runner import Context, execute, InstallError  # noqa: E402
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="auxo-installer", description="Install Auxo Linux.")
+    ap.add_argument("--dry-run", action="store_true", help="print commands instead of running them")
+    ap.add_argument("--config", help="JSON file with the answers (see InstallConfig)")
+    ap.add_argument("--no-tui", action="store_true", help="with --config: run without the interface")
+    ap.add_argument("--target", default=TARGET, help=argparse.SUPPRESS)
+    ap.add_argument("--offline", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--bios", action="store_true", help=argparse.SUPPRESS)
+    args = ap.parse_args()
+
+    if os.geteuid() != 0 and not args.dry_run:
+        os.execvp("sudo", ["sudo", sys.executable, os.path.realpath(__file__), *sys.argv[1:]])
+
+    if args.dry_run and args.target == TARGET:
+        import tempfile  # a dry run writes its files somewhere harmless
+        args.target = tempfile.mkdtemp(prefix="auxo-dryrun-")
+    cfg = InstallConfig()
+    if args.config:
+        cfg = InstallConfig(**json.load(open(args.config)))
+    from auxo_install.tui import online
+    env = Env(efi=disks.is_efi() and not args.bios, efi_bits=disks.efi_bits(),
+              online=False if args.offline else online(), target=args.target)
+
+    if args.no_tui:
+        if not args.config:
+            ap.error("--no-tui needs --config")
+        errs = validate(cfg, env.efi)
+        if errs:
+            print("\n".join("✗ " + e for e in errs), file=sys.stderr)
+            sys.exit(2)
+        steps, notes = build_plan(cfg, env)
+        ctx = Context(env.target, dry_run=args.dry_run, on_line=print)
+        try:
+            notes += execute(steps, ctx)
+        except InstallError as e:
+            print(f"\n✗ {e}", file=sys.stderr)
+            sys.exit(1)
+        for n in notes:
+            print("• " + n)
+        return
+
+    from auxo_install import tui
+    test_disks = None
+    if os.environ.get("AUXO_TEST_DISKS"):  # the test-suite's fake disks
+        test_disks = disks.parse_lsblk(json.load(open(os.environ["AUXO_TEST_DISKS"])))
+    ok = tui.main(cfg, env, dry_run=args.dry_run, disks=test_disks)
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

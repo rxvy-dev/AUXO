@@ -275,6 +275,9 @@ SVDIR = "/etc/runit/runsvdir/default"
 
 
 def _booted_runit():
+    # inside the installer's chroot there's no running runit to talk to
+    if os.environ.get("AUXO_IN_INSTALLER") == "1":
+        return False
     return not DRY and ROOT == "/" and os.path.isdir("/run/runit")
 
 
