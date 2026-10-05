@@ -45,7 +45,8 @@ ARCH_VM = dict(iso("auxo-linux-2026.09.27-x86_64_202609", "auxo-linux-2026.09.27
 ARCH_SRC = "https://github.com/rxvy-dev/AUXO/tree/arch-3.0.4"
 STD = VOID
 DISCORD = "https://discord.gg/XbQ66dH5a7"
-KDE_SHOT = "https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png"
+KDE_SHOT = "https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png"  # Auxo 3 (Arch) desktop: no longer used on the pages
+OG_IMAGE = "https://auxolinux.com/og.png"  # upload website/og.png to the site root
 
 imgs = json.load(open("assets/screenshots.json"))  # Auxo 3 (Arch) Calamares screenshots, no longer used on the pages
 import base64 as _b64e
@@ -490,6 +491,7 @@ TABRULES
 .heroshot{border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:#15181e;box-shadow:0 50px 90px -40px rgba(0,0,0,.9),0 0 0 8px rgba(255,255,255,.02);background-size:0}
 .heroshot .shotwrap{background-size:cover;background-position:top;aspect-ratio:1100/650}
 .heroshot img{width:100%;height:100%;object-fit:cover;object-position:top}
+.heroshot.tui .shotwrap{aspect-ratio:1000/640;background:#121212}
 .auxo a.inl{color:var(--a);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--a) 40%,transparent);text-underline-offset:3px}
 .how3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
 @media(max-width:960px){.how3{grid-template-columns:1fr}}
@@ -742,11 +744,11 @@ def head(title, desc, canon):
 <meta property="og:title" content="{title}">
 <meta property="og:description" content="{desc}">
 <meta property="og:url" content="{canon}">
-<meta property="og:image" content="{KDE_SHOT}">
+<meta property="og:image" content="{OG_IMAGE}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{title}">
 <meta name="twitter:description" content="{desc}">
-<meta name="twitter:image" content="{KDE_SHOT}">
+<meta name="twitter:image" content="{OG_IMAGE}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -863,7 +865,7 @@ faq_html = "".join(f"<details><summary>{q}</summary><p>{a}</p></details>" for q,
 LOGOS = open("assets/logos.html").read()
 TOPO = '<svg class="topo" viewBox="0 0 520 440" aria-hidden="true"><g transform="translate(10.4 -26.8) scale(3.9)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.72" opacity="0.1"/></g><g transform="translate(42.4 29.2) scale(3.4)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.82" opacity="0.14"/></g><g transform="translate(71.2 79.6) scale(2.95)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.95" opacity="0.18"/></g><g transform="translate(100.0 130.0) scale(2.5)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="1.12" opacity="0.24"/></g><g transform="translate(125.6 174.8) scale(2.1)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="1.33" opacity="0.3"/></g><g transform="translate(157 118) scale(1.6)">{MARK_PATHS}</g></svg>'.replace("{MARK_PATHS}", MARK_PATHS)
 import re as _re
-d_layers_k = _re.sub(r'<div class="L L-plasma">.*?</div>', f'<div class="L L-plasma" role="img" aria-label="Auxo KDE Plasma 6 desktop"><img src="{KDE_SHOT}" alt="" loading="lazy"></div>', d_layers, count=1)
+d_layers_k = d_layers  # only real Auxo 4 screenshots on the site; no 4.0 desktop screenshot yet
 
 IC = {
  "time": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
@@ -919,9 +921,9 @@ soft_panels = "".join(
     f'<div class="spanel sp-{k}"><p class="sdesc">{d}</p><div class="logos">{logo_cells(ICONS2[k])}</div>'
     f'<p class="pkgs"><span>Packages</span>{pk}</p></div>' for k, t, d, pk in SOFT)
 
-HERO_SHOT = (f'<figure class="heroshot" aria-label="The Auxo Linux KDE Plasma 6 desktop">'
-             f'<div class="bar mute"><i></i><i></i><i></i><b>Auxo Linux · KDE Plasma 6</b></div>'
-             f'<div class="shotwrap" style="background-image:url({imgs[0]})"><img src="{KDE_SHOT}" alt="" loading="eager"></div></figure>')
+HERO_SHOT = (f'<figure class="heroshot tui" aria-label="The Auxo Linux 4.0 installer">'
+             f'<div class="bar mute"><i></i><i></i><i></i><b>Auxo Linux 4.0 · installer</b></div>'
+             f'<div class="shotwrap"><img src="{TUI["welcome"]}" alt="The welcome page of the Auxo Linux 4.0 text installer" loading="eager"></div></figure>')
 
 home = head("Auxo Linux — Void Linux, set up the way you want it",
             "Auxo Linux is a rolling distro built on Void Linux. Pick your desktop, kernel, shell and accent colour in a fast text installer, and change any of them later with one command.",
@@ -1409,8 +1411,6 @@ def keytable(rows):
 
 def mini_screen(k):
     lay = {d[0]: d[5] for d in DESKS}[k]
-    if k == "plasma":
-        return f'<div class="screen mini" role="img" aria-label="KDE Plasma 6 on Auxo">{RIDGE}<div class="L L-plasma" style="display:block"><img src="{KDE_SHOT}" alt="" loading="lazy"></div></div>'
     return f'<div class="screen mini" aria-hidden="true">{RIDGE}<div class="L" style="display:block">{lay}</div></div>'
 
 KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"),
@@ -1609,7 +1609,7 @@ BLURB_L = ("Auxo Linux is an independent rolling distribution built on Void Linu
            "schedulers, firewall and DNS. Snapper takes a snapshot before every update, and auxo-rollback restores one if something breaks. "
            "Auxo uses the official Void repositories, xbps and runit. Versions 1 to 3 were based on Arch Linux.")
 
-shots_dl = [(KDE_SHOT, "KDE Plasma 6 desktop", False)] + [(TUI[k], t, True) for k, t in
+shots_dl = [(TUI[k], t, True) for k, t in
             [("welcome", "Installer: welcome"), ("desktop", "Installer: pick a desktop"), ("accent", "Installer: pick an accent"), ("extras", "Installer: extras"), ("review", "Installer: review and install")]]
 shots_html = "".join(
     f'<figure class="rv"><img src="{src}" alt="{t}" loading="lazy"><figcaption><span>{t}</span></figcaption></figure>'

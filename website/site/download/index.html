@@ -13,11 +13,11 @@
 <meta property="og:title" content="Get Auxo Linux — Download">
 <meta property="og:description" content="Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.">
 <meta property="og:url" content="https://auxolinux.com/download/">
-<meta property="og:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
+<meta property="og:image" content="https://auxolinux.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Get Auxo Linux — Download">
 <meta name="twitter:description" content="Download Auxo Linux 4.0, built on Void Linux: one image for PCs, live USB and virtual machines. The discontinued Arch-based Auxo 3 is still available.">
-<meta name="twitter:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
+<meta name="twitter:image" content="https://auxolinux.com/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -50,8 +50,9 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .cards5.extras6{grid-template-columns:repeat(3,1fr)}
 @media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
 .cards5.extras6 .pkgs{margin-top:10px}
-.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy{margin-top:28px;border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
 .legacy .eyebrow{color:var(--dim)}
+.legacy .top p{margin:10px 0 20px;color:var(--mut)}
 .legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
 .dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
@@ -449,6 +450,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .heroshot{border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:#15181e;box-shadow:0 50px 90px -40px rgba(0,0,0,.9),0 0 0 8px rgba(255,255,255,.02);background-size:0}
 .heroshot .shotwrap{background-size:cover;background-position:top;aspect-ratio:1100/650}
 .heroshot img{width:100%;height:100%;object-fit:cover;object-position:top}
+.heroshot.tui .shotwrap{aspect-ratio:1000/640;background:#121212}
 .auxo a.inl{color:var(--a);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--a) 40%,transparent);text-underline-offset:3px}
 .how3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
 @media(max-width:960px){.how3{grid-template-columns:1fr}}

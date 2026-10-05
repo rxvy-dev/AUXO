@@ -13,11 +13,11 @@
 <meta property="og:title" content="Desktops — Auxo Linux">
 <meta property="og:description" content="Every desktop Auxo Linux offers: KDE Plasma, Hyprland, Sway, i3, GNOME, Xfce and Cinnamon. What each one installs, its keybindings, and the command to switch.">
 <meta property="og:url" content="https://auxolinux.com/desktops/">
-<meta property="og:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
+<meta property="og:image" content="https://auxolinux.com/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Desktops — Auxo Linux">
 <meta name="twitter:description" content="Every desktop Auxo Linux offers: KDE Plasma, Hyprland, Sway, i3, GNOME, Xfce and Cinnamon. What each one installs, its keybindings, and the command to switch.">
-<meta name="twitter:image" content="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png">
+<meta name="twitter:image" content="https://auxolinux.com/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
@@ -50,8 +50,9 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .cards5.extras6{grid-template-columns:repeat(3,1fr)}
 @media(max-width:860px){.cards5.extras6{grid-template-columns:1fr}}
 .cards5.extras6 .pkgs{margin-top:10px}
-.legacy{border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
+.legacy{margin-top:28px;border:1px dashed var(--line2);border-radius:8px;padding:28px;background:var(--card)}
 .legacy .eyebrow{color:var(--dim)}
+.legacy .top p{margin:10px 0 20px;color:var(--mut)}
 .legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
 .dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
@@ -449,6 +450,7 @@ h1,h2,h3{font-family:var(--fh);letter-spacing:-.022em;line-height:1.08;font-weig
 .heroshot{border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:#15181e;box-shadow:0 50px 90px -40px rgba(0,0,0,.9),0 0 0 8px rgba(255,255,255,.02);background-size:0}
 .heroshot .shotwrap{background-size:cover;background-position:top;aspect-ratio:1100/650}
 .heroshot img{width:100%;height:100%;object-fit:cover;object-position:top}
+.heroshot.tui .shotwrap{aspect-ratio:1000/640;background:#121212}
 .auxo a.inl{color:var(--a);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--a) 40%,transparent);text-underline-offset:3px}
 .how3{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
 @media(max-width:960px){.how3{grid-template-columns:1fr}}
@@ -655,7 +657,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
       <div class="code"><span class="ta">❯</span> auxo-tweak desktop plasma</div>
       <p class="pkgs"><span>Installs</span>kde-plasma · konsole · dolphin · kate · ark · spectacle · kde-gtk-config</p>
     </div>
-    <div class="dvis rv"><div class="screen mini" role="img" aria-label="KDE Plasma 6 on Auxo"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L L-plasma" style="display:block"><img src="https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png" alt="" loading="lazy"></div></div></div>
+    <div class="dvis rv"><div class="screen mini" aria-hidden="true"><svg class="ridge" viewBox="0 0 1600 500" preserveAspectRatio="none" aria-hidden="true"><path d="M0 360 L180 230 L300 300 L470 150 L620 280 L760 190 L900 300 L1080 120 L1240 260 L1380 200 L1600 320 V500 H0Z"/><path d="M0 430 L220 330 L380 400 L560 300 L720 390 L900 320 L1100 410 L1300 330 L1460 390 L1600 360 V500 H0Z"/></svg><div class="L" style="display:block"><i class="act" style="left:8%;top:8%;width:50%;height:58%"></i><i class="t" style="left:44%;top:26%;width:46%;height:52%"></i><i class="pn" style="left:0%;top:93.5%;width:100%;height:6.5%"></i></div></div></div>
   </div>
 </section><section class="dsec" id="d-hyprland">
   <div class="dsgrid">
