@@ -31,6 +31,9 @@ chown -R root:root "$INCLUDE"
 find "$INCLUDE" -type d -exec chmod 755 {} +
 find "$INCLUDE" -type f -exec chmod go-w {} +
 
+# leftovers of an interrupted mklive run (their mounts were already released by build.sh)
+rm -rf --one-file-system "$MK"/mklive-build.* 2>/dev/null || true
+
 step "Building the live ISO (this takes a while)"
 PKGS=$(grep -v '^\s*#' "$SRC/mklive/packages.txt" | xargs)
 SERVICES=$(grep -v '^\s*#' "$SRC/mklive/services.txt" | xargs)

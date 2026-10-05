@@ -34,13 +34,14 @@ VOID_MIRROR=${VOID_MIRROR:-https://repo-default.voidlinux.org}
 say() { printf '\e[1;35m::\e[0m %s\n' "$*"; }
 die() { printf '\e[31merror:\e[0m %s\n' "$*" >&2; exit 1; }
 
-# never leave (or delete through) bind mounts of the host's /dev, /proc, /sys
+# never leave (or delete through) mounts under out/: the build system's bind mounts of the
+# host's /dev, /proc, /sys, and anything a failed void-mklive run left behind
 unmount_root() {
   local m
   command -v findmnt >/dev/null || return 0
   while read -r m; do
     [[ -n $m ]] && umount -l "$m" 2>/dev/null || true
-  done < <(findmnt -rno TARGET | awk -v r="$ROOT" 'index($0, r) == 1' | sort -r)
+  done < <(findmnt -rno TARGET | awk -v r="$OUT/" 'index($0, r) == 1' | sort -r)
 }
 
 if (( CLEAN )); then
@@ -112,7 +113,11 @@ if [[ ! -f $ROOT/.auxo-ready ]]; then
   touch "$ROOT/.auxo-ready"
 fi
 
-# 3. build inside it
+# 3. build inside it. The build system's root must itself be a mount point (void-mklive's
+#    xbps-uchroot makes "/" private, which fails on a plain folder), and private, so nothing
+#    mounted inside spreads to the host.
+mount --bind "$ROOT" "$ROOT"
+mount --make-rprivate "$ROOT"
 for d in dev proc sys; do
   mkdir -p "$ROOT/$d"
   mount --rbind "/$d" "$ROOT/$d"
