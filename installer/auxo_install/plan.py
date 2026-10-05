@@ -22,9 +22,11 @@ USER_GROUPS = ["wheel", "audio", "video", "input", "storage", "network", "lp", "
 ONLINE_DESKTOPS = {"gnome", "xfce", "cinnamon", "hyprland", "sway", "i3"}
 RSYNC_EXCLUDES = ["/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/lost+found",
                   "/var/cache/xbps/*", "/swapfile"]
-LIVE_FILES = ["/etc/auxo/live", "/etc/sudoers.d/99-void-live", "/etc/sudoers.d/90-auxo-live",
-              "/etc/sddm.conf.d/90-auxo-live.conf", "/etc/polkit-1/rules.d/void-live.rules",
-              "/etc/greetd/auxo-live.toml", "/etc/xdg/autostart/auxo-live-welcome.desktop"]
+# live-session files: from the Auxo ISO overlay, plus what void-mklive's boot hooks create
+LIVE_FILES = ["/etc/auxo/live", "/etc/xdg/autostart/auxo-live-welcome.desktop",
+              "/usr/share/applications/auxo-install.desktop", "/etc/profile.d/auxo-live.sh",
+              "/etc/sudoers.d/99-void-live", "/etc/polkit-1/rules.d/void-live.rules",
+              "/etc/sddm.conf", "/etc/default/live.conf"]
 
 
 @dataclass

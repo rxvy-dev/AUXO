@@ -1,6 +1,0 @@
----
-type:       "job"
-name:       "auxoprepare"
-interface:  "python"
-script:     "main.py"
-noconfig:   true

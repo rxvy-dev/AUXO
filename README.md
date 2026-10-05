@@ -5,9 +5,9 @@
 <h1 align="center">Auxo Linux</h1>
 
 <p align="center">
-  <b>Arch Linux, set up the way you want it.</b><br>
-  An Arch-based rolling distro with a graphical installer. Pick your desktop, kernel, shell and accent colour,
-  then change any of them later with one command. No reinstall.
+  <b>Void Linux, set up the way you want it.</b><br>
+  A rolling distro on a Void base with runit and xbps. Pick your desktop, kernel, shell and accent
+  colour in a retro text installer, then change any of them later with one command. No reinstall.
 </p>
 
 <p align="center">
@@ -18,58 +18,59 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-<p align="center">
-  <img src="website/og.png" width="720" alt="Auxo Linux">
-</p>
-
 ---
+
+> **Auxo 4.0 moves from Arch to Void Linux.** Auxo 3.x (Arch-based, Calamares installer) is kept
+> under the git tag [`arch-3.0.4`](../../tree/arch-3.0.4).
 
 ## What it is
 
-Auxo is Arch underneath: the official repositories, pacman, the AUR and the Arch Wiki all work as normal.
+Auxo is Void underneath: Void's repositories, `xbps`, runit and the Void docs all work as normal.
 On top it adds:
 
-- a **Calamares installer** with pages for Desktop, Accent, Kernel, Shell and extra software
+- **`auxo-installer`**, a full-screen text installer (keyboard, language, time zone, disk, desktop,
+  accent, kernel, shell, account, extras) that shows a summary and changes nothing until you press Install
 - **`auxo-tweak`**, which changes any of those choices after install. The installer calls the same
   commands, so changing something later gives the same result as a fresh install
-- **bootable btrfs snapshots** on every pacman transaction, with `auxo-rollback` to make one your system again
+- **bootable btrfs snapshots**, taken before every update, with `auxo-rollback` to make one your system again
 
 ```bash
-auxo-tweak desktop hyprland     # switch your whole desktop
-auxo-tweak accent rose          # recolour GRUB, boot splash, login, prompt, terminals and bars
-auxo-tweak kernel linux-zen     # swap kernels
-auxo-tweak gaming on            # Steam, GameMode, MangoHud, Gamescope + tweaks
-auxo-update                     # Arch news check → snapshot → repo + AUR + Flatpak
-auxo-rollback --list            # list snapshots
+auxo-tweak desktop hyprland           # switch your whole desktop
+auxo-tweak accent rose                # recolour GRUB, boot splash, login, prompt, terminals, bars, Plasma
+auxo-tweak kernel linux-lts           # swap kernels (stays the default boot entry after updates)
+auxo-tweak nvidia on                  # the right NVIDIA driver for your card
+auxo-tweak scheduler lavd --mode gaming   # sched-ext CPU scheduler
+auxo-tweak gaming on                  # Steam, GameMode, MangoHud, gamescope + tweaks
+auxo-update                           # snapshot → xbps → Flatpak
+auxo-rollback --list                  # list snapshots
 ```
 
 ## Features
 
 | | |
 |---|---|
-| **GUI installer** | Calamares with Auxo branding and its own Desktop, Accent, Kernel, Shell and Software pages, each with a preview image. |
-| **8 desktop choices** | KDE Plasma 6 (the live desktop, installs offline), Hyprland, Sway and i3 with **Auxo rices** (bar, launcher, notifications, lock screen and screenshots wired up), plus GNOME, Xfce, Cinnamon, or no desktop. |
-| **One accent, everywhere** | 7 accents (violet, cyan, emerald, amber, rose, blue, mono), applied to the GRUB theme, the boot splash, the login screen, the MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst and the KDE/GNOME accent. |
-| **Text login screen** | greetd + tuigreet in your accent colour, the same on every desktop, GPU and VM. F3 switches session. GNOME uses its own login screen (GDM), which it needs to start. |
-| **Boot splash** | An animated Plymouth theme: the Auxo mark in your accent with a climber running up the trail. `auxo-tweak splash on\|off\|status` |
-| **Time-travel snapshots** | Flat btrfs layout (`@ @home @log @cache @snapshots`). snapper + snap-pac snapshot every pacman run, grub-btrfs makes them bootable, and `auxo-rollback` turns one back into your live system. `/home` is never touched. |
-| **Hardware autodetect** | NVIDIA Turing and newer get `nvidia-open` (`-dkms` on zen/lts) with modesetting. AMD and Intel get Vulkan and VA-API. `auxo-tweak drivers --prune` removes drivers and VM guest tools you don't need. |
-| **Gaming** | `auxo-tweak gaming on`: multilib, Steam, GameMode, MangoHud, Gamescope, 32-bit Vulkan for your GPU, `vm.max_map_count`, split-lock and ntsync tweaks. `off --purge` removes it all. |
-| **Kernels** | linux, linux-zen, linux-lts, linux-hardened. Your pick becomes the default GRUB entry, with the stable kernel kept as a fallback. |
-| **Dual boot** | os-prober enabled. Calamares offers *install alongside* and reuses an existing EFI partition. |
-| **Works offline** | With no network the install still completes (Plasma + stable kernel). Anything that needs a download is skipped, and you're told why. |
-| **VM friendly** | A VM image is provided, `/boot` is never btrfs-compressed (so GRUB can always read the kernel), and guest tools are kept only for the hypervisor you're on. |
-| **Software bundles** | Optional groups in the installer: Gaming, Development (incl. SDL2/SDL3), Multimedia & creative, Office, Utilities, Virtualization, extra browsers. |
+| **Text installer** | Retro, keyboard-driven and fast. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Works offline (installs Plasma); other desktops download what they need. |
+| **8 desktop choices** | KDE Plasma 6 with the **Auxo global theme** (the live desktop, installs offline), Hyprland, Sway and i3 with **Auxo rices**, plus GNOME, Xfce, Cinnamon, or no desktop. Hyprland comes from the [hyprland-void](https://github.com/Makrennel/hyprland-void) community repo, since Void doesn't package it. |
+| **One accent, everywhere** | 7 accents applied to the GRUB theme, boot splash, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
+| **Kernels** | Void's `linux`, `linux-lts` or `linux-mainline`. A kernel hook keeps your pick as the default GRUB entry after every update. |
+| **NVIDIA** | `auxo-tweak nvidia on` picks `nvidia` (Turing and newer, open kernel modules), `nvidia580` (Maxwell–Volta) or `nvidia470` (Kepler) from Void's nonfree repo, with DKMS for every installed kernel. `nvidia prime` adds `prime-run` for laptops. |
+| **Performance** | sched-ext CPU schedulers through `scx-loader` (`lavd`, `bpfland`, `flash`, `cosmos`, `rusty`) with gaming/low-latency/power-save modes, power profiles, zram. |
+| **Time-travel snapshots** | Flat btrfs layout (`@ @home @log @cache @snapshots`). snapper snapshots before every `auxo-update` and hourly, grub-btrfs makes them bootable, and `auxo-rollback` turns one back into your live system. `/home` is never touched. |
+| **Network & security** | `auxo-tweak firewall on` (ufw), `auxo-tweak dns cloudflare\|quad9\|google` (NetworkManager, every connection). |
+| **Gaming** | `auxo-tweak gaming on`: nonfree + multilib repos, Steam with its 32-bit libraries, GameMode, MangoHud, gamescope, `vm.max_map_count`, split-lock and ntsync tweaks. |
+| **Housekeeping** | `auxo-tweak cleanup` (package cache, orphans, old kernels via `vkpurge`), `auxo-tweak flatpak on` (Flathub), `auxo-tweak mirrors` (xmirror). |
+| **runit** | No systemd. Services are runit services in `/etc/sv`; Auxo enables them by linking into the default runlevel, the Void way. |
 
 ## The tools (`packages/auxo-tools`)
 
 | Tool | What it does |
 |---|---|
-| `auxo-tweak` | Menu + CLI: `accent`, `desktop`, `rice`, `kernel`, `shell`, `snapshots`, `drivers`, `gaming`, `splash`, `mirrors`, `zram`, `multilib`, `aur`, `service`, `info`. Asks for sudo by itself when needed. |
-| `auxo-update` | Warns about Arch news that needs manual steps, snapshots, updates repo + AUR (paru/yay) + Flatpak, then reports .pacnew files, orphans and whether to reboot. `-y`, `--no-news` |
+| `auxo-tweak` | Menu + CLI: `accent`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `splash`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |
 | `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |
-| `auxo-welcome` | First-run hub. In the live session it launches the installer; on an installed system it offers accent, drivers, snapshots and updates. |
+| `auxo-welcome` | First-run hub. In the live session it opens the installer; on an installed system it offers accent, drivers, snapshots and updates. |
+| `auxo-installer` | The text installer (`installer/`), shipped on the live ISO only. |
 
 Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
 
@@ -77,76 +78,63 @@ Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
 
 ```
 auxo/
-├── build.sh                    # sudo ./build.sh  →  out/auxo-linux-YYYY.MM.DD-x86_64.iso
-├── archiso/                    # the archiso profile (based on releng)
-│   ├── profiledef.sh           # ISO name/label, BIOS (syslinux) + UEFI (GRUB) boot
-│   ├── packages.x86_64         # live system: KDE Plasma (Wayland), Calamares, drivers, tools
-│   ├── pacman.conf             # build-time pacman.conf (+ local [auxo] repo)
-│   ├── grub/  syslinux/        # branded boot menus: normal · NVIDIA · safe graphics · copy-to-RAM
-│   └── airootfs/
-│       ├── etc/calamares/      # installer config, branding, slideshow, choosers, netinstall groups
-│       ├── usr/share/auxo/calamares-modules/   # custom Python jobs: auxoprepare, auxodesktop, auxosnap
-│       └── usr/local/bin/      # live-only helpers
+├── build.sh                    # ./build.sh  →  out/auxo-linux-YYYY.MM.DD-x86_64.iso
+├── VERSION
+├── mklive/                     # the live ISO: package list, services, overlay files, post-setup
+├── installer/                  # auxo-installer: config, disks, plan (pure), runner, curses TUI
 ├── packages/
-│   ├── auxo-tools/             # PKGBUILD: auxo-tweak, auxo-fetch, auxo-update, auxo-rollback, auxo-welcome,
-│   │                           #           rices, accents, Plymouth theme
-│   └── calamares/              # PKGBUILD: Calamares built WITH the packagechooser module
-├── branding/                   # logo/ (official logo files), gen-assets.py, gen-plymouth.py (boot splash)
+│   ├── build-xbps.sh           # builds auxo-tools + auxo-installer .xbps packages into a local repo
+│   └── auxo-tools/files/       # auxo-tweak & friends, rices, accents, Plymouth + Plasma themes
+├── branding/                   # logo/ (official logo files), gen-assets.py, gen-plymouth.py
 ├── scripts/
-│   ├── build-in-docker.sh      # build from any distro with Docker
+│   ├── build-iso-inner.sh      # what build.sh runs inside the Void container
 │   ├── test-vm.sh              # boot the ISO in QEMU (UEFI or --bios) with a 40 GB virtual disk
 │   └── smoke-test.sh           # headless boot test with a screenshot
-├── tests/                      # tool + installer-module tests (no root needed)
-├── website/                    # auxolinux.com: build-site.py generates the homepage, download page and docs
-└── .github/workflows/build-iso.yml   # CI: build ISO → boot it in QEMU → upload ISO + screenshot
+├── tests/                      # tool + installer tests (no root, no Void needed)
+├── website/                    # auxolinux.com generator
+└── .github/workflows/build-iso.yml   # CI: tests → ISO → boot it in QEMU → upload
 ```
 
 ## Build the ISO
 
-**On Arch** (or an Arch-based distro):
+On **any Linux** with Docker or Podman:
 
 ```bash
-sudo ./build.sh --clean      # ≈ 20–40 min, needs ~20 GB free
+./build.sh            # builds in Void's official container with void-mklive
 ./scripts/test-vm.sh out/auxo-linux-*.iso
 ```
 
-**On any other distro:** `./scripts/build-in-docker.sh`
+On **Void Linux**: `sudo ./build.sh --native`
 
-**In the cloud:** run the *Build Auxo ISO* workflow from the Actions tab. Pushing a tag like `v3.0.3` attaches
-the ISO to a GitHub Release (ISOs over 2 GB are split into parts).
-
-`build.sh` first builds `calamares` and `auxo-tools` into a local repo, then runs `mkarchiso`. Calamares
-isn't in the official repos, and the AUR build leaves out the `packagechooser` module that the
-Desktop/Accent/Kernel/Shell pages need, so Auxo ships its own PKGBUILD.
+`build.sh` packages `auxo-tools` and `auxo-installer` as `.xbps` files in a local repository,
+then runs Void's own ISO builder, [void-mklive](https://github.com/void-linux/void-mklive)
+(pinned to a tested commit), with the package list in `mklive/packages.txt`.
 
 ## Tests
 
 ```bash
-./tests/test-tools.sh                     # 69 checks: auxo-tweak / auxo-fetch against a fake root
-python3 tests/test-calamares-modules.py   # 41 checks: installer jobs with a mocked libcalamares
-./scripts/smoke-test.sh out/*.iso         # boots the real ISO headless and takes a screenshot
+./tests/test-tools.sh            # auxo-tweak against a fake Void root (commands are printed, not run)
+python3 tests/test-installer.py  # installer plans + a full walkthrough of the real TUI in a virtual terminal
+./scripts/smoke-test.sh out/*.iso   # boots the real ISO headless and takes a screenshot
 ```
 
 ## How an install works
 
-`partition → mount → unpackfs` (copies the live squashfs) `→ … → shellprocess@cleanlive`
-(copies the kernel back into `/boot`, turns off btrfs compression there, strips live-only files) →
-**auxoprepare** (keyring, pacman.conf, multilib, reflector) → packages (your software bundles) →
-users → **auxodesktop** (`auxo-tweak accent / shell / kernel / desktop / drivers / splash`) →
-initcpio → grubcfg → bootloader → **auxosnap** (`auxo-tweak snapshots on`, first snapshot, flush to disk) → done.
+The installer follows the same sequence as Void's own installer, then applies Auxo's choices
+through `auxo-tweak`:
 
-The installer calls the same `auxo-tweak` commands you can run later, so installing and changing
-things afterwards go through the same code.
+partition (GPT: EFI + root, or BIOS boot + root) → format → mount (btrfs subvolumes, uncompressed
+`/boot`) → copy the live system (rsync) → fstab by UUID → remove the live user and live-only files →
+hostname, locale, time zone, keyboard → your account (root locked, sudo for wheel) →
+**auxo-tweak** `accent / splash / shell / kernel / desktop / drivers / zram / extras` →
+dracut → GRUB (UEFI with a fallback copy, or BIOS) → first snapshot → done.
 
 ## Website
 
 ```bash
-cd website && python3 build-site.py            # → site/index.html, site/download/index.html, site/docs/index.html
-python3 build-site.py --preview                # → preview/ with flat links, for local viewing
+cd website && python3 build-site.py            # → site/
+python3 build-site.py --preview                # → preview/ with flat links
 ```
-
-The pages are plain HTML + CSS with no JavaScript, so they can be pasted straight into a WordPress
-Custom HTML block.
 
 ## Contributing
 
@@ -156,5 +144,6 @@ Bug reports, ideas and pull requests are welcome. Open an issue, or come and cha
 ## Credits
 
 Auxo Linux is made by **rxvy**, with AI assistance for a lot of the code. Built on
-[Arch Linux](https://archlinux.org) and [Calamares](https://calamares.io).
-Auxo is not affiliated with the Arch Linux project.
+[Void Linux](https://voidlinux.org) and [void-mklive](https://github.com/void-linux/void-mklive);
+Hyprland packages from [hyprland-void](https://github.com/Makrennel/hyprland-void).
+Auxo is not affiliated with the Void Linux project.

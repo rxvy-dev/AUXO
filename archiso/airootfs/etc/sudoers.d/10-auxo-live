@@ -1,2 +1,0 @@
-# live session only — removed by the installer
-liveuser ALL=(ALL:ALL) NOPASSWD: ALL

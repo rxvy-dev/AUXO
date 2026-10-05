@@ -1,6 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Welcome to Auxo
-Exec=auxo-welcome
-NoDisplay=true
-X-KDE-autostart-phase=2

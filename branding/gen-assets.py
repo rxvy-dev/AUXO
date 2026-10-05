@@ -187,25 +187,11 @@ def main():
     for i, (did, label, sub, kind) in enumerate(DESKTOPS):
         render(svg_desktop(label, sub, va, vb, kind), f"{OUT}/desktops/{did}.png")
 
-    # ── copy into the profile / packages ──────────────────────────────
-    A = os.path.join(ROOT, "archiso")
+    # ── copy into the auxo-tools package (the live ISO's boot menu is void-mklive's) ──
     T = os.path.join(ROOT, "packages", "auxo-tools", "files")
-    B = os.path.join(A, "airootfs", "etc", "calamares", "branding", "auxo")
-    shutil.copy(f"{OUT}/splash.png", f"{A}/syslinux/splash.png")
     os.makedirs(f"{T}/share/wallpapers", exist_ok=True)
-    os.makedirs(f"{T}/share/pixmaps", exist_ok=True)
     for f in os.listdir(f"{OUT}/wallpapers"):
         shutil.copy(f"{OUT}/wallpapers/{f}", f"{T}/share/wallpapers/{f}")
-    for f in ("auxo-logo.svg", "auxo-logo.png", "auxo-wordmark.png"):
-        shutil.copy(f"{OUT}/{f}", f"{T}/share/pixmaps/{f}")
-    os.makedirs(f"{B}/accents", exist_ok=True)
-    os.makedirs(f"{B}/desktops", exist_ok=True)
-    for f in ("auxo-logo.png", "auxo-wordmark.png"):
-        shutil.copy(f"{OUT}/{f}", f"{B}/{f}")
-    shutil.copy(f"{OUT}/wallpapers/auxo-violet.png", f"{B}/welcome.png")
-    for d in ("accents", "desktops"):
-        for f in os.listdir(f"{OUT}/{d}"):
-            shutil.copy(f"{OUT}/{d}/{f}", f"{B}/{d}/{f}")
     print("assets written to", OUT)
 
 

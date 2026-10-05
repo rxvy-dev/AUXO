@@ -21,9 +21,9 @@ FETCHED = ["dash-to-dock@micxgx.gmail.com", "blur-my-shell@aunetx"]
 
 
 def _owned_by_package(path):
-    if DRY or not have("pacman"):
+    if DRY or not have("xbps-query"):
         return False
-    return run(["pacman", "-Qqo", path], capture=True, check=False).strip() != ""
+    return run(["xbps-query", "-o", path], capture=True, check=False).strip() != ""
 
 
 def cleanup():

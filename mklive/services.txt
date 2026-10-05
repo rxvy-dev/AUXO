@@ -1,0 +1,5 @@
+dbus
+elogind
+NetworkManager
+sddm
+chronyd

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install Auxo Linux
+Comment=Install Auxo on this computer
+Icon=auxo-logo
+Exec=konsole --fullscreen -e sudo auxo-installer
+Terminal=false
+Categories=System;

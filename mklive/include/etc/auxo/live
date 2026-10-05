@@ -1,0 +1,2 @@
+# This file only exists on the Auxo live ISO. The installer removes it.
+LIVE_USER="anon"

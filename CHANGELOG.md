@@ -1,5 +1,28 @@
 # Changelog
 
+## 4.0.0 (in development)
+**Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept under the
+git tag `arch-3.0.4`.
+
+- Base: Void Linux with runit and xbps (no systemd). Services are runit services;
+  `auxo-tweak` enables them by linking into the default runlevel.
+- New installer: `auxo-installer`, a retro full-screen text installer replacing
+  Calamares. Erase a disk (UEFI or BIOS) or use existing partitions for dual boot;
+  btrfs with subvolumes, ext4 or xfs; offline install of Plasma; a review screen and
+  nothing touched until you press Install.
+- Kernels: Void's `linux`, `linux-lts` and `linux-mainline`. A kernel hook keeps your
+  choice as the default GRUB entry after updates.
+- New `auxo-tweak` commands: `nvidia` (picks nvidia / nvidia580 / nvidia470, back to
+  nouveau, `prime-run`), `scheduler` (sched-ext via scx-loader), `power`, `firewall`
+  (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
+- Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
+  rice is back on `hyprland.conf` for that version.
+- `auxo-update` for xbps: updates xbps first, snapshots before updating.
+- ISO built with Void's void-mklive in a container: `./build.sh` works on any Linux
+  with Docker or Podman.
+- Removed: archiso profile, Calamares and its PKGBUILD, the AUR helper command
+  (no AUR on Void; use Flatpak or xbps-src).
+
 ## 3.0.4
 - Fixed: GNOME showed "Oh no! Something has gone wrong" / failed to start after
   install. GNOME is Wayland-only now and has to be started by its own login screen

@@ -270,7 +270,7 @@ check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop 
 out=$(AUXO_ROOT=/ "$PKG/bin/auxo-fetch" --accent amber 2>&1)
 check "fetch prints os + accent"             "echo \"\$out\" | grep -q 'accent'"
 check "fetch --json is valid"                "AUXO_ROOT=/ \"$PKG/bin/auxo-fetch\" --json | python3 -m json.tool >/dev/null"
-check "no pacman/systemctl left in the tools" "! grep -rnE 'pacman |systemctl|mkinitcpio' $PKG/bin $PKG/lib --include='*' -I | grep -v '^.*#' | grep -q ."
+check "no pacman/systemctl left in the tools" "! grep -rnIE 'pacman|systemctl|mkinitcpio|archiso' $PKG/bin $PKG/lib $PKG/etc --exclude-dir=__pycache__ | grep -q ."
 check "shell scripts parse"                  "bash -n $PKG/bin/auxo-update && bash -n $PKG/bin/auxo-rollback && sh -n $PKG/bin/auxo-branding && sh -n $PKG/bin/auxo-polkit-agent"
 
 echo

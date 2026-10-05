@@ -1,0 +1,91 @@
+# Auxo Linux live ISO — packages on top of base-system (one per line, # comments)
+# Every name checked against void-packages. auxo-tools / auxo-installer come from the local repo.
+
+# Auxo
+auxo-tools
+auxo-installer
+
+# installer needs
+grub
+grub-x86_64-efi
+grub-i386-efi
+efibootmgr
+os-prober
+dracut
+rsync
+gptfdisk
+parted
+btrfs-progs
+xfsprogs
+e2fsprogs
+dosfstools
+cryptsetup
+lvm2
+ntfs-3g
+
+# live desktop: KDE Plasma (installs offline)
+dbus
+elogind
+polkit
+NetworkManager
+kde-plasma
+konsole
+dolphin
+kate
+ark
+spectacle
+xdg-desktop-portal-kde
+kde-gtk-config
+breeze-gtk
+sddm
+firefox
+pipewire
+wireplumber
+
+# login + theming used by the installed system
+greetd
+tuigreet
+plymouth
+noto-fonts-ttf
+noto-fonts-emoji
+font-inter
+
+# graphics (NVIDIA comes from nonfree after install: auxo-tweak nvidia on)
+mesa-dri
+vulkan-loader
+mesa-vulkan-radeon
+mesa-vulkan-intel
+mesa-vaapi
+intel-video-accel
+
+# shells
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+zsh-completions
+
+# system
+snapper
+grub-btrfs
+inotify-tools
+cronie
+zramen
+chrony
+socklog-void
+newt
+python3
+python3-pyqt6
+pciutils
+usbutils
+sudo
+xmirror
+nano
+curl
+git
+fastfetch
+
+# VM guest tools (auxo-tweak drivers --prune keeps only the right one)
+qemu-ga
+spice-vdagent
+open-vm-tools
+virtualbox-ose-guest
