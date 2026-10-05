@@ -78,7 +78,7 @@ Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
 
 ```
 auxo/
-├── build.sh                    # ./build.sh  →  out/auxo-linux-YYYY.MM.DD-x86_64.iso
+├── build.sh                    # ./build.sh  →  out/auxo-linux-YYYY.MM.DD-x86_64.iso (any distro)
 ├── VERSION
 ├── mklive/                     # the live ISO: package list, services, overlay files, post-setup
 ├── installer/                  # auxo-installer: config, disks, plan (pure), runner, curses TUI
@@ -97,16 +97,19 @@ auxo/
 
 ## Build the ISO
 
-On **any Linux** with Docker or Podman:
+On **any Linux distro** (Arch, Debian/MX/Ubuntu, Fedora, Void, …):
 
 ```bash
-./build.sh            # builds in Void's official container with void-mklive
+./build.sh                                # asks for sudo
 ./scripts/test-vm.sh out/auxo-linux-*.iso
 ```
 
-On **Void Linux**: `sudo ./build.sh --native`
+No Docker needed: `build.sh` downloads Void's statically linked `xbps`, sets up a small Void
+system in `out/void-root` (once) and builds inside it with `chroot`. It only needs `sudo`,
+`curl` or `wget`, `tar` and `xz`, and about 15 GB free. Alternatives: `./build.sh --docker`
+(Void's official container) or `sudo ./build.sh --native` on a Void host.
 
-`build.sh` packages `auxo-tools` and `auxo-installer` as `.xbps` files in a local repository,
+The build packages `auxo-tools` and `auxo-installer` as `.xbps` files in a local repository,
 then runs Void's own ISO builder, [void-mklive](https://github.com/void-linux/void-mklive)
 (pinned to a tested commit), with the package list in `mklive/packages.txt`.
 

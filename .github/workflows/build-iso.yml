@@ -31,7 +31,7 @@ jobs:
 
       - name: Build the ISO in a Void container (void-mklive)
         run: |
-          ./build.sh
+          ./build.sh --docker
           sudo chown -R "$USER" out
           ls -lh out
 
