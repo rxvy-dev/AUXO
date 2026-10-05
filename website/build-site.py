@@ -817,7 +817,7 @@ bento = f"""
 <span class="tm">:: snapshot · before update</span>
 <span class="tg">✓</span> 42 packages updated</div></div>
 <div class="s3 wide rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></div>
- <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, an animated boot splash and a fast text login screen that works everywhere, including VMs.</p>
+ <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, an optional animated boot splash (<code>auxo-tweak splash on</code>) and a fast text login screen that works everywhere, including VMs.</p>
  <div class="mini"><span class="ta">❯</span> auxo-fetch --json | jq .accent
 <span class="tm">"</span><span class="accname"></span><span class="tm">"</span></div></div>
 """

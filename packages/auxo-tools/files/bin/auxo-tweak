@@ -37,7 +37,7 @@ sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 
 from auxo_accents import ACCENTS, ansi  # noqa: E402
 from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, installed, online,  # noqa: E402
-                       require_root, read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
+                       require_root, read_conf, write_conf, set_kv, read_file, write_file, chown, home_of, normal_users,
                        invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
                        sv_enable, sv_disable, sv_enabled, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
@@ -782,7 +782,7 @@ def cmd_splash(args):
     if args.state == "status":
         print(f"  splash      {conf.get('SPLASH', 'off')}")
         print(f"  plymouth    {'installed' if installed('plymouth') else 'not installed'}")
-        print(f"  initramfs   {'plymouth included' if os.path.exists(R(DRACUT_SPLASH)) else 'no plymouth'}")
+        print(f"  initramfs   {'plymouth included' if 'add_dracutmodules' in (read_file(DRACUT_SPLASH) or '') else 'no plymouth'}")
         return
     require_root()
     rebuild = regrub = False
@@ -791,12 +791,17 @@ def cmd_splash(args):
         rebuild |= auxo_theme.apply_splash(auxo_theme.current())
         write_file("/etc/plymouth/plymouthd.conf",
                    "# written by auxo-tweak splash\n[Daemon]\nTheme=auxo\nShowDelay=0\nDeviceTimeout=8\n")
-        if not os.path.exists(R(DRACUT_SPLASH)):
-            write_file(DRACUT_SPLASH, '# written by auxo-tweak splash\nadd_dracutmodules+=" plymouth "\n')
+        on = '# written by auxo-tweak splash\nadd_dracutmodules+=" plymouth "\n'
+        if read_file(DRACUT_SPLASH) != on:
+            write_file(DRACUT_SPLASH, on)
             rebuild = True
         regrub |= _cmdline(add=("quiet", "splash"))
     else:
-        rebuild |= _rm(DRACUT_SPLASH)
+        # dracut adds Plymouth to the initramfs whenever it's installed, so say no explicitly
+        off = '# written by auxo-tweak splash\nomit_dracutmodules+=" plymouth "\n'
+        if read_file(DRACUT_SPLASH) != off:
+            write_file(DRACUT_SPLASH, off)
+            rebuild = True
         regrub |= _cmdline(remove=("splash",))
     write_conf({"SPLASH": args.state})
     if rebuild and not args.no_initramfs:

@@ -1,0 +1,12 @@
+#!/bin/sh
+# D-Bus activation of org.freedesktop.login1 (see org.freedesktop.login1.service).
+# Brings up the runit service and returns; elogind then claims the bus name itself
+# (D-Bus treats an activator that exits 0 like a daemon that forked, and keeps waiting).
+# The setuid launch helper clears the environment, so set what sv needs.
+export PATH=/usr/bin:/usr/sbin:/bin:/sbin SVDIR=/var/service
+if [ -e /var/service/elogind ]; then
+    sv -w 15 start elogind >/dev/null 2>&1 || :
+    exit 0
+fi
+# elogind isn't enabled as a service: behave like the stock activation file
+exec /usr/libexec/elogind/elogind --daemon

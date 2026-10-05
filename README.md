@@ -129,7 +129,7 @@ through `auxo-tweak`:
 partition (GPT: EFI + root, or BIOS boot + root) → format → mount (btrfs subvolumes, uncompressed
 `/boot`) → copy the live system (rsync) → fstab by UUID → remove the live user and live-only files →
 hostname, locale, time zone, keyboard → your account (root locked, sudo for wheel) →
-**auxo-tweak** `accent / splash / shell / kernel / desktop / drivers / zram / extras` →
+**auxo-tweak** `accent / shell / kernel / desktop / drivers / zram / extras` →
 dracut → GRUB (UEFI with a fallback copy, or BIOS) → first snapshot → done.
 
 ## Website

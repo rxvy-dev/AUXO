@@ -1,0 +1,9 @@
+# Auxo: when something asks D-Bus for logind before elogind is up (NetworkManager does, at
+# boot), start the runit-supervised elogind instead of letting D-Bus spawn a bare copy.
+# The bare copy skips Void's wrapper (cgroup + /run/user mounts), breaks logins, and makes
+# runit retry "elogind is already running" on the console every second, forever.
+# Installed in /usr/local/share/dbus-1/system-services, which D-Bus reads before /usr/share.
+[D-BUS Service]
+Name=org.freedesktop.login1
+Exec=/usr/libexec/auxo/elogind-activate
+User=root

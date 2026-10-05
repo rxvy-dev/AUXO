@@ -214,6 +214,15 @@ def get_kv(path, key, default=""):
     return default
 
 
+def read_file(path):
+    """Contents of a file in the target root, or None if it doesn't exist."""
+    try:
+        with open(R(path)) as f:
+            return f.read()
+    except (FileNotFoundError, IsADirectoryError):
+        return None
+
+
 def write_file(path, content, mode=0o644, owner=None):
     p = R(path)
     os.makedirs(os.path.dirname(p), exist_ok=True)

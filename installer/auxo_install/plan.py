@@ -307,7 +307,6 @@ def build_plan(cfg, env):
     # 8 ── Auxo: the same commands the user can run later
     u = ["--user", cfg.username]
     acts = [tweak(T, "accent", cfg.accent, "--no-grub", "--no-initramfs", *u),
-            tweak(T, "splash", "on", "--no-grub", "--no-initramfs"),
             tweak(T, "shell", cfg.shell, *u)]
     if kernel != "linux":
         acts.append(tweak(T, "kernel", kernel, "--no-grub", "--no-initramfs"))

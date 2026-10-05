@@ -254,7 +254,10 @@ check "second run is a no-op"                "! echo \"\$out\" | grep -q 'dracut
 out=$("$T" accent amber --user alex --no-grub 2>&1)
 check "accent change recolours the splash"   "cmp -s $ROOT/usr/share/plymouth/themes/auxo/logo.png $ROOT/usr/share/auxo/plymouth/accents/amber/logo.png && echo \"\$out\" | grep -q 'dracut --regenerate-all'"
 "$T" splash off >/dev/null 2>&1
-check "splash off"                           "[ ! -e $ROOT/etc/dracut.conf.d/auxo-splash.conf ] && ! grep -q splash $ROOT/etc/default/grub"
+check "splash off keeps plymouth out"        "grep -q 'omit_dracutmodules+=\" plymouth \"' $ROOT/etc/dracut.conf.d/auxo-splash.conf && ! grep -q splash $ROOT/etc/default/grub"
+check "ISO ships no plymouth"                "! grep -qx plymouth $HERE/mklive/packages.txt"
+check "D-Bus starts elogind through runit"   "grep -q '^Exec=/usr/libexec/auxo/elogind-activate' $PKG/share/dbus-1/system-services/org.freedesktop.login1.service && sh -n $PKG/libexec/elogind-activate && grep -q 'sv -w 15 start elogind' $PKG/libexec/elogind-activate"
+check "login1 override is packaged first"    "grep -q 'usr/local/share/dbus-1/system-services' $HERE/packages/build-xbps.sh && grep -q 'libexec/elogind-activate' $HERE/packages/build-xbps.sh"
 check "runit closes the splash at boot"   "sh -n $PKG/etc/runit/core-services/99-auxo-plymouth.sh && grep -q 'plymouth quit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh && ! grep -qE '^[[:space:]]*exit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh"
 check "splash hook is packaged"              "grep -q 'core-services/99-auxo-plymouth.sh' $HERE/packages/build-xbps.sh"
 
