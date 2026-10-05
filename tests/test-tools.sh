@@ -255,6 +255,8 @@ out=$("$T" accent amber --user alex --no-grub 2>&1)
 check "accent change recolours the splash"   "cmp -s $ROOT/usr/share/plymouth/themes/auxo/logo.png $ROOT/usr/share/auxo/plymouth/accents/amber/logo.png && echo \"\$out\" | grep -q 'dracut --regenerate-all'"
 "$T" splash off >/dev/null 2>&1
 check "splash off"                           "[ ! -e $ROOT/etc/dracut.conf.d/auxo-splash.conf ] && ! grep -q splash $ROOT/etc/default/grub"
+check "runit closes the splash at boot"   "sh -n $PKG/etc/runit/core-services/99-auxo-plymouth.sh && grep -q 'plymouth quit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh && ! grep -qE '^[[:space:]]*exit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh"
+check "splash hook is packaged"              "grep -q 'core-services/99-auxo-plymouth.sh' $HERE/packages/build-xbps.sh"
 
 echo "▲ gaming"
 out=$(AUXO_TEST_GPU="1002:744c AMD RX 7900" "$T" gaming on --user alex 2>&1)

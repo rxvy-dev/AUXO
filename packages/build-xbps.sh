@@ -18,7 +18,7 @@ mkdir -p "$OUT"
 src=$HERE/packages/auxo-tools/files
 d=$WORK/auxo-tools
 install -d "$d"/usr/{bin,lib/auxo,share/{auxo,applications,pixmaps,wallpapers,plasma/look-and-feel}} \
-           "$d"/etc/auxo "$d"/etc/kernel.d/post-install
+           "$d"/etc/auxo "$d"/etc/kernel.d/post-install "$d"/etc/runit/core-services
 find "$src/bin" -maxdepth 1 -type f -exec install -m755 {} "$d/usr/bin/" \;
 install -m644 "$src"/lib/*.py "$d/usr/lib/auxo/"
 cp -r "$src"/share/auxo/. "$d/usr/share/auxo/"
@@ -28,6 +28,8 @@ install -m644 "$src"/share/pixmaps/* "$d/usr/share/pixmaps/"
 install -m644 "$src"/applications/*.desktop "$d/usr/share/applications/"
 install -m644 "$src/etc/auxo/auxo.conf" "$d/etc/auxo/auxo.conf"
 install -m755 "$src/etc/kernel.d/post-install/49-auxo-default-kernel" "$d/etc/kernel.d/post-install/"
+# runit has no Plymouth integration: this closes the boot splash at the end of stage 1
+install -m644 "$src/etc/runit/core-services/99-auxo-plymouth.sh" "$d/etc/runit/core-services/"
 find "$d/usr/share/auxo" -name '*.sh' -exec chmod 755 {} +
 find "$d" -name '__pycache__' -prune -exec rm -rf {} +
 # xbps runs INSTALL with the target root as working directory; only brand a live system,
