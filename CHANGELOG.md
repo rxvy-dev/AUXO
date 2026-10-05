@@ -2,7 +2,7 @@
 
 ## 4.0.0 (in development)
 **Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept under the
-git tag `arch-3.0.4`.
+`arch` branch.
 
 - Base: Void Linux with runit and xbps (no systemd). Services are runit services;
   `auxo-tweak` enables them by linking into the default runlevel.

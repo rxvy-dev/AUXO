@@ -21,7 +21,7 @@
 ---
 
 > **Auxo 4.0 moves from Arch to Void Linux.** Auxo 3.x (Arch-based, Calamares installer) is kept
-> under the git tag [`arch-3.0.4`](../../tree/arch-3.0.4).
+> on the [`arch`](../../tree/arch) branch.
 
 ## What it is
 

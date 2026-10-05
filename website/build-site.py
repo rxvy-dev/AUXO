@@ -42,7 +42,7 @@ VOID = dict(iso("auxo-linux-VOID", "auxo-linux-2026.10.05-x86_64.iso"), size="",
 # Auxo 3 (Arch Linux): discontinued, still downloadable
 ARCH = dict(iso("auxo-linux-2026.09.27-x86_64", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
 ARCH_VM = dict(iso("auxo-linux-2026.09.27-x86_64_202609", "auxo-linux-2026.09.27-x86_64.iso"), size="2.8 GB", date="2026-09-27")
-ARCH_SRC = "https://github.com/rxvy-dev/AUXO/tree/arch-3.0.4"
+ARCH_SRC = "https://github.com/rxvy-dev/AUXO/tree/arch"
 STD = VOID
 DISCORD = "https://discord.gg/XbQ66dH5a7"
 KDE_SHOT = "https://i.ibb.co/B5s78nCV/Screenshot-20260926-233008.png"  # Auxo 3 (Arch) desktop: no longer used on the pages
@@ -1159,7 +1159,7 @@ dl = head("Get Auxo Linux — Download",
     <div class="top"><div><p class="eyebrow">Discontinued</p><h2>Auxo 3 (Arch Linux) <span class="dtag">No longer updated</span></h2>
       <p>Auxo 3 was based on Arch Linux and used the Calamares installer. It's no longer developed: there won't be new Auxo 3 images or updates to its Auxo tools. Systems you install from it still get Arch package updates through pacman. <b>For new installs, use Auxo 4.</b></p></div></div>
     <div class="dltable">{dlrow(ARCH, "Auxo Linux 3.0 (Arch) — Installer", "Final Arch-based image: live KDE Plasma with the graphical installer")}{dlrow(ARCH_VM, "Auxo Linux 3.0 (Arch) — VM", "The same, built for virtual machines")}</div>
-    <p class="subtle" style="margin-top:14px">The Auxo 3 source code is kept on GitHub under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p>
+    <p class="subtle" style="margin-top:14px">The Auxo 3 source code is kept on GitHub on the <a class="inl" href="{ARCH_SRC}">arch</a> branch.</p>
   </div>
 </div></section>
 
@@ -1524,7 +1524,7 @@ rel_page = head("Releases — Auxo Linux",
 <section><div class="wrap">
   <div class="timeline">
     {"".join(relcard(*r) for r in REL)}
-    <article class="tl rv" id="arch"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 3 (Arch Linux)</h2><span class="rbadge">Discontinued</span></header><p class="tlt">The Arch-based line ends here</p><p class="muted">Auxo 3 won't get new images or tool updates. Its final images are still on the <a class="inl" href="{DL}#arch">download page</a>, and the source is on GitHub under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p></div></article>
+    <article class="tl rv" id="arch"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 3 (Arch Linux)</h2><span class="rbadge">Discontinued</span></header><p class="tlt">The Arch-based line ends here</p><p class="muted">Auxo 3 won't get new images or tool updates. Its final images are still on the <a class="inl" href="{DL}#arch">download page</a>, and the source is on GitHub on the <a class="inl" href="{ARCH_SRC}">arch</a> branch.</p></div></article>
     {"".join(relcard(*r) for r in REL_ARCH)}
     <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 2</h2><span class="rbadge">2026-07-19</span></header><p class="tlt">Earlier release</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.19-0048-x86_64">View on archive.org</a></p></div></article>
     <article class="tl rv"><div class="tldot"></div><div class="tlcard"><header><h2>Auxo 1</h2><span class="rbadge">2026-07-09</span></header><p class="tlt">The first Auxo image</p><p class="muted">The image is kept on the Internet Archive. <a class="inl" href="https://archive.org/details/auxo-linux-2026.07.09-x86_64">View on archive.org</a></p></div></article>
@@ -1565,7 +1565,7 @@ com_page = head("Community — Auxo Linux",
 <span class="tm">$ </span>cd AUXO
 <span class="tm">$ </span>./build.sh --clean
 <span class="tm">$ </span>./scripts/test-vm.sh out/auxo-linux-*.iso</div>
-      <p class="muted" style="margin-top:12px">It sets up a small Void system in <code>out/</code> and builds inside it. The Arch-based Auxo 3 is under the <a class="inl" href="{ARCH_SRC}">arch-3.0.4</a> tag.</p></div>
+      <p class="muted" style="margin-top:12px">It sets up a small Void system in <code>out/</code> and builds inside it. The Arch-based Auxo 3 is on the <a class="inl" href="{ARCH_SRC}">arch</a> branch.</p></div>
     <div class="card rv"><h3>Run the tests</h3><p>Both suites run anywhere, without root.</p>
       <div class="code"><span class="tm">$ </span>./tests/test-tools.sh
 <span class="tm">$ </span>python3 tests/test-installer.py</div>
