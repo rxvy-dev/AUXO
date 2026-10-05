@@ -242,24 +242,12 @@ check "zramen: zstd, half of RAM"            "grep -q 'ZRAM_COMP_ALGORITHM=zstd'
 "$T" zram off >/dev/null 2>&1
 check "zram off"                             "! enabled zramen"
 
-echo "▲ splash (dracut)"
-out=$("$T" splash on 2>&1)
-check "installs plymouth"                    "echo \"\$out\" | grep -q 'xbps-install -y plymouth'"
-check "dracut includes plymouth"             "grep -q 'add_dracutmodules+=\" plymouth \"' $ROOT/etc/dracut.conf.d/auxo-splash.conf"
-check "kernel cmdline has splash"            "grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=\".*quiet.*splash' $ROOT/etc/default/grub"
-check "plymouthd.conf Theme=auxo"            "grep -q '^Theme=auxo' $ROOT/etc/plymouth/plymouthd.conf"
-check "initramfs rebuilt"                    "echo \"\$out\" | grep -q 'dracut --regenerate-all --force'"
-out=$("$T" splash on 2>&1)
-check "second run is a no-op"                "! echo \"\$out\" | grep -q 'dracut --regenerate' && [ \$(grep -o splash $ROOT/etc/default/grub | wc -l) = 1 ]"
-out=$("$T" accent amber --user alex --no-grub 2>&1)
-check "accent change recolours the splash"   "cmp -s $ROOT/usr/share/plymouth/themes/auxo/logo.png $ROOT/usr/share/auxo/plymouth/accents/amber/logo.png && echo \"\$out\" | grep -q 'dracut --regenerate-all'"
-"$T" splash off >/dev/null 2>&1
-check "splash off keeps plymouth out"        "grep -q 'omit_dracutmodules+=\" plymouth \"' $ROOT/etc/dracut.conf.d/auxo-splash.conf && ! grep -q splash $ROOT/etc/default/grub"
+echo "▲ no boot splash"
 check "ISO ships no plymouth"                "! grep -qx plymouth $HERE/mklive/packages.txt"
 check "D-Bus starts elogind through runit"   "grep -q '^Exec=/usr/libexec/auxo/elogind-activate' $PKG/share/dbus-1/system-services/org.freedesktop.login1.service && sh -n $PKG/libexec/elogind-activate && grep -q 'sv -w 15 start elogind' $PKG/libexec/elogind-activate"
 check "login1 override is packaged first"    "grep -q 'usr/local/share/dbus-1/system-services' $HERE/packages/build-xbps.sh && grep -q 'libexec/elogind-activate' $HERE/packages/build-xbps.sh"
-check "runit closes the splash at boot"   "sh -n $PKG/etc/runit/core-services/99-auxo-plymouth.sh && grep -q 'plymouth quit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh && ! grep -qE '^[[:space:]]*exit' $PKG/etc/runit/core-services/99-auxo-plymouth.sh"
-check "splash hook is packaged"              "grep -q 'core-services/99-auxo-plymouth.sh' $HERE/packages/build-xbps.sh"
+check "initramfs never gets plymouth"        "grep -q '^omit_dracutmodules+=\" plymouth \"' $PKG/dracut/90-auxo-no-plymouth.conf && grep -q 'dracut.conf.d/\"' $HERE/packages/build-xbps.sh"
+check "no splash command or theme left"      "! \"$T\" splash on >/dev/null 2>&1 && [ ! -e $PKG/share/auxo/plymouth ] && ! grep -rqi plymouth $PKG/bin $PKG/lib --exclude-dir=__pycache__"
 
 echo "▲ gaming"
 out=$(AUXO_TEST_GPU="1002:744c AMD RX 7900" "$T" gaming on --user alex 2>&1)

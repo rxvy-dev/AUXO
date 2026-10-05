@@ -36,7 +36,7 @@ On top it adds:
 
 ```bash
 auxo-tweak desktop hyprland           # switch your whole desktop
-auxo-tweak accent rose                # recolour GRUB, boot splash, login, prompt, terminals, bars, Plasma
+auxo-tweak accent rose                # recolour GRUB, login, prompt, terminals, bars, Plasma
 auxo-tweak kernel linux-lts           # swap kernels (stays the default boot entry after updates)
 auxo-tweak nvidia on                  # the right NVIDIA driver for your card
 auxo-tweak scheduler lavd --mode gaming   # sched-ext CPU scheduler
@@ -51,7 +51,7 @@ auxo-rollback --list                  # list snapshots
 |---|---|
 | **Text installer** | Retro, keyboard-driven and fast. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Works offline (installs Plasma); other desktops download what they need. |
 | **8 desktop choices** | KDE Plasma 6 with the **Auxo global theme** (the live desktop, installs offline), Hyprland, Sway and i3 with **Auxo rices**, plus GNOME, Xfce, Cinnamon, or no desktop. Hyprland comes from the [hyprland-void](https://github.com/Makrennel/hyprland-void) community repo, since Void doesn't package it. |
-| **One accent, everywhere** | 7 accents applied to the GRUB theme, boot splash, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
+| **One accent, everywhere** | 7 accents applied to the GRUB theme, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
 | **Kernels** | Void's `linux`, `linux-lts` or `linux-mainline`. A kernel hook keeps your pick as the default GRUB entry after every update. |
 | **NVIDIA** | `auxo-tweak nvidia on` picks `nvidia` (Turing and newer, open kernel modules), `nvidia580` (Maxwell–Volta) or `nvidia470` (Kepler) from Void's nonfree repo, with DKMS for every installed kernel. `nvidia prime` adds `prime-run` for laptops. |
 | **Performance** | sched-ext CPU schedulers through `scx-loader` (`lavd`, `bpfland`, `flash`, `cosmos`, `rusty`) with gaming/low-latency/power-save modes, power profiles, zram. |
@@ -65,7 +65,7 @@ auxo-rollback --list                  # list snapshots
 
 | Tool | What it does |
 |---|---|
-| `auxo-tweak` | Menu + CLI: `accent`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `splash`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-tweak` | Menu + CLI: `accent`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
 | `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |
 | `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |
@@ -84,8 +84,8 @@ auxo/
 ├── installer/                  # auxo-installer: config, disks, plan (pure), runner, curses TUI
 ├── packages/
 │   ├── build-xbps.sh           # builds auxo-tools + auxo-installer .xbps packages into a local repo
-│   └── auxo-tools/files/       # auxo-tweak & friends, rices, accents, Plymouth + Plasma themes
-├── branding/                   # logo/ (official logo files), gen-assets.py, gen-plymouth.py
+│   └── auxo-tools/files/       # auxo-tweak & friends, rices, accents, Plasma theme
+├── branding/                   # logo/ (official logo files), gen-assets.py
 ├── scripts/
 │   ├── build-iso-inner.sh      # what build.sh runs inside the Void container
 │   ├── test-vm.sh              # boot the ISO in QEMU (UEFI or --bios) with a 40 GB virtual disk

@@ -17,6 +17,9 @@ git tag `arch-3.0.4`.
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- No boot splash: the Plymouth theme and `auxo-tweak splash` are gone, and Plymouth is
+  kept out of the initramfs (on runit nothing closes it, so boot sat on the splash forever).
+- D-Bus starts elogind through its runit service instead of spawning a bare copy at boot.
 - `auxo-update` for xbps: updates xbps first, snapshots before updating.
 - ISO built with Void's void-mklive in a container: `./build.sh` works on any Linux
   with Docker or Podman.

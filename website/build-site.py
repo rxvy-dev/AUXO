@@ -817,7 +817,7 @@ bento = f"""
 <span class="tm">:: snapshot · before update</span>
 <span class="tg">✓</span> 42 packages updated</div></div>
 <div class="s3 wide rv"><div class="ico"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></div>
- <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, an optional animated boot splash (<code>auxo-tweak splash on</code>) and a fast text login screen that works everywhere, including VMs.</p>
+ <h3>Sensible defaults</h3><p>zram swap, a git-aware prompt in your accent, and a fast text login screen that works everywhere, including VMs.</p>
  <div class="mini"><span class="ta">❯</span> auxo-fetch --json | jq .accent
 <span class="tm">"</span><span class="accname"></span><span class="tm">"</span></div></div>
 """
@@ -975,7 +975,7 @@ home = head("Auxo Linux — Arch, set up the way you want it",
   <div class="shots3">
     <figure class="rv"><img src="{imgs[0]}" alt="Auxo live session with the welcome app" loading="lazy"><figcaption><b>Try it live</b><span>Boot the USB stick and the Auxo welcome app opens.</span></figcaption></figure>
     <figure class="rv"><img src="{imgs[1]}" alt="Choosing a desktop in the Auxo installer" loading="lazy"><figcaption><b>Pick your desktop</b><span>Plasma, GNOME, Xfce, Cinnamon, or a ready-made Hyprland, Sway or i3 setup.</span></figcaption></figure>
-    <figure class="rv"><img src="{imgs[2]}" alt="Choosing an accent colour in the Auxo installer" loading="lazy"><figcaption><b>Choose an accent</b><span>One colour for the boot menu, splash, login, prompt, terminal and bars.</span></figcaption></figure>
+    <figure class="rv"><img src="{imgs[2]}" alt="Choosing an accent colour in the Auxo installer" loading="lazy"><figcaption><b>Choose an accent</b><span>One colour for the boot menu, login, prompt, terminal and bars.</span></figcaption></figure>
   </div>
   <div class="note" style="margin-top:24px">{I['info']}<span>{REC_LONG}</span></div>
   <div class="sec-foot picker-row"><span class="hint">Try an accent on this page:</span><div class="swatches" role="radiogroup" aria-label="Accent colour">{swatches}</div></div>
@@ -1210,7 +1210,7 @@ def cmdrow(cmd, desc):
 TWEAK = [
  ("auxo-tweak", "Open the interactive menu."),
  ("auxo-tweak info", "Show your current Auxo settings."),
- ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the boot splash, login screen, prompt, terminals and bars. With no name, lists the colours."),
+ ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the login screen, prompt, terminals and bars. With no name, lists the colours."),
  ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
  ("auxo-tweak rice NAME", "Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
  ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code>, <code>linux-zen</code> or <code>linux-hardened</code>."),
@@ -1218,7 +1218,6 @@ TWEAK = [
  ("auxo-tweak snapshots on|off|status", "Bootable btrfs snapshots with snapper, snap-pac and grub-btrfs."),
  ("auxo-tweak drivers", "Detect your GPU and install the right driver. <code>--prune</code> removes drivers and VM guest tools for hardware that isn't there."),
  ("auxo-tweak gaming on|off|status", "Steam, GameMode, MangoHud, Gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>."),
- ("auxo-tweak splash on|off|status", "The animated Auxo boot splash (Plymouth) in your accent colour."),
  ("auxo-tweak mirrors", "Rank the fastest mirrors with reflector. <code>--country</code> limits the search."),
  ("auxo-tweak zram on|off", "Compressed swap in RAM."),
  ("auxo-tweak multilib on", "Enable the 32-bit repository (needed for Steam and Wine)."),
@@ -1274,7 +1273,7 @@ docs = head("Auxo Linux documentation",
 <p>Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
 
 <h2 id="accents">Accent colours</h2>
-<p>One setting colours the GRUB menu, the boot splash, the login screen, your prompt, terminals and bars.</p>
+<p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars.</p>
 <div class="accs">{acc_list}</div>
 <div class="code"><span class="ta">❯</span> auxo-tweak accent rose</div>
 

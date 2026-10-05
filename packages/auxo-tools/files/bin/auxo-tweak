@@ -21,7 +21,6 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak mirrors [--url URL]      pick a faster Void mirror
   auxo-tweak zram on|off              compressed RAM swap
   auxo-tweak repo nonfree|multilib    enable Void's extra repositories
-  auxo-tweak splash on|off|status     animated Auxo boot splash (Plymouth) in your accent colour
   auxo-tweak service NAME on|off      bluetooth | cups | sshd | power-profiles
   auxo-tweak info                     show current Auxo settings
 """
@@ -37,7 +36,7 @@ sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 
 from auxo_accents import ACCENTS, ansi  # noqa: E402
 from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, installed, online,  # noqa: E402
-                       require_root, read_conf, write_conf, set_kv, read_file, write_file, chown, home_of, normal_users,
+                       require_root, read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
                        invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
                        sv_enable, sv_disable, sv_enabled, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
@@ -68,10 +67,7 @@ def cmd_accent(args):
             print(f"  {ansi(a)}{mark} {name:<8} {a}{RESET}")
         return
     require_root()
-    splash_changed = auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
-    if splash_changed and read_conf().get("SPLASH") == "on" and not args.no_initramfs:
-        log("boot splash colour changed → rebuilding initramfs")
-        regen_initramfs()
+    auxo_theme.apply_system(args.name, mkconfig=not args.no_grub)
     users = target_users(args)
     for u in users:
         auxo_theme.apply_user(u, args.name)
@@ -759,58 +755,6 @@ def cmd_session_apply(args):
     auxo_theme.session_apply(args.accent, once=args.once)
 
 
-# ── boot splash (Plymouth, built into the initramfs by dracut) ─────────
-DRACUT_SPLASH = "/etc/dracut.conf.d/auxo-splash.conf"
-
-
-def _cmdline(add=(), remove=()):
-    """Edit GRUB_CMDLINE_LINUX_DEFAULT; returns True if it changed."""
-    if not os.path.exists(R("/etc/default/grub")):
-        return False
-    old = get_kv("/etc/default/grub", "GRUB_CMDLINE_LINUX_DEFAULT", "")
-    words = [w for w in old.split() if w not in remove]
-    words += [w for w in add if w not in words]
-    new = " ".join(words)
-    if new != old:
-        set_kv("/etc/default/grub", "GRUB_CMDLINE_LINUX_DEFAULT", new)
-        return True
-    return False
-
-
-def cmd_splash(args):
-    conf = read_conf()
-    if args.state == "status":
-        print(f"  splash      {conf.get('SPLASH', 'off')}")
-        print(f"  plymouth    {'installed' if installed('plymouth') else 'not installed'}")
-        print(f"  initramfs   {'plymouth included' if 'add_dracutmodules' in (read_file(DRACUT_SPLASH) or '') else 'no plymouth'}")
-        return
-    require_root()
-    rebuild = regrub = False
-    if args.state == "on":
-        xbps_install("plymouth")
-        rebuild |= auxo_theme.apply_splash(auxo_theme.current())
-        write_file("/etc/plymouth/plymouthd.conf",
-                   "# written by auxo-tweak splash\n[Daemon]\nTheme=auxo\nShowDelay=0\nDeviceTimeout=8\n")
-        on = '# written by auxo-tweak splash\nadd_dracutmodules+=" plymouth "\n'
-        if read_file(DRACUT_SPLASH) != on:
-            write_file(DRACUT_SPLASH, on)
-            rebuild = True
-        regrub |= _cmdline(add=("quiet", "splash"))
-    else:
-        # dracut adds Plymouth to the initramfs whenever it's installed, so say no explicitly
-        off = '# written by auxo-tweak splash\nomit_dracutmodules+=" plymouth "\n'
-        if read_file(DRACUT_SPLASH) != off:
-            write_file(DRACUT_SPLASH, off)
-            rebuild = True
-        regrub |= _cmdline(remove=("splash",))
-    write_conf({"SPLASH": args.state})
-    if rebuild and not args.no_initramfs:
-        regen_initramfs()
-    if regrub and not args.no_grub and have("grub-mkconfig") and os.path.exists(R("/boot/grub")):
-        auxo_theme.grub_mkconfig()
-    log(f"boot splash {args.state}" + (" (takes effect on next boot)" if args.state == "on" else ""))
-
-
 # ── gaming ────────────────────────────────────────────────────────────
 GAMING_SYSCTL = "/etc/sysctl.d/80-auxo-gaming.conf"
 GAMING_MODULES = "/etc/modules-load.d/auxo-gaming.conf"
@@ -953,9 +897,6 @@ def main():
     s.set_defaults(fn=cmd_mirrors)
     s = sub.add_parser("zram"); s.add_argument("state", choices=["on", "off"]); s.set_defaults(fn=cmd_zram)
     s = sub.add_parser("repo"); s.add_argument("name", choices=["nonfree", "multilib"]); s.set_defaults(fn=cmd_repo)
-    s = sub.add_parser("splash"); s.add_argument("state", choices=["on", "off", "status"])
-    s.add_argument("--no-initramfs", action="store_true"); s.add_argument("--no-grub", action="store_true")
-    s.set_defaults(fn=cmd_splash)
     s = sub.add_parser("gaming"); s.add_argument("state", choices=["on", "off", "status"]); s.add_argument("--user")
     s.add_argument("--no-steam", action="store_true"); s.add_argument("--purge", action="store_true")
     s.set_defaults(fn=cmd_gaming)

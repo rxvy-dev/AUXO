@@ -10,8 +10,6 @@ from auxo_desktops import GNOME_ACCENT
 
 WALLDIR = "/usr/share/wallpapers"
 GRUB_THEME = "/usr/share/grub/themes/auxo"
-SPLASH_SRC = "/usr/share/auxo/plymouth"
-SPLASH_THEME = "/usr/share/plymouth/themes/auxo"
 
 
 def current():
@@ -186,25 +184,6 @@ def motd(accent):
             f"{c2}   /_/  \\_\\    {rs}  auxo-fetch   system summary\n\n")
 
 
-def apply_splash(accent):
-    """Copy the Plymouth theme + this accent's images into place.
-    Returns True when anything changed (the initramfs then needs a rebuild)."""
-    import filecmp
-    src_theme, src_acc = R(f"{SPLASH_SRC}/theme"), R(f"{SPLASH_SRC}/accents/{accent}")
-    if not os.path.isdir(src_theme) or not os.path.isdir(src_acc):
-        return False
-    dst = R(SPLASH_THEME)
-    os.makedirs(dst, exist_ok=True)
-    changed = False
-    for d in (src_theme, src_acc):
-        for f in sorted(os.listdir(d)):
-            a, b = os.path.join(d, f), os.path.join(dst, f)
-            if not os.path.exists(b) or not filecmp.cmp(a, b, shallow=False):
-                shutil.copyfile(a, b)
-                changed = True
-    return changed
-
-
 def apply_system(accent, mkconfig=True):
     if accent not in ACCENTS:
         raise ValueError(f"unknown accent '{accent}'. choose: {', '.join(ACCENTS)}")
@@ -213,11 +192,9 @@ def apply_system(accent, mkconfig=True):
     apply_sddm(accent)
     apply_login(accent)
     write_file("/etc/motd", motd(accent))
-    splash_changed = apply_splash(accent)
     import auxo_kde
     auxo_kde.apply_system(accent)
     log(f"system accent → {accent} ({ACCENTS[accent][0]})")
-    return splash_changed
 
 
 # ── per-user ──────────────────────────────────────────────────────────
