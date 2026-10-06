@@ -72,6 +72,7 @@ auxo-rollback --list                  # list snapshots
 | `auxo-motd` | The greeting in each new terminal: your accent logo, uptime, disk, when you last updated, and a tip. `--off` / `--on` |
 | `auxo-welcome` | First-run hub. In the live session it opens the installer; on an installed system it offers accent, drivers, snapshots and updates. |
 | `auxo-installer` | The text installer (`installer/`), shipped on the live ISO only. |
+| `cybervis` | [Cybervis](https://github.com/rxvy-dev/cybervis), a terminal visualizer (matrix rain, plasma, fire, warp…), compiled into its own package from `packages/cybervis/`. |
 
 Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
 

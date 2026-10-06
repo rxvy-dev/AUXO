@@ -1,0 +1,3 @@
+Cybervis by rxvy: https://github.com/rxvy-dev/cybervis
+Vendored from Cybervis.c on the main branch (v5.0) on 2026-10-05.
+To update: curl -fsSL https://raw.githubusercontent.com/rxvy-dev/cybervis/refs/heads/main/Cybervis.c -o packages/cybervis/Cybervis.c

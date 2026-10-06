@@ -4,7 +4,7 @@
 #   packages/build-xbps.sh [OUTDIR]          default OUTDIR: out/repo
 #   STAGE_ONLY=1 packages/build-xbps.sh DIR  only lay out the package files (no xbps needed; used by the tests)
 #
-# Needs xbps-create and xbps-rindex (a Void system or the build container).
+# Needs xbps-create and xbps-rindex (a Void system or the build container), and a C compiler for cybervis.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${1:-$HERE/out/repo}
@@ -52,15 +52,23 @@ install -m755 "$HERE/installer/auxo-installer" "$i/usr/lib/auxo-installer/auxo-i
 install -m644 "$HERE"/installer/auxo_install/*.py "$i/usr/lib/auxo-installer/auxo_install/"
 ln -s ../lib/auxo-installer/auxo-installer "$i/usr/bin/auxo-installer"
 
+# ── cybervis (terminal visualizer by rxvy, compiled for x86_64) ───────
+c=$WORK/cybervis
+CV_VERSION=5.0
+install -d "$c/usr/bin" "$c/usr/share/applications"
+${CC:-cc} -O3 -pipe -o "$c/usr/bin/cybervis" "$HERE/packages/cybervis/Cybervis.c" -lm -lpthread
+strip "$c/usr/bin/cybervis" 2>/dev/null || :
+install -m644 "$HERE/packages/cybervis/cybervis.desktop" "$c/usr/share/applications/"
+
 if [[ ${STAGE_ONLY:-0} == 1 ]]; then
-  rm -rf "$OUT/auxo-tools" "$OUT/auxo-installer"
-  cp -a "$d" "$OUT/auxo-tools"; cp -a "$i" "$OUT/auxo-installer"
+  rm -rf "$OUT/auxo-tools" "$OUT/auxo-installer" "$OUT/cybervis"
+  cp -a "$d" "$OUT/auxo-tools"; cp -a "$i" "$OUT/auxo-installer"; cp -a "$c" "$OUT/cybervis"
   echo "staged into $OUT"
   exit 0
 fi
 
 cd "$OUT"
-rm -f auxo-tools-*.xbps auxo-installer-*.xbps
+rm -f auxo-tools-*.xbps auxo-installer-*.xbps cybervis-*.xbps
 xbps-create -A noarch -n "auxo-tools-${VERSION}_${REV}" \
   -s "Auxo Linux tools: auxo-tweak, auxo-update, auxo-fetch, themes and rices" \
   -D "python3>=0 newt>=0 pciutils>=0 sudo>=0 polkit>=0 xmirror>=0 util-linux>=0" \
@@ -70,6 +78,9 @@ xbps-create -A noarch -n "auxo-installer-${VERSION}_${REV}" \
   -s "Auxo Linux text installer" \
   -D "auxo-tools>=0 python3>=0 rsync>=0 gptfdisk>=0 parted>=0 btrfs-progs>=0 dosfstools>=0 xfsprogs>=0 e2fsprogs>=0 grub>=0" \
   -H "https://auxolinux.com" -l "GPL-3.0-or-later" -m "rxvy <https://github.com/rxvy-dev>" "$i"
+xbps-create -A x86_64 -n "cybervis-${CV_VERSION}_${REV}" \
+  -s "Terminal spectral engine: matrix rain, plasma, fire, warp and more" \
+  -H "https://github.com/rxvy-dev/cybervis" -l "custom" -m "rxvy <https://github.com/rxvy-dev>" "$c"
 # -f: re-register even if the version is unchanged (otherwise the index keeps the old checksum)
 rm -f "$OUT"/*-repodata
 xbps-rindex -f -a "$OUT"/*.xbps

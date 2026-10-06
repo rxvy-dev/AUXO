@@ -4,6 +4,7 @@
 # Auxo
 auxo-tools
 auxo-installer
+cybervis
 
 # installer needs
 grub
@@ -47,6 +48,8 @@ greetd
 tuigreet
 noto-fonts-ttf
 noto-fonts-emoji
+# Japanese/Chinese/Korean text (the installer offers those languages), and cybervis's katakana rain
+noto-fonts-cjk-sans
 font-inter
 
 # graphics (NVIDIA comes from nonfree after install: auxo-tweak nvidia on)

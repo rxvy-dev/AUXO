@@ -41,6 +41,8 @@ TIPS = [
     "auxo-tweak mirrors — pick a faster Void mirror",
     "auxo-tweak info — every Auxo setting at a glance",
     "auxo-fetch — your system, drawn in your accent colour",
+    "cybervis — matrix rain, plasma, fire and warp in your terminal (1-0 modes, Tab colours, q quits)",
+    "cybervis -m warp -c ultra — jump straight into a mode and palette",
     "xbps-query -Rs NAME — search Void's repositories",
     "sudo sv status NAME — check a runit service (they live in /etc/sv)",
     "auxo-tweak power performance — switch power profile",

@@ -281,6 +281,21 @@ check "shells run it in new terminals"       "grep -q auxo-motd $PKG/share/auxo/
 check "zshrc no longer runs auxo-fetch too"  "! grep -q 'auxo-fetch --small' $PKG/share/auxo/shell/zshrc"
 rm -rf $MH
 
+echo "▲ cybervis (compiled into its own package)"
+ST=$(mktemp -d)
+if command -v cc >/dev/null; then
+  STAGE_ONLY=1 "$HERE/packages/build-xbps.sh" "$ST" >/dev/null 2>&1
+  check "cybervis compiles"                  "[ -x $ST/cybervis/usr/bin/cybervis ]"
+  check "cybervis runs (help)"               "$ST/cybervis/usr/bin/cybervis help 2>&1 | grep -q 'Terminal Spectral Engine'"
+  check "cybervis is in the app menu"        "grep -q '^Exec=cybervis' $ST/cybervis/usr/share/applications/cybervis.desktop && grep -q '^Terminal=true' $ST/cybervis/usr/share/applications/cybervis.desktop"
+else
+  echo "  (no C compiler — skipping the cybervis build)"
+fi
+rm -rf "$ST"
+check "ISO ships cybervis + a CJK font"      "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx cybervis && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx noto-fonts-cjk-sans"
+check "package list has no stray comments"   "! sed 's/#.*//' $HERE/mklive/packages.txt | xargs | grep -q '#'"
+check "ISO build installs a compiler"        "grep -q 'xbps-install -y .* gcc' $HERE/scripts/build-iso-inner.sh"
+
 echo "▲ info / fetch / scripts"
 out=$("$T" info 2>&1); echo "$out" | sed 's/^/    /' | head -6
 check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop    none' && echo \"\$out\" | grep -q 'kernel     linux-lts'"

@@ -11,7 +11,7 @@ step() { printf '\n\e[1;35m▲ %s\e[0m\n' "$*"; }
 step "Preparing the build environment"
 xbps-install -Syu xbps
 xbps-install -yu
-xbps-install -y bash make git kmod xz lzo outils dosfstools e2fsprogs
+xbps-install -y bash make git kmod xz lzo outils dosfstools e2fsprogs gcc   # gcc: cybervis
 
 step "Building Auxo packages"
 "$SRC/packages/build-xbps.sh" "$OUT/repo"
@@ -35,7 +35,7 @@ find "$INCLUDE" -type f -exec chmod go-w {} +
 rm -rf --one-file-system "$MK"/mklive-build.* 2>/dev/null || true
 
 step "Building the live ISO (this takes a while)"
-PKGS=$(grep -v '^\s*#' "$SRC/mklive/packages.txt" | xargs)
+PKGS=$(sed 's/#.*//' "$SRC/mklive/packages.txt" | xargs)
 SERVICES=$(grep -v '^\s*#' "$SRC/mklive/services.txt" | xargs)
 cd "$MK"
 ./mklive.sh -a x86_64 \

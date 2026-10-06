@@ -1259,7 +1259,7 @@ acc_list = "".join(f'<span class="accchip"><i style="background:linear-gradient(
 
 DOC_NAV = [("start", "Getting started"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("accents", "Accent colours"),
            ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("packages", "Packages and services"),
-           ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("motd", "auxo-motd"), ("fetch", "auxo-fetch"),
+           ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("motd", "auxo-motd"), ("cybervis", "Cybervis"), ("fetch", "auxo-fetch"),
            ("vm", "Virtual machines"), ("trouble", "Troubleshooting"), ("faq", "FAQ")]
 doc_nav = "".join(f'<a href="#{k}">{t}</a>' for k, t in DOC_NAV)
 
@@ -1367,6 +1367,12 @@ docs = head("Auxo Linux documentation",
 <span class="ta">❯</span> auxo-motd --on    <span class="tm"># bring it back</span>
 <span class="ta">❯</span> auxo-motd --tip   <span class="tm"># just a tip</span></div>
 <p>Keep an eye on the tips. Not all of them are about settings.</p>
+
+<h2 id="cybervis">Cybervis</h2>
+<p><a class="inl" href="https://github.com/rxvy-dev/cybervis">Cybervis</a> comes with Auxo: ten animated modes in your terminal, from matrix rain and an audio spectrum to plasma, fire, a warp drive and the Game of Life, in 22 colour palettes. Run <code>cybervis</code>, or open Cybervis from the app menu.</p>
+<div class="code"><span class="ta">❯</span> cybervis                      <span class="tm"># 1-0 switch mode, Tab palette, q quit</span>
+<span class="ta">❯</span> cybervis -m warp -c ultra     <span class="tm"># start in a mode and palette</span>
+<span class="ta">❯</span> cybervis help                 <span class="tm"># every option</span></div>
 
 <h2 id="fetch">auxo-fetch</h2>
 <p>A fast system summary drawn in your accent colour.</p>

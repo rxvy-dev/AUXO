@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Cybervis
+GenericName=Terminal visualizer
+Comment=Matrix rain, plasma, fire, warp and more in your terminal
+Exec=cybervis
+Icon=utilities-terminal
+Terminal=true
+Categories=Utility;TerminalEmulator;
+Keywords=matrix;visualizer;screensaver;
