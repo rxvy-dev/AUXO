@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""auxo-motd — the Auxo greeting shown when you open a terminal.
+
+  auxo-motd          show it
+  auxo-motd --tip    show just a random tip
+  auxo-motd --off    stop showing it in new terminals (--on brings it back)
+"""
+import os
+import random
+import shutil
+import sys
+import time
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+from auxo_accents import ACCENTS, DEFAULT, hex_to_rgb  # noqa: E402
+
+ROOT = os.environ.get("AUXO_ROOT", "/").rstrip("/")
+HOME = os.path.expanduser("~")
+STATE = os.environ.get("XDG_STATE_HOME", os.path.join(HOME, ".local", "state"))
+OFF_FILE = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "auxo", "no-motd")
+LAST_UPDATE = os.path.join(STATE, "auxo", "last-update")      # written by auxo-update
+
+LOGO = ["   ●  ", "  /\\  ", " /  \\ ", "/_/\\_\\"]
+
+TIPS = [
+    "auxo-tweak accent rose — recolour GRUB, the login screen, prompt, terminals and bars at once",
+    "auxo-tweak desktop hyprland — switch your whole desktop, no reinstall",
+    "auxo-update — snapshot first, then update xbps, every package and Flatpak",
+    "auxo-rollback --list — every snapshot you can go back to (your /home is never touched)",
+    "auxo-tweak kernel linux-lts — swap kernels; it stays the default boot entry",
+    "auxo-tweak nvidia on — picks the right NVIDIA driver for your card",
+    "auxo-tweak scheduler lavd --mode gaming — a sched-ext CPU scheduler, live, no reboot",
+    "auxo-tweak gaming on — Steam, GameMode, MangoHud, gamescope and the tweaks games want",
+    "auxo-tweak firewall on — block incoming connections in one line",
+    "auxo-tweak dns quad9 — private DNS for every connection",
+    "auxo-tweak cleanup — clear the package cache, orphans and old kernels",
+    "auxo-tweak flatpak on — Flathub, for apps that aren't in Void's repos",
+    "auxo-tweak rice hyprland — put the Auxo dotfiles back if you broke your setup",
+    "auxo-tweak shell fish — try a different shell (zsh and bash work too)",
+    "auxo-tweak zram on — compressed swap in RAM",
+    "auxo-tweak mirrors — pick a faster Void mirror",
+    "auxo-tweak info — every Auxo setting at a glance",
+    "auxo-fetch — your system, drawn in your accent colour",
+    "xbps-query -Rs NAME — search Void's repositories",
+    "sudo sv status NAME — check a runit service (they live in /etc/sv)",
+    "auxo-tweak power performance — switch power profile",
+    "auxo-motd --off — hide this greeting (auxo-motd --on brings it back)",
+]
+# a few in every hundred terminals get a nudge towards the summit
+HINTS = [
+    "every mountain has a summit. auxo-tweak knows the way",
+    "climbers whisper about a hidden route: auxo-tweak summit",
+    "you've been climbing your setup for a while. ever tried the real thing?",
+]
+
+
+def accent():
+    try:
+        for line in open(ROOT + "/etc/auxo/auxo.conf"):
+            if line.startswith("ACCENT="):
+                a = line.split("=", 1)[1].strip().strip('"')
+                if a in ACCENTS:
+                    return a
+    except OSError:
+        pass
+    return DEFAULT
+
+
+def color_on():
+    return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None and os.environ.get("TERM") != "dumb"
+
+
+def rgb(h):
+    if not color_on():
+        return ""
+    r, g, b = hex_to_rgb(h)
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+def sgr(code):
+    return f"\033[{code}m" if color_on() else ""
+
+
+def user():
+    for k in ("USER", "LOGNAME"):
+        if os.environ.get(k):
+            return os.environ[k]
+    try:
+        import pwd
+        return pwd.getpwuid(os.getuid()).pw_name
+    except (ImportError, KeyError):
+        return "climber"
+
+
+def greeting(hour):
+    if 5 <= hour < 12:
+        return "Good morning"
+    if 12 <= hour < 18:
+        return "Good afternoon"
+    if 18 <= hour < 23:
+        return "Good evening"
+    return "Up late"
+
+
+def os_name():
+    try:
+        d = dict(l.rstrip().split("=", 1) for l in open(ROOT + "/etc/os-release") if "=" in l)
+        return d.get("PRETTY_NAME", "Auxo Linux").strip('"')
+    except OSError:
+        return "Auxo Linux"
+
+
+def uptime():
+    try:
+        s = int(float(open("/proc/uptime").read().split()[0]))
+    except (OSError, ValueError, IndexError):
+        return None
+    d, s = divmod(s, 86400)
+    h, s = divmod(s, 3600)
+    m = s // 60
+    return f"{d}d {h}h" if d else (f"{h}h {m}m" if h else f"{m}m")
+
+
+def disk():
+    try:
+        u = shutil.disk_usage(ROOT or "/")
+        return round(100 * u.used / u.total)
+    except OSError:
+        return None
+
+
+def last_update(now):
+    """(text, overdue) for the last auxo-update, or None when it has never run."""
+    try:
+        t = os.path.getmtime(LAST_UPDATE)
+    except OSError:
+        return None
+    days = int((now - t) // 86400)
+    text = "today" if days == 0 else "yesterday" if days == 1 else f"{days} days ago"
+    return text, days >= 14
+
+
+def tip(rng):
+    if rng.random() < 0.04:
+        return HINTS[rng.randrange(len(HINTS))], True
+    return TIPS[rng.randrange(len(TIPS))], False
+
+
+def main(argv):
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
+    if "--off" in argv:
+        os.makedirs(os.path.dirname(OFF_FILE), exist_ok=True)
+        open(OFF_FILE, "w").close()
+        print("auxo-motd: off (auxo-motd --on brings it back)")
+        return 0
+    if "--on" in argv:
+        try:
+            os.remove(OFF_FILE)
+        except FileNotFoundError:
+            pass
+        print("auxo-motd: on")
+        return 0
+    seed = os.environ.get("AUXO_MOTD_SEED")
+    rng = random.Random(seed) if seed is not None else random.Random()
+    a1, a2 = ACCENTS[accent()]
+    c1, c2, dim, bold, rs = rgb(a1), rgb(a2), sgr("2"), sgr("1"), sgr("0")
+    text, secret = tip(rng)
+    if "--tip" in argv:
+        print(text)
+        return 0
+    if os.path.exists(OFF_FILE) and "--force" not in argv:
+        return 0
+
+    now = time.time()
+    lt = time.localtime(now)
+    status = [os_name()]
+    up = uptime()
+    if up:
+        status.append(f"up {up}")
+    d = disk()
+    if d is not None:
+        status.append(f"/ {d}% used")
+    lu = last_update(now)
+    if lu is None:
+        upd = f"{dim}never updated with auxo-update{rs} · run {c1}auxo-update{rs}"
+    elif lu[1]:
+        upd = f"{rgb('#fbbf24')}last update {lu[0]}{rs} · time for {c1}auxo-update{rs}"
+    else:
+        upd = f"{dim}last update {lu[0]}{rs}"
+
+    lines = [
+        f"{bold}{greeting(lt.tm_hour)}, {user()}.{rs}",
+        f"{dim}{' · '.join(status)}{rs}",
+        upd,
+        (f"{c2}{bold}✦ {text}{rs}" if secret else f"{dim}tip:{rs} {text}"),
+    ]
+    out = ["", *(f"{(c1 if i < 2 else c2)}{bold}{LOGO[i]}{rs}  {lines[i]}" for i in range(4)), ""]
+    print("\n".join(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

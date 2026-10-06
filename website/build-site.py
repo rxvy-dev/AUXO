@@ -1259,7 +1259,7 @@ acc_list = "".join(f'<span class="accchip"><i style="background:linear-gradient(
 
 DOC_NAV = [("start", "Getting started"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("accents", "Accent colours"),
            ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("packages", "Packages and services"),
-           ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("fetch", "auxo-fetch"),
+           ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("motd", "auxo-motd"), ("fetch", "auxo-fetch"),
            ("vm", "Virtual machines"), ("trouble", "Troubleshooting"), ("faq", "FAQ")]
 doc_nav = "".join(f'<a href="#{k}">{t}</a>' for k, t in DOC_NAV)
 
@@ -1360,6 +1360,13 @@ docs = head("Auxo Linux documentation",
 <li>loads the <code>ntsync</code> module at boot, for Wine and Proton builds that support it</li>
 </ul>
 <p><code>auxo-tweak gaming off</code> removes the tweaks, and adding <code>--purge</code> removes the packages as well. Use <code>--no-steam</code> to skip Steam.</p>
+
+<h2 id="motd">auxo-motd</h2>
+<p>Each new terminal window opens with a short greeting: your accent logo, uptime, disk use, when you last ran <code>auxo-update</code> (with a nudge if it's been a while), and a tip. Text-console and SSH logins show the classic <code>/etc/motd</code> instead.</p>
+<div class="code"><span class="ta">❯</span> auxo-motd --off   <span class="tm"># stop showing it</span>
+<span class="ta">❯</span> auxo-motd --on    <span class="tm"># bring it back</span>
+<span class="ta">❯</span> auxo-motd --tip   <span class="tm"># just a tip</span></div>
+<p>Keep an eye on the tips. Not all of them are about settings.</p>
 
 <h2 id="fetch">auxo-fetch</h2>
 <p>A fast system summary drawn in your accent colour.</p>

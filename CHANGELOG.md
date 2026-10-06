@@ -17,6 +17,9 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- New `auxo-motd`: a greeting in each new terminal with uptime, disk use, a reminder
+  when the last `auxo-update` was a while ago, and a tip. `auxo-motd --off` hides it.
+- There's a mountain hidden somewhere in Auxo. Climbers say the MOTD knows the way.
 - No boot splash: the Plymouth theme and `auxo-tweak splash` are gone, and Plymouth is
   kept out of the initramfs (on runit nothing closes it, so boot sat on the splash forever).
 - D-Bus starts elogind through its runit service instead of spawning a bare copy at boot.

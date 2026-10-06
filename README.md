@@ -69,6 +69,7 @@ auxo-rollback --list                  # list snapshots
 | `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |
 | `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |
+| `auxo-motd` | The greeting in each new terminal: your accent logo, uptime, disk, when you last updated, and a tip. `--off` / `--on` |
 | `auxo-welcome` | First-run hub. In the live session it opens the installer; on an installed system it offers accent, drivers, snapshots and updates. |
 | `auxo-installer` | The text installer (`installer/`), shipped on the live ISO only. |
 

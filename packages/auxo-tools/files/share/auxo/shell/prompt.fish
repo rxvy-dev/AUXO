@@ -16,3 +16,9 @@ function fish_prompt
     test $st -eq 0; and set_color $c; or set_color red
     echo -n ' ❯ '; set_color normal
 end
+
+# Auxo greeting in each new terminal window (login shells already showed /etc/motd)
+if status is-interactive; and not status is-login; and not set -q AUXO_MOTD_SHOWN; and command -q auxo-motd
+    set -gx AUXO_MOTD_SHOWN 1
+    auxo-motd
+end

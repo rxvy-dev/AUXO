@@ -861,6 +861,9 @@ def menu():
 
 
 def main():
+    if sys.argv[1:2] == ["summit"]:          # the hidden route (not in --help or the menu)
+        import auxo_summit
+        return auxo_summit.main()
     p = argparse.ArgumentParser(prog="auxo-tweak", description="Change your Auxo system without reinstalling.")
     sub = p.add_subparsers(dest="cmd")
 

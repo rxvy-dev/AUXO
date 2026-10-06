@@ -260,6 +260,27 @@ check "--no-steam leaves Steam out"          "! echo \"\$out\" | grep -q ' steam
 "$T" gaming off --purge >/dev/null 2>&1
 check "gaming off removes tweaks"            "! test -f $ROOT/etc/sysctl.d/80-auxo-gaming.conf && grep -q 'GAMING=\"off\"' $ROOT/etc/auxo/auxo.conf"
 
+echo "▲ auxo-motd (terminal greeting)"
+M="$PKG/bin/auxo-motd"; MH=$(mktemp -d)
+mm() { HOME=$MH XDG_STATE_HOME=$MH/state XDG_CONFIG_HOME=$MH/config USER=alex AUXO_MOTD_SEED=3 "$M" "$@" 2>&1; }
+out=$(mm)
+check "greets the user"                      "echo \"\$out\" | grep -qE 'Good (morning|afternoon|evening), alex|Up late, alex'"
+check "shows a tip"                          "echo \"\$out\" | grep -q 'tip:\\|✦'"
+check "suggests auxo-update when never run"  "echo \"\$out\" | grep -q 'never updated with auxo-update'"
+mkdir -p $MH/state/auxo && touch -d '20 days ago' $MH/state/auxo/last-update
+check "nudges when the last update is old"   "mm | grep -q 'last update 20 days ago · time for auxo-update'"
+touch $MH/state/auxo/last-update
+check "quiet when updated today"             "mm | grep -q 'last update today' && ! mm | grep -q 'time for'"
+mm --off >/dev/null
+check "--off hides it"                       "[ -z \"\$(mm)\" ]"
+mm --on >/dev/null
+check "--on brings it back"                  "mm | grep -q alex"
+check "no colour codes when not a terminal"  "! mm | grep -q $'\\033'"
+check "summit hint exists but stays rare"    "python3 -c 'import random,sys; sys.argv=[\"x\"]; exec(open(\"$M\").read().split(\"def main\")[0]); n=sum(tip(random.Random(i))[1] for i in range(2000)); sys.exit(0 if 20<n<200 else 1)'"
+check "shells run it in new terminals"       "grep -q auxo-motd $PKG/share/auxo/shell/prompt.zsh && grep -q auxo-motd $PKG/share/auxo/shell/prompt.bash && grep -q auxo-motd $PKG/share/auxo/shell/prompt.fish"
+check "zshrc no longer runs auxo-fetch too"  "! grep -q 'auxo-fetch --small' $PKG/share/auxo/shell/zshrc"
+rm -rf $MH
+
 echo "▲ info / fetch / scripts"
 out=$("$T" info 2>&1); echo "$out" | sed 's/^/    /' | head -6
 check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop    none' && echo \"\$out\" | grep -q 'kernel     linux-lts'"
@@ -267,7 +288,7 @@ out=$(AUXO_ROOT=/ "$PKG/bin/auxo-fetch" --accent amber 2>&1)
 check "fetch prints os + accent"             "echo \"\$out\" | grep -q 'accent'"
 check "fetch --json is valid"                "AUXO_ROOT=/ \"$PKG/bin/auxo-fetch\" --json | python3 -m json.tool >/dev/null"
 check "no pacman/systemctl left in the tools" "! grep -rnIE 'pacman|systemctl|mkinitcpio|archiso' $PKG/bin $PKG/lib $PKG/etc --exclude-dir=__pycache__ | grep -q ."
-check "shell scripts parse"                  "bash -n $PKG/bin/auxo-update && bash -n $PKG/bin/auxo-rollback && sh -n $PKG/bin/auxo-branding && sh -n $PKG/bin/auxo-polkit-agent"
+check "shell scripts parse"                  "bash -n $PKG/bin/auxo-update && bash -n $PKG/bin/auxo-rollback && sh -n $PKG/bin/auxo-branding && sh -n $PKG/bin/auxo-polkit-agent && bash -n $PKG/share/auxo/shell/prompt.bash"
 
 echo
 printf '%d passed, %d failed\n' "$pass" "$fail"

@@ -11,3 +11,10 @@ add-zsh-hook precmd vcs_info
 setopt prompt_subst
 PROMPT='%F{'$AUXO_C'}▲%f %B%~%b${vcs_info_msg_0_} %(?.%F{'$AUXO_C'}.%F{203})❯%f '
 RPROMPT='%(?..%F{203}%?%f)'
+
+# Auxo greeting in each new terminal window (login shells already showed /etc/motd).
+# AUXO_FETCHED stops older ~/.zshrc files from also running auxo-fetch.
+if [[ -o interactive && ! -o login && -z $AUXO_MOTD_SHOWN ]] && (( $+commands[auxo-motd] )); then
+  export AUXO_MOTD_SHOWN=1 AUXO_FETCHED=1
+  auxo-motd
+fi
