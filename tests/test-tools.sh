@@ -268,14 +268,15 @@ check "greets the user"                      "echo \"\$out\" | grep -qE 'Good (m
 check "shows a tip"                          "echo \"\$out\" | grep -q 'tip:\\|✦'"
 check "suggests auxo-update when never run"  "echo \"\$out\" | grep -q 'never updated with auxo-update'"
 mkdir -p $MH/state/auxo && touch -d '20 days ago' $MH/state/auxo/last-update
-check "nudges when the last update is old"   "mm | grep -q 'last update 20 days ago · time for auxo-update'"
+out=$(mm); check "nudges when the last update is old"   "echo \"\$out\" | grep -q 'last update 20 days ago · time for auxo-update'"
 touch $MH/state/auxo/last-update
-check "quiet when updated today"             "mm | grep -q 'last update today' && ! mm | grep -q 'time for'"
+out=$(mm); check "quiet when updated today"             "echo \"\$out\" | grep -q 'last update today' && ! echo \"\$out\" | grep -q 'time for'"
 mm --off >/dev/null
 check "--off hides it"                       "[ -z \"\$(mm)\" ]"
 mm --on >/dev/null
-check "--on brings it back"                  "mm | grep -q alex"
-check "no colour codes when not a terminal"  "! mm | grep -q $'\\033'"
+out=$(mm); check "--on brings it back"                  "echo \"\$out\" | grep -q alex"
+check "no colour codes when not a terminal"  "! echo \"\$out\" | grep -q $'\\033'"
+check "survives a closed pipe"               "mm | head -c1 >/dev/null; [ \${PIPESTATUS[0]} = 0 ]"
 check "summit hint exists but stays rare"    "python3 -c 'import random,sys; sys.argv=[\"x\"]; exec(open(\"$M\").read().split(\"def main\")[0]); n=sum(tip(random.Random(i))[1] for i in range(2000)); sys.exit(0 if 20<n<200 else 1)'"
 check "shells run it in new terminals"       "grep -q auxo-motd $PKG/share/auxo/shell/prompt.zsh && grep -q auxo-motd $PKG/share/auxo/shell/prompt.bash && grep -q auxo-motd $PKG/share/auxo/shell/prompt.fish"
 check "zshrc no longer runs auxo-fetch too"  "! grep -q 'auxo-fetch --small' $PKG/share/auxo/shell/zshrc"
