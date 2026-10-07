@@ -20,6 +20,8 @@
 - Cybervis comes preinstalled: matrix rain, audio spectrum, plasma, fire, warp and more in
   your terminal (`cybervis`, or Cybervis in the app menu). Compiled during the ISO build.
 - Japanese, Chinese and Korean text now displays properly (noto-fonts-cjk-sans on the ISO).
+- Auxo supports cancer research: the installer, the welcome app and (now and then) the
+  terminal greeting point to the Terry Fox Foundation. `auxo-motd --give` has the link.
 - New `auxo-motd`: a greeting in each new terminal with uptime, disk use, a reminder
   when the last `auxo-update` was a while ago, and a tip. `auxo-motd --off` hides it.
 - There's a mountain hidden somewhere in Auxo. Climbers say the MOTD knows the way.

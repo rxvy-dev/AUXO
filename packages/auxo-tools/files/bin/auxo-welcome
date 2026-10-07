@@ -110,6 +110,12 @@ class Welcome(QMainWindow):
             btn.clicked.connect(fn)
             grid.addWidget(btn, i // 2, i % 2)
         v.addLayout(grid)
+        give = QPushButton("♥  Auxo supports cancer research: donate to the Terry Fox Foundation")
+        give.setObjectName("give")
+        give.setStyleSheet("QPushButton#give{color:#ff8a92;border:1px solid #5a1a20;background:#1c0b0e}"
+                           "QPushButton#give:hover{background:#3a0d12;color:#fff}")
+        give.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://terryfox.org/?form=GENERAL")))
+        v.addWidget(give)
 
         if not LIVE:
             row = QHBoxLayout()

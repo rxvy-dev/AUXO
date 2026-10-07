@@ -383,6 +383,7 @@ class TUI:
             self.put(y + 1, left, "Internet: ", curses.color_pair(C_DIM))
             self.put(y + 1, left + 10, net, curses.color_pair(C_OK if self.env.online else C_WARN))
             self.put(y + 2, left, f"Boot mode: {'UEFI' if self.env.efi else 'BIOS (legacy)'}", curses.color_pair(C_DIM))
+            self.give_back(y + 4)
             self.scr.refresh()
             k = self.key()
             if k in ("\n", "\r", curses.KEY_ENTER):
@@ -390,6 +391,14 @@ class TUI:
             if k in ("n", "N"):
                 self.run_outside(["nmtui"])
                 self.env.online = online()
+
+    def give_back(self, y):
+        """Auxo supports cancer research: shown on the welcome and finish pages."""
+        top, left, height, width = self.body
+        self.put(y, left, "♥ ", curses.color_pair(C_ERR) | curses.A_BOLD)
+        self.put(y, left + 2, "Auxo supports cancer research", curses.color_pair(C_NORMAL) | curses.A_BOLD)
+        return self.text(y + 1, ["Auxo is free. If it's useful to you, give to the Terry Fox Foundation "
+                                 "instead: terryfox.org"], curses.color_pair(C_DIM))
 
     def run_outside(self, argv):
         curses.endwin()
@@ -631,6 +640,7 @@ class TUI:
             if ok:
                 y = self.text(top, ["Remove the USB stick and reboot to start Auxo.",
                                     "", "Change anything later with auxo-tweak, and update with auxo-update."])
+                y = self.give_back(y + 1)
             else:
                 y = self.text(top, ["Something went wrong:", ""], curses.color_pair(C_ERR))
                 y = self.text(y, [error], curses.color_pair(C_NORMAL))

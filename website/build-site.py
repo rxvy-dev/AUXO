@@ -1373,10 +1373,11 @@ docs = head("Auxo Linux documentation",
 <p><code>auxo-tweak gaming off</code> removes the tweaks, and adding <code>--purge</code> removes the packages as well. Use <code>--no-steam</code> to skip Steam.</p>
 
 <h2 id="motd">auxo-motd</h2>
-<p>Each new terminal window opens with a short greeting: your accent logo, uptime, disk use, when you last ran <code>auxo-update</code> (with a nudge if it's been a while), and a tip. Text-console and SSH logins show the classic <code>/etc/motd</code> instead.</p>
+<p>Each new terminal window opens with a short greeting: your accent logo, uptime, disk use, when you last ran <code>auxo-update</code> (with a nudge if it's been a while), and a tip, or now and then a reminder that you can donate to cancer research through the Terry Fox Foundation. Text-console and SSH logins show the classic <code>/etc/motd</code> instead.</p>
 <div class="code"><span class="ta">❯</span> auxo-motd --off   <span class="tm"># stop showing it</span>
 <span class="ta">❯</span> auxo-motd --on    <span class="tm"># bring it back</span>
-<span class="ta">❯</span> auxo-motd --tip   <span class="tm"># just a tip</span></div>
+<span class="ta">❯</span> auxo-motd --tip   <span class="tm"># just a tip</span>
+<span class="ta">❯</span> auxo-motd --give  <span class="tm"># support cancer research</span></div>
 <p>Keep an eye on the tips. Not all of them are about settings.</p>
 
 <h2 id="cybervis">Cybervis</h2>

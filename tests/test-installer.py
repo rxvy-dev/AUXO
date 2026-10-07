@@ -236,6 +236,7 @@ def tui_walkthrough(shots_dir=None):
     pump(1.5)
     res = {}
     res["welcome"] = "Welcome to Auxo Linux" in text() and "DRY RUN" in text()
+    res["give"] = "Auxo supports cancer research" in text() and "terryfox.org" in text()
     snap("01-welcome")
     send(ENTER)
     res["keyboard"] = "Keyboard layout" in text() and "English (US)" in text()
@@ -277,6 +278,7 @@ def tui_walkthrough(shots_dir=None):
     snap("09-confirm")
     send("y", 3.0)
     res["installed"] = "Auxo is installed" in text()
+    res["give_done"] = "Auxo supports cancer research" in text()
     snap("10-done")
     send(ENTER, 1.0)
     try:
@@ -331,12 +333,12 @@ shots = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else No
 try:
     import pyte  # noqa: F401
     r = tui_walkthrough(shots)
-    labels = {"welcome": "welcome screen (dry-run badge)", "keyboard": "keyboard list", "search": "type-to-search filters",
+    labels = {"welcome": "welcome screen (dry-run badge)", "give": "welcome page: Auxo supports cancer research", "keyboard": "keyboard list", "search": "type-to-search filters",
               "language": "language page", "timezone": "time zone page", "disk": "disk list, small USB marked unusable",
               "filesystem": "filesystem choice", "desktop": "desktops with 'needs internet' when offline",
               "accent": "accent → kernel", "account": "account form", "mismatch": "password mismatch caught",
               "extras": "extras checklist", "review": "review shows the disk to erase", "confirm": "red confirmation dialog",
-              "installed": "dry-run install reaches the finish screen"}
+              "installed": "dry-run install reaches the finish screen", "give_done": "finish page: cancer research note"}
     for k, label in labels.items():
         check(label, r.get(k, False))
 except ImportError:

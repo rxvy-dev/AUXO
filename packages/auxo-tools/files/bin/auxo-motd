@@ -4,6 +4,7 @@
   auxo-motd          show it
   auxo-motd --tip    show just a random tip
   auxo-motd --off    stop showing it in new terminals (--on brings it back)
+  auxo-motd --give   how to support cancer research (Auxo supports the Terry Fox Foundation)
 """
 import os
 import random
@@ -142,10 +143,17 @@ def last_update(now):
     return text, days >= 14
 
 
+GIVE = "Auxo is free. Remember you can donate to cancer research: terryfox.org"
+
+
 def tip(rng):
-    if rng.random() < 0.04:
-        return HINTS[rng.randrange(len(HINTS))], True
-    return TIPS[rng.randrange(len(TIPS))], False
+    """(text, kind): kind is "tip", "hint" (the hidden game) or "give" (cancer research)."""
+    r = rng.random()
+    if r < 0.04:
+        return HINTS[rng.randrange(len(HINTS))], "hint"
+    if r < 0.29:                         # about one terminal in four
+        return GIVE, "give"
+    return TIPS[rng.randrange(len(TIPS))], "tip"
 
 
 def main(argv):
@@ -168,7 +176,11 @@ def main(argv):
     rng = random.Random(seed) if seed is not None else random.Random()
     a1, a2 = ACCENTS[accent()]
     c1, c2, dim, bold, rs = rgb(a1), rgb(a2), sgr("2"), sgr("1"), sgr("0")
-    text, secret = tip(rng)
+    text, kind = tip(rng)
+    if "--give" in argv:
+        print("Auxo is free, and Auxo supports cancer research. If Auxo is useful to you, please give\n"
+              "to the Terry Fox Foundation instead: https://terryfox.org/?form=GENERAL")
+        return 0
     if "--tip" in argv:
         print(text)
         return 0
@@ -196,7 +208,8 @@ def main(argv):
         f"{bold}{greeting(lt.tm_hour)}, {user()}.{rs}",
         f"{dim}{' · '.join(status)}{rs}",
         upd,
-        (f"{c2}{bold}✦ {text}{rs}" if secret else f"{dim}tip:{rs} {text}"),
+        (f"{c2}{bold}✦ {text}{rs}" if kind == "hint" else
+         f"{rgb('#ff5a64')}♥{rs} {text}" if kind == "give" else f"{dim}tip:{rs} {text}"),
     ]
     out = ["", *(f"{(c1 if i < 2 else c2)}{bold}{LOGO[i]}{rs}  {lines[i]}" for i in range(4)), ""]
     print("\n".join(out))
@@ -205,7 +218,9 @@ def main(argv):
 
 if __name__ == "__main__":
     try:
-        sys.exit(main(sys.argv[1:]))
+        rc = main(sys.argv[1:])
+        sys.stdout.flush()               # flush here so a closed pipe is caught below, not at exit
     except BrokenPipeError:              # e.g. `auxo-motd | head -1`
         os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
-        sys.exit(0)
+        rc = 0
+    sys.exit(rc)

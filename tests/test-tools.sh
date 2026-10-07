@@ -277,7 +277,9 @@ mm --on >/dev/null
 out=$(mm); check "--on brings it back"                  "echo \"\$out\" | grep -q alex"
 check "no colour codes when not a terminal"  "! echo \"\$out\" | grep -q $'\\033'"
 check "survives a closed pipe"               "mm | head -c1 >/dev/null; [ \${PIPESTATUS[0]} = 0 ]"
-check "summit hint exists but stays rare"    "python3 -c 'import random,sys; sys.argv=[\"x\"]; exec(open(\"$M\").read().split(\"def main\")[0]); n=sum(tip(random.Random(i))[1] for i in range(2000)); sys.exit(0 if 20<n<200 else 1)'"
+check "summit hint exists but stays rare"    "python3 -c 'import random,sys; sys.argv=[\"x\"]; exec(open(\"$M\").read().split(\"def main\")[0]); n=sum(tip(random.Random(i))[1]==\"hint\" for i in range(2000)); sys.exit(0 if 20<n<200 else 1)'"
+check "cancer research reminder ~1 in 4"     "python3 -c 'import random,sys; sys.argv=[\"x\"]; exec(open(\"$M\").read().split(\"def main\")[0]); n=sum(tip(random.Random(i))[1]==\"give\" for i in range(2000)); sys.exit(0 if 380<n<620 else 1)'"
+check "--give links the Terry Fox Foundation" "mm --give | grep -q 'https://terryfox.org/?form=GENERAL'"
 check "shells run it in new terminals"       "grep -q auxo-motd $PKG/share/auxo/shell/prompt.zsh && grep -q auxo-motd $PKG/share/auxo/shell/prompt.bash && grep -q auxo-motd $PKG/share/auxo/shell/prompt.fish"
 check "zshrc no longer runs auxo-fetch too"  "! grep -q 'auxo-fetch --small' $PKG/share/auxo/shell/zshrc"
 rm -rf $MH
