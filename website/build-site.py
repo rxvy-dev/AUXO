@@ -109,37 +109,15 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
 .dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
-/* give back: Terry Fox Foundation (fixed red, independent of the accent picker) */
-.tf{--tf:#e1262f;--tf2:#ff6b6b;position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--tf) 45%,var(--line2));border-radius:14px;
- background:radial-gradient(90% 120% at 100% 0%,color-mix(in srgb,var(--tf) 22%,transparent),transparent 60%),linear-gradient(180deg,#1a1215,#121014);padding:56px 56px 40px}
-.tf .tfgrid{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
-.tf .tfgrid>*{min-width:0}
-@media(max-width:600px){.tf .btn.give,.tf .btn.ways{width:100%;white-space:normal;text-align:center;height:auto;min-height:56px;padding:14px 18px}}
-@media(max-width:960px){.tf{padding:36px 22px 28px}.tf .tfgrid{grid-template-columns:1fr;gap:32px}}
-.tf .eyebrow{color:var(--tf2)}
-.tf h2{font-size:clamp(32px,3.8vw,50px);margin:12px 0 18px;letter-spacing:-.03em}
-.tf h2 em{font-style:normal;color:var(--tf2)}
-.tf p.story{color:#d8d2d4;font-size:17.5px;line-height:1.7;max-width:620px}
-.tf p.story b{color:#fff}
-.tf .tfcta{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 14px}
-.tf .btn.give{background:var(--tf);border-color:var(--tf);color:#fff;height:56px;padding:0 28px;font-size:17px;box-shadow:0 18px 40px -16px color-mix(in srgb,var(--tf) 80%,transparent)}
-.tf .btn.give:hover{filter:brightness(1.1);transform:translateY(-1px)}
-.tf .btn.give svg{width:19px;height:19px}
-.tf .btn.ways{height:56px;background:transparent;border-color:color-mix(in srgb,var(--tf) 40%,var(--line2))}
-.tf .fine{font-size:13.5px;color:var(--dim);max-width:600px}
-.tf .tfstats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
-.tf .tfstats div{border:1px solid color-mix(in srgb,var(--tf) 30%,var(--line));border-radius:10px;padding:16px 14px;background:rgba(0,0,0,.25)}
-.tf .tfstats b{display:block;font:700 clamp(22px,2.1vw,30px) var(--fh);letter-spacing:-.02em;color:#fff;white-space:nowrap}
-.tf .tfstats span{font-size:13px;color:var(--mut)}
-@media(max-width:520px){.tf .tfstats{grid-template-columns:1fr}}
-.tf .route{width:100%;height:auto;display:block}
-.tf .route .done{stroke:var(--tf);stroke-width:5;fill:none;stroke-linecap:round;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--tf) 70%,transparent))}
-.tf .route .todo{stroke:#f3f4f6;stroke-opacity:.45;stroke-width:3;fill:none;stroke-dasharray:2 10;stroke-linecap:round}
-.tf .route text{font:600 12.5px var(--fm);fill:#d8d2d4}
-.tf .route text.k{fill:var(--tf2)}
-.tf .route .land{fill:#1d171b;stroke:#2c2328}
-.tf .quote{margin-top:18px;font:600 19px/1.4 var(--fh);color:#fff}
-.tf .quote small{display:block;font:500 13px var(--fb);color:var(--dim);margin-top:6px}
+/* give back: Terry Fox Foundation bar (fixed red, independent of the accent picker) */
+.tfbar{background:linear-gradient(90deg,#3a0d12,#1c0b0e 60%,#1a1014);border-bottom:1px solid #5a1a20;color:#f1dcdd;font-size:14.5px}
+.tfbar .wrap{display:flex;align-items:center;gap:12px;min-height:46px;padding-top:8px;padding-bottom:8px}
+.tfbar svg{width:16px;height:16px;fill:#ff5a64;flex:none}
+.tfbar span{flex:1;min-width:0}
+.tfbar b{color:#fff}
+.tfbar a{flex:none;font-weight:600;color:#fff;background:#e1262f;border-radius:6px;padding:7px 14px;white-space:nowrap}
+.tfbar a:hover{filter:brightness(1.1)}
+@media(max-width:700px){.tfbar .wrap{flex-wrap:wrap;gap:8px 10px}.tfbar a{width:100%;text-align:center}}
 .fgive{color:#ff6b6b!important}
 
 /* nav */
@@ -813,7 +791,7 @@ def footer():
   <div><h4>Get Auxo</h4><ul><li><a href="{DL}#installer">Installer image</a></li><li><a href="{DL}#vmsetup">Virtual machines</a></li><li><a href="{DL}#arch">Auxo 3 (Arch)</a></li><li><a href="{DL}#usb">Make a USB stick</a></li><li><a href="{DL}#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="{DESKP}">Desktops</a></li><li><a href="{HOME}#software">Software</a></li><li><a href="{RELP}">Releases</a></li><li><a href="{CHANGELOG_URL}">Changelog</a></li>{f'<li><a href="{PRESSP}">Press kit</a></li>' if PRESSP else ''}</ul></div>
   <div><h4>Docs</h4><ul><li><a href="{DOCS}#tweak">auxo-tweak</a></li><li><a href="{DOCS}#snapshots">Snapshots</a></li><li><a href="{DOCS}#nvidia">NVIDIA</a></li><li><a href="{DOCS}#gaming">Gaming</a></li><li><a href="{DOCS}#trouble">Troubleshooting</a></li></ul></div>
-  <div><h4>Community</h4><ul>{f'<li><a href="{COMP}">Get involved</a></li>' if EXTRA_PAGES else ''}<li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a class="fgive" href="{HOME}#give">♥ Support cancer research</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
+  <div><h4>Community</h4><ul>{f'<li><a href="{COMP}">Get involved</a></li>' if EXTRA_PAGES else ''}<li><a href="{DISCORD}">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a class="fgive" href="https://terryfox.org/?form=GENERAL" target="_blank" rel="noopener">♥ Support cancer research</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
 <div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
@@ -961,7 +939,7 @@ HERO_SHOT = (f'<figure class="heroshot tui" aria-label="The Auxo Linux 4.0 insta
 home = head("Auxo Linux — Void Linux, set up the way you want it",
             "Auxo Linux is a rolling distro built on Void Linux. Pick your desktop, kernel, shell and accent colour in a fast text installer, and change any of them later with one command.",
             "https://auxolinux.com/") + nav("home") + f"""
-<main id="main">{alertbar()}
+<main id="main"><div class="tfbar" id="give"><div class="wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.4 2.4h1.8c.8-1.2 2.2-2.4 4.4-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg><span><b>Auxo is free.</b> Help finish Terry Fox's Marathon of Hope: give to cancer research instead.</span><a href="https://terryfox.org/?form=GENERAL" target="_blank" rel="noopener">Donate to the Terry Fox Foundation →</a></div></div>{alertbar()}
 <section class="khero v7">{RIDGE.replace('class="ridge"','class="hridge"')}<div class="wrap hgrid">
   <div>
     <a class="badge rise" href="{DL}#releases"><b>.</b>Auxo Linux 4.0: now built on Void Linux →</a>
@@ -1047,43 +1025,6 @@ home = head("Auxo Linux — Void Linux, set up the way you want it",
     <a class="rv" href="{DL}#usb">{IC['usb']}<h3>Live USB</h3><p>Boot a full KDE Plasma desktop without touching your drive.</p><span class="more">Make a USB stick →</span></a>
     <a class="rv" href="{DL}#vmsetup">{IC['vm']}<h3>Virtual machines</h3><p>VirtualBox, QEMU/KVM and VMware, from the same image.</p><span class="more">VM setup →</span></a>
     <a class="rv" href="{DL}#installer">{IC['dual']}<h3>Dual boot</h3><p>Install alongside Windows or another Linux and pick at startup.</p><span class="more">Get the image →</span></a>
-  </div>
-</div></section>
-
-<section id="give" style="padding-top:24px"><div class="wrap">
-  <div class="tf rv">
-    <div class="tfgrid">
-      <div>
-        <p class="eyebrow">Give back · Cancer research</p>
-        <h2>Help finish what <em>Terry</em> started.</h2>
-        <p class="story">In 1980, <b>Terry Fox</b> set out to run across Canada on one leg to raise money for cancer research. He ran <b>5,373 km in 143 days</b>, nearly a marathon every day, until cancer stopped him near Thunder Bay. His Marathon of Hope never ended: <b>more than $800 million</b> has been raised for cancer research in his name.</p>
-        <p class="story" style="margin-top:14px">Auxo is free. If it's useful to you, give what you would have paid for it to the Terry Fox Foundation instead.</p>
-        <div class="tfcta">
-          <a class="btn give" href="https://terryfox.org/?form=GENERAL" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.4 2.4h1.8c.8-1.2 2.2-2.4 4.4-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>Donate to the Terry Fox Foundation</a>
-          <a class="btn ways" href="https://terryfox.org/ways-to-give/" target="_blank" rel="noopener">Other ways to give</a>
-        </div>
-        <p class="fine">Your donation goes straight to the Terry Fox Foundation; Auxo never sees it. Auxo isn't affiliated with the foundation, we just think it's worth it.</p>
-      </div>
-      <div>
-        <svg class="route" viewBox="0 0 520 250" role="img" aria-label="Terry Fox's route: from St. John's to Thunder Bay, with the rest of the way to the Pacific still to go">
-          <path class="land" d="M10 150 C40 110 70 95 110 92 C150 70 190 62 230 66 C270 52 320 56 360 64 C400 60 440 72 470 92 C495 104 508 124 510 150 C505 175 480 190 440 192 C390 200 330 196 280 200 C220 204 160 202 110 196 C60 192 25 180 10 150 Z"/>
-          <path class="todo" d="M48 158 C90 140 130 132 170 130 C200 129 220 128 236 126"/>
-          <path class="done" d="M236 126 C280 120 320 124 360 128 C400 132 440 128 482 118"/>
-          <circle cx="482" cy="118" r="7" fill="#e1262f"/>
-          <circle cx="236" cy="126" r="8" fill="#fff"/><circle cx="236" cy="126" r="3.5" fill="#e1262f"/>
-          <circle cx="48" cy="158" r="5" fill="none" stroke="#f3f4f6" stroke-opacity=".6" stroke-width="2"/>
-          <text x="430" y="98">St. John's</text><text class="k" x="420" y="82">Apr 12, 1980</text>
-          <text x="196" y="106">Thunder Bay</text><text class="k" x="200" y="90">Sept 1, 1980</text>
-          <text x="22" y="186">Pacific</text><text class="k" x="22" y="202">still to go</text>
-        </svg>
-        <div class="tfstats">
-          <div><b>5,373 km</b><span>run on one leg</span></div>
-          <div><b>143 days</b><span>nearly a marathon a day</span></div>
-          <div><b>$800M+</b><span>raised for research</span></div>
-        </div>
-        <p class="quote">"Terry Fox started a marathon against cancer. Together, we can finish it."<small>The Terry Fox Foundation</small></p>
-      </div>
-    </div>
   </div>
 </div></section>
 
