@@ -56,6 +56,39 @@ body{background:var(--bg);margin:0;overflow-x:clip}
 .legacy .dlrow .btn.primary{background:var(--card2);border-color:var(--line2);color:var(--tx)}
 .dtag{display:inline-block;font:600 11px var(--fm);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);border:1px solid var(--line2);border-radius:5px;padding:2px 7px;margin-left:8px;vertical-align:middle}
 
+/* give back: Terry Fox Foundation (fixed red, independent of the accent picker) */
+.tf{--tf:#e1262f;--tf2:#ff6b6b;position:relative;overflow:hidden;border:1px solid color-mix(in srgb,var(--tf) 45%,var(--line2));border-radius:14px;
+ background:radial-gradient(90% 120% at 100% 0%,color-mix(in srgb,var(--tf) 22%,transparent),transparent 60%),linear-gradient(180deg,#1a1215,#121014);padding:56px 56px 40px}
+.tf .tfgrid{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;align-items:center}
+.tf .tfgrid>*{min-width:0}
+@media(max-width:600px){.tf .btn.give,.tf .btn.ways{width:100%;white-space:normal;text-align:center;height:auto;min-height:56px;padding:14px 18px}}
+@media(max-width:960px){.tf{padding:36px 22px 28px}.tf .tfgrid{grid-template-columns:1fr;gap:32px}}
+.tf .eyebrow{color:var(--tf2)}
+.tf h2{font-size:clamp(32px,3.8vw,50px);margin:12px 0 18px;letter-spacing:-.03em}
+.tf h2 em{font-style:normal;color:var(--tf2)}
+.tf p.story{color:#d8d2d4;font-size:17.5px;line-height:1.7;max-width:620px}
+.tf p.story b{color:#fff}
+.tf .tfcta{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 14px}
+.tf .btn.give{background:var(--tf);border-color:var(--tf);color:#fff;height:56px;padding:0 28px;font-size:17px;box-shadow:0 18px 40px -16px color-mix(in srgb,var(--tf) 80%,transparent)}
+.tf .btn.give:hover{filter:brightness(1.1);transform:translateY(-1px)}
+.tf .btn.give svg{width:19px;height:19px}
+.tf .btn.ways{height:56px;background:transparent;border-color:color-mix(in srgb,var(--tf) 40%,var(--line2))}
+.tf .fine{font-size:13.5px;color:var(--dim);max-width:600px}
+.tf .tfstats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+.tf .tfstats div{border:1px solid color-mix(in srgb,var(--tf) 30%,var(--line));border-radius:10px;padding:16px 14px;background:rgba(0,0,0,.25)}
+.tf .tfstats b{display:block;font:700 clamp(22px,2.1vw,30px) var(--fh);letter-spacing:-.02em;color:#fff;white-space:nowrap}
+.tf .tfstats span{font-size:13px;color:var(--mut)}
+@media(max-width:520px){.tf .tfstats{grid-template-columns:1fr}}
+.tf .route{width:100%;height:auto;display:block}
+.tf .route .done{stroke:var(--tf);stroke-width:5;fill:none;stroke-linecap:round;filter:drop-shadow(0 0 8px color-mix(in srgb,var(--tf) 70%,transparent))}
+.tf .route .todo{stroke:#f3f4f6;stroke-opacity:.45;stroke-width:3;fill:none;stroke-dasharray:2 10;stroke-linecap:round}
+.tf .route text{font:600 12.5px var(--fm);fill:#d8d2d4}
+.tf .route text.k{fill:var(--tf2)}
+.tf .route .land{fill:#1d171b;stroke:#2c2328}
+.tf .quote{margin-top:18px;font:600 19px/1.4 var(--fh);color:#fff}
+.tf .quote small{display:block;font:500 13px var(--fb);color:var(--dim);margin-top:6px}
+.fgive{color:#ff6b6b!important}
+
 /* nav */
 .nav{position:sticky;top:0;z-index:40;background:#050608;backdrop-filter:saturate(1.5) blur(16px);-webkit-backdrop-filter:saturate(1.5) blur(16px);border-bottom:1px solid var(--line)}
 .nav .wrap{display:flex;align-items:center;gap:40px;height:72px}
@@ -665,7 +698,7 @@ body:has(#acc-mono:checked){--a:#e5e7eb;--a2:#9ca3af}body:has(#acc-mono:checked)
   <div><h4>Get Auxo</h4><ul><li><a href="/download/#installer">Installer image</a></li><li><a href="/download/#vmsetup">Virtual machines</a></li><li><a href="/download/#arch">Auxo 3 (Arch)</a></li><li><a href="/download/#usb">Make a USB stick</a></li><li><a href="/download/#verify">Verify a download</a></li></ul></div>
   <div><h4>Explore</h4><ul><li><a href="/#desktops">Desktops</a></li><li><a href="/#software">Software</a></li><li><a href="/download/#releases">Releases</a></li><li><a href="https://github.com/rxvy-dev/AUXO/blob/main/CHANGELOG.md">Changelog</a></li></ul></div>
   <div><h4>Docs</h4><ul><li><a href="/docs/#tweak">auxo-tweak</a></li><li><a href="/docs/#snapshots">Snapshots</a></li><li><a href="/docs/#nvidia">NVIDIA</a></li><li><a href="/docs/#gaming">Gaming</a></li><li><a href="/docs/#trouble">Troubleshooting</a></li></ul></div>
-  <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
+  <div><h4>Community</h4><ul><li><a href="https://discord.gg/XbQ66dH5a7">Discord</a></li><li><a href="https://www.reddit.com/r/DistroHub/">r/DistroHub</a></li><li><a class="fgive" href="/#give">♥ Support cancer research</a></li><li><a href="https://github.com/rxvy-dev/AUXO">GitHub</a></li></ul></div>
 </div>
 <div class="fbot"><span>© 2026 Auxo Linux</span><span>Built on Void Linux. Not affiliated with the Void Linux project.</span></div>
 </div></footer>
