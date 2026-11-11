@@ -1,0 +1,13 @@
+{
+  "policies": {
+    "Homepage": { "URL": "https://auxolinux.com/bsd", "Locked": false, "StartPage": "homepage" },
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DontCheckDefaultBrowser": true,
+    "OverrideFirstRunPage": "https://auxolinux.com/bsd",
+    "Preferences": {
+      "browser.theme.toolbar-theme": { "Value": 0, "Status": "default" },
+      "media.ffmpeg.vaapi.enabled": { "Value": true, "Status": "default" }
+    }
+  }
+}

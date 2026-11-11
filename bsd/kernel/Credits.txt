@@ -1,0 +1,5 @@
+## Credits & Acknowledge 
+- **FilhoDExu67** — Ideas, suggestions and project feedback.
+- **Onyx-ig** — Founder and primary developer of AuxoBSD.
+- **Julia/Julio** — Package manager server infrastructure.
+- **Rxvy-dev** — Original creator of Auxo Linux, the project that inspired this fork.

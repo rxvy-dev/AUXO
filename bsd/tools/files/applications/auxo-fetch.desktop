@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Auxo Fetch
+Comment=Your system, drawn in your accent colour
+Exec=konsole --hold -e auxo-fetch
+Icon=/usr/local/share/pixmaps/auxobsd-logo.png
+Terminal=false
+Categories=System;
+NoDisplay=false

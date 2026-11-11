@@ -23,6 +23,10 @@
 > **Auxo 4.0 moves from Arch to Void Linux.** Auxo 3.x (Arch-based, Calamares installer) is kept
 > on the [`arch`](../../tree/arch) branch.
 
+> **AuxoBSD** is the FreeBSD edition of Auxo: FreeBSD 15.1 with KDE Plasma, Firefox, a graphical
+> installer, NVIDIA support for every generation, and the Auxo tools. It lives in
+> [`bsd/`](bsd/README.md).
+
 ## What it is
 
 Auxo is Void underneath: Void's repositories, `xbps`, runit and the Void docs all work as normal.
@@ -76,6 +80,18 @@ auxo-rollback --list                  # list snapshots
 
 Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
 
+## AuxoBSD
+
+[`bsd/`](bsd/README.md) builds **AuxoBSD**: FreeBSD 15.1 + KDE Plasma 6 + Firefox with a Qt
+installer, GPU detection (Intel, AMD, NVIDIA current/580/470/390/340, PRIME laptops, VirtualBox),
+ZFS boot environments, and FreeBSD versions of `auxo-tweak`, `auxo-fetch`, `auxo-update` and
+`auxo-rollback`. Software comes from FreeBSD's `pkg`, and `auxo-tweak xbps on` adds Void Linux's
+`xbps` (the Auxo Linux repositories) through FreeBSD's Linux compatibility layer.
+
+Both editions share one palette, the Plasma theme, wallpapers and shell prompts from
+`packages/auxo-tools`. The ISO builds on FreeBSD (`cd bsd && sudo ./build.sh`) or in GitHub Actions.
+The from-scratch AuxoBSD research kernel is in [`bsd/kernel/`](bsd/kernel/README.md).
+
 ## Repository layout
 
 ```
@@ -94,6 +110,7 @@ auxo/
 │   └── smoke-test.sh           # headless boot test with a screenshot
 ├── tests/                      # tool + installer tests (no root, no Void needed)
 ├── website/                    # auxolinux.com generator
+├── bsd/                        # AuxoBSD: FreeBSD + Plasma ISO, installer, tools; kernel/ = research kernel
 └── .github/workflows/build-iso.yml   # CI: tests → ISO → boot it in QEMU → upload
 ```
 
@@ -121,6 +138,9 @@ then runs Void's own ISO builder, [void-mklive](https://github.com/void-linux/vo
 ./tests/test-tools.sh            # auxo-tweak against a fake Void root (commands are printed, not run)
 python3 tests/test-installer.py  # installer plans + a full walkthrough of the real TUI in a virtual terminal
 ./scripts/smoke-test.sh out/*.iso   # boots the real ISO headless and takes a screenshot
+./bsd/tests/test-tools.sh        # AuxoBSD tools against a fake FreeBSD root
+python3 bsd/tests/test-installer.py   # AuxoBSD installer plans + the Qt window offscreen
+make -C bsd/kernel test          # research kernel: boots in QEMU and drives auxsh over serial
 ```
 
 ## How an install works
@@ -148,7 +168,9 @@ Bug reports, ideas and pull requests are welcome. Open an issue, or come and cha
 
 ## Credits
 
-Auxo Linux is made by **rxvy**, with AI assistance for a lot of the code. Built on
+Auxo Linux is made by **rxvy**, with AI assistance for a lot of the code. AuxoBSD was started
+by **Onyx-ig** (see [`bsd/kernel/Credits.txt`](bsd/kernel/Credits.txt)); his research kernel keeps its own
+licence in `bsd/kernel/LICENSE`. AuxoBSD is built on FreeBSD and is not affiliated with the FreeBSD Project. Built on
 [Void Linux](https://voidlinux.org) and [void-mklive](https://github.com/void-linux/void-mklive);
 Hyprland packages from [hyprland-void](https://github.com/Makrennel/hyprland-void).
 Auxo is not affiliated with the Void Linux project.

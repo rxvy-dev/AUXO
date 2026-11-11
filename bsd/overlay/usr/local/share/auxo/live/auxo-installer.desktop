@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install AuxoBSD
+Comment=Install AuxoBSD on this computer
+Exec=sudo -E /usr/local/bin/auxo-installer
+Icon=/usr/local/share/pixmaps/auxobsd-logo.png
+Terminal=false
+Categories=System;

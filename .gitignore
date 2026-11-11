@@ -7,3 +7,7 @@ __pycache__/
 # website build output
 website/preview/
 .claude/
+
+# AuxoBSD ISO build
+bsd/work/
+bsd/out/

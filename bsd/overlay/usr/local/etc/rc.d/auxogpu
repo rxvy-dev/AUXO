@@ -1,0 +1,26 @@
+#!/bin/sh
+#
+# AuxoBSD live session: detect the GPU and load the driver that's on the image
+# (Intel, AMD, NVIDIA Turing and newer, VirtualBox/VMware), before the login screen.
+# Installed systems load their drivers from kld_list (auxo-tweak drivers).
+#
+# PROVIDE: auxogpu
+# REQUIRE: FILESYSTEMS ldconfig auxolive
+# BEFORE: dbus sddm
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="auxogpu"
+start_cmd="auxogpu_start"
+stop_cmd=":"
+
+auxogpu_start()
+{
+	[ "$(/sbin/mount -p | /usr/bin/awk '$2 == "/" {print $3}')" = "cd9660" ] || return 0
+	echo "AuxoBSD live: setting up graphics"
+	/usr/local/bin/auxo-tweak drivers --live || true
+}
+
+load_rc_config $name
+run_rc_command "$1"

@@ -1,0 +1,9 @@
+
+  AuxoBSD — FreeBSD with KDE Plasma and the Auxo tools.   https://auxolinux.com/bsd
+
+  auxo-update   update everything (with a ZFS boot environment first)
+  auxo-tweak    accent, graphics drivers, NVIDIA, shell, firewall, xbps and more
+  auxo-fetch    your system at a glance
+
+  Auxo is free. If it's useful to you, please give to cancer research: terryfox.org
+

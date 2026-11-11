@@ -1,0 +1,39 @@
+name: AuxoBSD kernel
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["bsd/kernel/**", "packages/auxo-tools/files/lib/auxo_accents.py", ".github/workflows/auxobsd-kernel.yml"]
+  pull_request:
+    paths: ["bsd/kernel/**", "packages/auxo-tools/files/lib/auxo_accents.py"]
+
+jobs:
+  kernel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: bsd/kernel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-common xorriso mtools
+          rustup target add x86_64-unknown-none
+
+      - name: Accents match the Auxo Linux palette
+        run: make accents-check
+
+      - name: Build
+        run: make && make check && make iso
+
+      - name: Boot in QEMU and drive auxsh
+        run: make test
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: auxobsd-kernel-iso
+          path: bsd/kernel/build/auxobsd.iso

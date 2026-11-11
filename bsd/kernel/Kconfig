@@ -1,0 +1,242 @@
+# AuxoBSD kernel configuration (Kconfig subset; edit with `make menuconfig`)
+
+mainmenu "AuxoBSD Kernel Configuration"
+
+menu "General setup"
+
+config CMDLINE
+string "Default kernel command line"
+default "console=ttyS0 loglevel=6"
+help
+  Used when the bootloader passes no command line. Recognised keys:
+    selftest=0|1   override CONFIG_SELFTEST at boot
+
+config HZ
+int "Timer frequency (Hz)"
+range 18 1000
+default 100
+help
+  PIT tick rate. The scheduler quantum is 100 ms regardless of this value.
+
+config HEAP_MB
+int "Kernel heap size (MiB)"
+range 1 64
+default 4
+help
+  Size of the contiguous heap handed to the Rust allocator at boot.
+  Thread stacks are allocated from it.
+
+config KSTACK_KB
+int "Kernel thread stack size (KiB)"
+range 8 64
+default 16
+
+config MAXPROC
+int "Maximum number of kernel threads"
+range 8 256
+default 64
+
+config LOG_BUF_KB
+int "Kernel log buffer size (KiB)"
+range 4 256
+default 16
+help
+  Ring buffer behind the `dmesg` command.
+
+config PANIC_TIMEOUT
+int "Seconds before rebooting after a panic (0 = halt)"
+range 0 3600
+default 0
+
+endmenu
+
+menu "Boot"
+
+config BOOT_MULTIBOOT2
+bool "Multiboot2 entry (GRUB)"
+default y
+help
+  Embed the Multiboot2 header so GRUB and other Multiboot2 loaders can boot the kernel.
+
+config BOOT_AUXOBOOT
+bool "AuxoBoot protocol entry"
+default y
+help
+  Accept the AuxoBoot handoff (EAX=0x42585541, EBX=struct auxb_info).
+  At least one of the two boot protocols must stay enabled.
+
+endmenu
+
+menu "Kernel hacking"
+
+config SELFTEST
+bool "Run kernel self-tests at boot"
+default y
+help
+  Runs PMM, heap, exception, TTY, scheduler and context-switch tests
+  before starting the shell. Costs a few seconds of boot time.
+
+config AUTOTEST
+bool "Exit QEMU after self-tests (CI mode)"
+depends on SELFTEST
+default n
+help
+  Writes the result to QEMU's isa-debug-exit device (port 0xf4) and also
+  exits on panic. Use with `make test`.
+
+config KSYMS
+bool "Embed kernel symbol table (names in backtraces)"
+default y
+help
+  Links the image twice so panics and `bt` show function names.
+
+endmenu
+
+menu "Bus support"
+
+config PCI
+bool "PCI bus support"
+default y
+help
+  Enumerates PCI devices (config mechanism #1) and enables the driver model.
+
+endmenu
+
+menu "Device drivers"
+
+menu "Console and input"
+
+config DRV_VGA_TEXT
+bool "VGA text console"
+default y
+
+config DRV_SERIAL
+bool "16550 serial console (COM1) and input"
+default y
+
+config DRV_PS2_KBD
+bool "PS/2 keyboard"
+default y
+
+endmenu
+
+menu "Graphics"
+
+config DRV_BOCHS_VGA
+bool "QEMU/Bochs standard VGA framebuffer [functional]"
+depends on PCI
+default y
+help
+  Linear 32bpp framebuffer via the Bochs DISPI registers. Status: functional
+  in QEMU (`-vga std`); try `fbtest` in the shell.
+
+config DRV_AMDGPU
+bool "AMD Radeon / amdgpu (Polaris .. Navi 31) [probe-only]"
+depends on PCI
+default y
+help
+  Identifies AMD GPUs by PCI ID, reports generation, BARs and PCIe link.
+  It does NOT initialise the GPU: no firmware load, no modesetting, no
+  acceleration. A real driver is a multi-year effort; this is the attach point.
+
+config DRV_NVIDIA
+bool "NVIDIA display controllers [probe-only]"
+depends on PCI
+default n
+
+config DRV_INTEL_GFX
+bool "Intel integrated graphics [probe-only]"
+depends on PCI
+default n
+
+endmenu
+
+menu "Network"
+
+config DRV_RTL8139
+bool "Realtek RTL8139 Ethernet [init, untested on hardware]"
+depends on PCI
+default y
+help
+  Resets the chip, reads the MAC, sets up polled RX/TX rings and can send a
+  raw test frame (`nettest`). No network stack is attached yet.
+
+config DRV_E1000
+bool "Intel 8254x (e1000) Ethernet [identify]"
+depends on PCI
+default y
+help
+  Reads MAC address and link state. No DMA rings yet.
+
+config DRV_RTL8188CE
+bool "Realtek RTL8188CE/8191CE/8192CE Wi-Fi [probe-only]"
+depends on PCI
+default y
+help
+  Identifies the adapter and reports its BARs. Wi-Fi needs the MAC/PHY/RF
+  init sequences, the rtl8192cfw firmware blob and an 802.11 stack, none of
+  which exist yet.
+
+config DRV_RTL8821AE
+bool "Realtek RTL8821AE / RTL8188EE Wi-Fi [probe-only]"
+depends on PCI
+default n
+
+config DRV_RTL8168
+bool "Realtek RTL8111/8168 Gigabit Ethernet [probe-only]"
+depends on PCI
+default n
+
+config DRV_VIRTIO_NET
+bool "virtio-net [probe-only]"
+depends on PCI
+default n
+
+endmenu
+
+menu "Storage"
+
+config DRV_ATA_PIO
+bool "Legacy ATA PIO disk (primary master) [functional]"
+default y
+help
+  IDENTIFY and LBA28 sector reads over the legacy I/O ports. Works in QEMU
+  with an IDE disk; does not work on SATA/NVMe-only machines.
+
+config DRV_AHCI
+bool "AHCI SATA controller [probe-only]"
+depends on PCI
+default n
+
+config DRV_NVME
+bool "NVMe controller [probe-only]"
+depends on PCI
+default n
+
+config DRV_VIRTIO_BLK
+bool "virtio-blk [probe-only]"
+depends on PCI
+default n
+
+endmenu
+
+menu "USB and sound"
+
+config DRV_XHCI
+bool "xHCI USB 3 host controller [probe-only]"
+depends on PCI
+default n
+
+config DRV_EHCI
+bool "EHCI USB 2 host controller [probe-only]"
+depends on PCI
+default n
+
+config DRV_HDA
+bool "Intel HD Audio controller [probe-only]"
+depends on PCI
+default n
+
+endmenu
+
+endmenu

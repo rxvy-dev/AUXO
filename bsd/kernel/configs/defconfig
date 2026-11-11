@@ -1,0 +1,4 @@
+# Default configuration: everything that is implemented, plus the common probes.
+CONFIG_SELFTEST=y
+CONFIG_KSYMS=y
+CONFIG_PCI=y

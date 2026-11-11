@@ -1,0 +1,4 @@
+repo:   https://github.com/openbsd/src
+paths:  lib/libc/string, lib/libc/stdlib
+commit: 487cc9e9a631bec9f3ba66850c930f5f8f3f3d27
+date:   2026-10-31

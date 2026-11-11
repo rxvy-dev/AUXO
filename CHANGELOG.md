@@ -1,5 +1,41 @@
 # Changelog
 
+## AuxoBSD 1.0.0 (in development)
+**AuxoBSD is now FreeBSD-based**: FreeBSD 15.1 with KDE Plasma 6 and Firefox (`bsd/`).
+
+- Graphical installer (`auxo-installer`, Qt): keyboard, time zone, disk with ZFS (boot
+  environments) or UFS, GPT that boots on BIOS and UEFI, graphics, accent, shell, account, summary.
+- GPU detection with the right driver for every NVIDIA generation (current and 580 with KMS for
+  Wayland; 470/390/340 legacy), PRIME offload on hybrid laptops (`prime-run`), Intel/AMD through
+  drm-kmod, VirtualBox (VMSVGA included) and VMware guest tools. Every NVIDIA branch is on the ISO
+  in a local repository, so drivers install offline.
+- FreeBSD versions of `auxo-tweak` (accent, gpu, drivers, nvidia, shell, power, firewall/pf, dns,
+  snapshots, cleanup, repo, service, xbps, info), `auxo-fetch`, `auxo-motd`, `auxo-update` and
+  `auxo-rollback` (ZFS boot environments).
+- Two package managers: FreeBSD's `pkg`, and `auxo-tweak xbps on` for Void Linux's `xbps` in
+  `/compat/void` through the Linux compatibility layer (`void-run` starts those programs).
+- Branding: the AuxoBSD logo (auxolinux.com/bsd) in the installer, Plasma launcher and graphical boot
+  menu, the Auxo mountain + AuxoBSD wordmark in the text boot menu, the Auxo Plasma theme, SDDM in
+  your accent, AuxoBSD os-release and login banner, Firefox opening auxolinux.com/bsd.
+- ISO build (`bsd/build.sh`, on FreeBSD) and a GitHub workflow that builds it in a FreeBSD VM.
+
+## AuxoBSD research kernel 0.1.0
+The original from-scratch AuxoBSD kernel by Onyx-ig now lives in `bsd/kernel/`, rebranded as part of Auxo.
+
+- Boots into **auxsh**, a kernel shell (PS/2 keyboard and serial input, history, Tab completion)
+  with the Auxo greeting (`auxo-motd`, Terry Fox Foundation note included).
+- **`auxo-fetch`** and **`auxo-tweak`** work on AuxoBSD: same logo, layout and flags as on Linux
+  (`--small`, `--no-logo`, `--json`, `--accent`; `accent`, `hostname`, `motd`, `color`, `info`,
+  `persist`, `reset` and the interactive menu). Linux-only sub-commands say so.
+- One palette for both editions: `bsd/include/auxo_accents.h` is generated from the Auxo Linux
+  accents (`make -C bsd accents`). The VGA console loads the accent gradient into its palette,
+  so `auxo-tweak accent` recolours the whole screen; ANSI colour works on VGA and serial.
+- Settings come from the kernel command line (`accent= hostname= motd= nocolor`); the GRUB menu
+  is in Auxo colours with plain-serial, reboot and power-off entries.
+- `make -C bsd test` boots the ISO in QEMU and checks the shell and tools (60 checks).
+- VirtualBox: on a 32-bit VM type AuxoBSD now explains how to switch to a 64-bit type instead
+  of triple-faulting ("critical error"), and it no longer hangs when the VM has no serial port.
+
 ## 4.0.0 (in development)
 **Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept on the
 `arch` branch.

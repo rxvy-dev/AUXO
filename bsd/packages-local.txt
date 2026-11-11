@@ -1,0 +1,8 @@
+# Not installed on the ISO, but fetched (with dependencies) into a local repository on it,
+# so the installer and auxo-tweak can set up these drivers without internet.
+nvidia-drm-kmod-580
+nvidia-driver-470
+nvidia-driver-390
+nvidia-driver-340
+virtualbox-ose-additions-72
+open-vm-tools

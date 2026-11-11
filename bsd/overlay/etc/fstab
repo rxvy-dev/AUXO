@@ -1,0 +1,4 @@
+# AuxoBSD live ISO
+/dev/iso9660/AUXOBSD  /  cd9660  ro  0  0
+proc                  /proc   procfs  rw  0  0
+fdesc                 /dev/fd fdescfs rw  0  0

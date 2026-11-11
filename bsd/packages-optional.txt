@@ -1,0 +1,9 @@
+# Nice to have: the build carries on (with a warning) if one of these isn't in the repository.
+virtualbox-ose-additions-72
+open-vm-tools
+noto-emoji
+plasma6-kdeplasma-addons
+fusefs-ntfs
+fusefs-exfat
+xdg-user-dirs
+spectacle

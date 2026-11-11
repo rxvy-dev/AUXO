@@ -1,0 +1,27 @@
+#!/bin/sh
+# auxo-rollback — make an earlier ZFS boot environment your system again.
+#   auxo-rollback --list        every boot environment, newest last
+#   auxo-rollback NUMBER|NAME   boot into it from the next restart
+# Your files in /home are their own dataset and are never rolled back.
+set -u
+list() { bectl list -H -C creation | awk '{printf "  %2d  %-28s %-4s %s %s\n", NR, $1, $2, $5, $6}'; }
+
+if [ "$(mount -p | awk '$2 == "/" {print $3}')" != zfs ]; then
+    echo "auxo-rollback: boot environments need a ZFS root (this system uses $(mount -p | awk '$2 == "/" {print $3}'))" >&2
+    exit 1
+fi
+case "${1:---list}" in
+    -l|--list)
+        echo "  #   name                         active  created"
+        list
+        echo "  (N = active now, R = active after reboot)  →  auxo-rollback NUMBER"
+        ;;
+    -h|--help) sed -n '2,5p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *)
+        [ "$(id -u)" = 0 ] || exec sudo "$0" "$@"
+        name=$1
+        case "$1" in *[!0-9]*) ;; *) name=$(bectl list -H -C creation | awk -v n="$1" 'NR == n {print $1}') ;; esac
+        [ -n "$name" ] || { echo "auxo-rollback: no boot environment $1" >&2; exit 1; }
+        bectl activate "$name" && echo ":: $name boots from the next restart (your current system stays as a boot environment)"
+        ;;
+esac

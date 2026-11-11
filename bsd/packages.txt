@@ -1,0 +1,43 @@
+# AuxoBSD: packages on the ISO (and so on every install). One per line; # comments.
+# @PY@ is replaced with FreeBSD's default Python flavour (e.g. py311).
+
+# desktop: KDE Plasma 6 on Xorg (Wayland session included), SDDM login
+xorg
+xf86-input-libinput
+plasma6-plasma
+sddm
+seatd
+dbus
+konsole
+dolphin
+kate
+ark
+gwenview
+okular
+
+# apps
+firefox
+
+# graphics: Intel/AMD (drm-kmod) and NVIDIA Turing+ (current branch, KMS) on the live image;
+# the legacy NVIDIA branches ship in the local repository (packages-local.txt)
+drm-kmod
+nvidia-drm-kmod
+nvidia-settings
+nvidia-xconfig
+xf86-video-scfb
+xf86-video-vmware
+
+# fonts
+noto-basic
+
+# system, shells, the Auxo tools and installer
+pkg
+sudo
+zsh
+zsh-autosuggestions
+zsh-syntax-highlighting
+fish
+bash
+python3
+@PY@-qt6-pyqt
+networkmgr

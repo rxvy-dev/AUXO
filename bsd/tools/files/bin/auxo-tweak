@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""auxo-tweak — change your AuxoBSD system after install, no reinstall needed.
+
+Run with no arguments for the interactive menu, or use a sub-command:
+
+  auxo-tweak accent [NAME]            accent colour: boot menu, login screen, Plasma, Konsole, prompts
+  auxo-tweak gpu                      show the detected GPUs and the driver each one gets
+  auxo-tweak drivers [--prune]        install and load the right graphics drivers
+  auxo-tweak nvidia status|on|off|primary|prime [--branch B]
+                                      NVIDIA: the right driver branch for your card (current, 580,
+                                      470, 390, 340), KMS for Wayland, PRIME offload on laptops
+  auxo-tweak shell NAME               zsh | fish | bash
+  auxo-tweak power balanced|performance|power-saver       CPU frequency profile (powerd)
+  auxo-tweak firewall on|off|status   pf: block incoming, allow outgoing
+  auxo-tweak dns cloudflare|quad9|google|auto             DNS servers (resolvconf)
+  auxo-tweak snapshots on|off|status  ZFS boot environments before every auxo-update
+  auxo-tweak cleanup                  clear the package cache, orphans and old boot environments
+  auxo-tweak repo quarterly|latest    which FreeBSD package branch pkg uses
+  auxo-tweak service NAME on|off      sshd | cups | bluetooth | avahi | any rc.d service
+  auxo-tweak xbps on|off|status       Void Linux packages (xbps) through the Linux compatibility layer
+  auxo-tweak info                     show current Auxo settings
+"""
+import argparse
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/local/lib/auxo"))
+
+from auxo_accents import ACCENTS, ansi  # noqa: E402
+from auxo_bsd import (R, DRY, AuxoError, log, warn, run, have, installed, pkg_install, pkg_remove,  # noqa: E402
+                      require_root, read_conf, write_conf, set_kv, del_kv, get_kv, write_file, read_file,
+                      home_of, normal_users, invoking_user, rc_set, rc_list_add, rc_list_remove,
+                      service_enable, service_disable, service_enabled, root_fstype, kenv, pci_devices,
+                      LOADER_CONF, SHARE, RESET, BOLD, DIM)
+import auxo_gpu  # noqa: E402
+import auxo_plasma  # noqa: E402
+import auxo_void  # noqa: E402
+
+LINUX_ONLY = ["desktop", "rice", "kernel", "scheduler", "zram", "flatpak", "mirrors", "gaming"]
+XORG_D = "/usr/local/etc/X11/xorg.conf.d"
+GPU_KLDS = ["i915kms", "amdgpu", "radeonkms", "nvidia", "nvidia-modeset", "nvidia-drm"]
+
+
+def target_users(args):
+    if getattr(args, "user", None):
+        return [args.user]
+    u = invoking_user()
+    return [u] if u else normal_users()
+
+
+# ── accent ────────────────────────────────────────────────────────────
+def cmd_accent(args):
+    if not args.name:
+        cur = auxo_plasma.current()
+        for name, (a, _) in ACCENTS.items():
+            print(f"  {ansi(a)}{'●' if name == cur else '○'} {name:<8} {a}{RESET}")
+        return
+    require_root()
+    auxo_plasma.apply_system(args.name, loader=not args.no_loader)
+    users = target_users(args)
+    for u in users:
+        auxo_plasma.apply_user(u, args.name)
+    if not args.user:
+        for u in users:
+            env = auxo_plasma.session_env(u)
+            if env:
+                run(["auxo-tweak", "session-apply", "--accent", args.name], check=False, user=u, env=env)
+
+
+def cmd_session_apply(args):
+    auxo_plasma.session_apply(args.accent, once=args.once)
+
+
+# ── graphics ──────────────────────────────────────────────────────────
+def detected():
+    vm = auxo_gpu.vm_kind(kenv("smbios.system.product"), kenv("smbios.system.maker"))
+    return auxo_gpu.detect(pci_devices()), vm
+
+
+def cmd_gpu(args):
+    gpus, vm = detected()
+    p = auxo_gpu.plan(gpus, read_conf().get("NVIDIA_MODE") or None, vm)
+    print(f"{BOLD}Graphics{RESET}" + (f"  (virtual machine: {vm})" if vm else ""))
+    for i, g in enumerate(gpus):
+        print(f"  {i}: {auxo_gpu.describe(g)}")
+    if not gpus:
+        print("  no PCI display controller found")
+    print(f"{BOLD}Driver plan{RESET}")
+    print(f"  packages   {' '.join(p['pkgs']) or '-'}")
+    print(f"  modules    {' '.join(p['klds']) or '-'}")
+    if p["nvidia"]:
+        print(f"  nvidia     {auxo_gpu.NVIDIA[p['nvidia']]['label']}, {p['mode']}"
+              + (", KMS on (Wayland ready)" if auxo_gpu.NVIDIA[p["nvidia"]]["drm"] else ", X11 only"))
+    for n in p["notes"]:
+        print(f"  {DIM}{n}{RESET}")
+    loaded = [k for k in GPU_KLDS if not DRY and run(["kldstat", "-q", "-n", k], check=False) == 0]
+    if loaded:
+        print(f"  loaded now {' '.join(loaded)}")
+
+
+def apply_plan(p, prune=False):
+    """Install and configure a driver plan from auxo_gpu.plan()."""
+    if p["nvidia"]:
+        want = set(p["pkgs"])
+        stale = [x for x in auxo_gpu.NVIDIA_ALL if x not in want and installed(x)]
+        if stale:   # another branch is installed: the NVIDIA packages conflict with each other
+            log(f"removing the other NVIDIA driver branch ({' '.join(stale)})")
+            pkg_remove(*stale)
+    elif prune:
+        pkg_remove(*[x for x in auxo_gpu.NVIDIA_ALL + auxo_gpu.NVIDIA_TOOLS if installed(x)])
+    if p["pkgs"]:
+        log(f"installing {' '.join(p['pkgs'])}")
+        pkg_install(*p["pkgs"])
+    if prune and not any(s.startswith("vbox") for s in p["services"]):
+        pkg_remove(*[x for x in auxo_gpu.VBOX_ADDITIONS if installed(x)])
+        for s in ("vboxguest", "vboxservice"):
+            service_disable(s)
+
+    rc_list_remove("kld_list", *GPU_KLDS)
+    if p["klds"]:
+        rc_list_add("kld_list", *p["klds"])
+    if "hw.nvidiadrm.modeset" in p["loader"]:
+        set_kv(LOADER_CONF, "hw.nvidiadrm.modeset", "1")
+    else:
+        del_kv(LOADER_CONF, "hw.nvidiadrm.modeset")
+    for name in ("20-nvidia.conf",):
+        if name not in p["xorg"] and os.path.exists(R(f"{XORG_D}/{name}")):
+            os.remove(R(f"{XORG_D}/{name}"))
+    for name, content in p["xorg"].items():
+        write_file(f"{XORG_D}/{name}", content)
+    if p["prime_run"]:
+        write_file("/usr/local/bin/prime-run", auxo_gpu.PRIME_RUN, mode=0o755)
+    elif os.path.exists(R("/usr/local/bin/prime-run")):
+        os.remove(R("/usr/local/bin/prime-run"))
+    for s in p["services"]:
+        service_enable(s)
+    write_conf({"GPU": ",".join(p["klds"]) or "framebuffer",
+                "NVIDIA": f"{p['nvidia']} ({p['mode']})" if p["nvidia"] else "off"})
+    for n in p["notes"]:
+        log(n)
+    if not DRY and os.environ.get("AUXO_IN_INSTALLER") != "1":
+        for k in p["klds"]:
+            run(["kldload", "-n", k], check=False)
+        log("done; reboot to start the desktop on the new driver")
+
+
+def cmd_drivers(args):
+    gpus, vm = detected()
+    # an explicit `auxo-tweak nvidia primary|prime|off` choice sticks; otherwise automatic
+    p = auxo_gpu.plan(gpus, read_conf().get("NVIDIA_MODE") or None, vm)
+    if args.live:
+        return live_drivers(p)
+    require_root()
+    for g in gpus:
+        log(auxo_gpu.describe(g))
+    apply_plan(p, prune=args.prune)
+
+
+def live_drivers(p):
+    """Live ISO: load what's on the image right now (no package installs)."""
+    for k in p["klds"]:
+        if run(["kldload", "-n", k], check=False) != 0:
+            warn(f"{k} isn't on the live image; the installed system gets it")
+    if p["nvidia"] == "current" and p["mode"] == "primary":
+        write_file(f"{XORG_D}/20-nvidia.conf", auxo_gpu.xorg_nvidia_conf())
+    elif p["nvidia"] and p["nvidia"] != "current":
+        log(f"NVIDIA {auxo_gpu.NVIDIA[p['nvidia']]['label']}: the live session uses the framebuffer; "
+            "the installer sets up the right driver")
+    if p["prime_run"]:
+        write_file("/usr/local/bin/prime-run", auxo_gpu.PRIME_RUN, mode=0o755)
+    for s in p["services"]:
+        run(["service", s, "onestart"], check=False)
+
+
+def cmd_nvidia(args):
+    gpus, vm = detected()
+    nv = [g for g in gpus if g["kind"] == "nvidia"]
+    conf = read_conf()
+    if args.state == "status":
+        if not nv:
+            print("no NVIDIA GPU found")
+            return
+        for g in nv:
+            print(f"  {auxo_gpu.describe(g)}")
+        print(f"  driver     {conf.get('NVIDIA', 'not set up')}")
+        inst = [x for x in auxo_gpu.NVIDIA_ALL if installed(x)]
+        print(f"  packages   {' '.join(inst) or 'none'}")
+        print(f"  KMS        {get_kv(LOADER_CONF, 'hw.nvidiadrm.modeset', '0') == '1' and 'on' or 'off'}")
+        if have("nvidia-smi") and not DRY:
+            run(["nvidia-smi", "--query-gpu=name,driver_version,temperature.gpu,utilization.gpu",
+                 "--format=csv,noheader"], check=False)
+        return
+    require_root()
+    if not nv and args.state != "off":
+        raise AuxoError("no NVIDIA GPU found")
+    mode = {"on": None, "primary": "primary", "prime": "prime", "off": "off"}[args.state]
+    if args.branch:
+        for g in nv:
+            g["branch"] = args.branch
+    p = auxo_gpu.plan(gpus, mode, vm)
+    if args.state == "off":
+        pkg_remove(*[x for x in auxo_gpu.NVIDIA_ALL + auxo_gpu.NVIDIA_TOOLS if installed(x)])
+    apply_plan(p)
+    write_conf({"NVIDIA_MODE": mode or ""})
+
+
+# ── shell ─────────────────────────────────────────────────────────────
+SHELLS = {
+    "zsh": ("/usr/local/bin/zsh", ["zsh", "zsh-autosuggestions", "zsh-syntax-highlighting"]),
+    "fish": ("/usr/local/bin/fish", ["fish"]),
+    "bash": ("/usr/local/bin/bash", ["bash"]),
+}
+FISHRC = """# ~/.config/fish/config.fish — AuxoBSD defaults
+set -g fish_greeting
+source /usr/local/share/auxo/shell/prompt.fish
+alias ll 'ls -lahG'
+alias update auxo-update
+"""
+BASHRC = """# ~/.bashrc — AuxoBSD defaults
+[ -r /usr/local/share/auxo/shell/prompt.bash ] && . /usr/local/share/auxo/shell/prompt.bash
+alias ls='ls -G' ll='ls -lahG' update='auxo-update'
+"""
+
+
+def cmd_shell(args):
+    require_root()
+    path, pkgs = SHELLS[args.name]
+    pkg_install(*pkgs)
+    for u in target_users(args):
+        home = home_of(u)
+        if args.name == "zsh" and read_file(f"{home}/.zshrc") is None:
+            write_file(f"{home}/.zshrc", read_file(f"{SHARE}/shell/zshrc") or "", owner=u)
+        elif args.name == "fish" and read_file(f"{home}/.config/fish/config.fish") is None:
+            write_file(f"{home}/.config/fish/config.fish", FISHRC, owner=u)
+        elif args.name == "bash" and read_file(f"{home}/.bashrc") is None:
+            write_file(f"{home}/.bashrc", BASHRC, owner=u)
+            write_file(f"{home}/.bash_profile", "[ -r ~/.bashrc ] && . ~/.bashrc\n", owner=u)
+        run(["pw", "usermod", u, "-s", path])
+        log(f"{u}: login shell → {args.name}")
+
+
+# ── power, firewall, dns ──────────────────────────────────────────────
+POWER = {"balanced": "-a hiadaptive -b adaptive", "performance": "-a maximum -b hiadaptive",
+         "power-saver": "-a adaptive -b minimum"}
+
+
+def cmd_power(args):
+    require_root()
+    rc_set("powerd_enable", "YES")
+    rc_set("powerd_flags", POWER[args.profile])
+    run(["service", "powerd", "restart"], check=False)
+    write_conf({"POWER": args.profile})
+    log(f"power profile → {args.profile}")
+
+
+PF_CONF = """# AuxoBSD firewall (auxo-tweak firewall): block incoming, allow outgoing.
+set skip on lo
+block in all
+pass out all keep state
+pass in inet proto icmp icmp-type { echoreq, unreach }
+pass in inet6 proto ipv6-icmp
+"""
+
+
+def cmd_firewall(args):
+    if args.state == "status":
+        print(f"firewall: {'on' if service_enabled('pf') else 'off'}")
+        if not DRY and service_enabled("pf"):
+            run(["pfctl", "-s", "info"], check=False)
+        return
+    require_root()
+    if args.state == "on":
+        if "auxo-tweak firewall" not in (read_file("/etc/pf.conf") or "auxo-tweak firewall"):
+            os.replace(R("/etc/pf.conf"), R("/etc/pf.conf.auxo-bak"))
+        write_file("/etc/pf.conf", PF_CONF)
+        service_enable("pf", now=True)
+        write_conf({"FIREWALL": "on"})
+        log("firewall on: incoming connections blocked, outgoing allowed")
+    else:
+        service_disable("pf", now=True)
+        write_conf({"FIREWALL": "off"})
+        log("firewall off")
+
+
+DNS = {"cloudflare": "1.1.1.1 1.0.0.1 2606:4700:4700::1111", "quad9": "9.9.9.9 149.112.112.112 2620:fe::fe",
+       "google": "8.8.8.8 8.8.4.4 2001:4860:4860::8888"}
+
+
+def cmd_dns(args):
+    require_root()
+    if args.provider == "auto":
+        del_kv("/etc/resolvconf.conf", "name_servers")
+    else:
+        set_kv("/etc/resolvconf.conf", "name_servers", DNS[args.provider])
+    run(["resolvconf", "-u"], check=False)
+    write_conf({"DNS": args.provider})
+    log(f"DNS → {args.provider}")
+
+
+# ── snapshots (ZFS boot environments), cleanup, repo, services ────────
+def cmd_snapshots(args):
+    zfs = root_fstype() == "zfs"
+    if args.state == "status":
+        on = read_conf().get("SNAPSHOTS", "on" if zfs else "off")
+        print(f"snapshots: {on}" + ("" if zfs else " (needs ZFS: this system is on " + (root_fstype() or "?") + ")"))
+        if zfs and not DRY:
+            run(["bectl", "list"], check=False)
+        return
+    require_root()
+    if args.state == "on" and not zfs:
+        raise AuxoError("boot environments need a ZFS root (pick ZFS in the installer)")
+    write_conf({"SNAPSHOTS": args.state})
+    log(f"snapshots {args.state}: " + ("auxo-update makes a boot environment first; pick one in the boot menu"
+                                       if args.state == "on" else "auxo-update won't make boot environments"))
+
+
+def cmd_cleanup(args):
+    require_root()
+    run(["pkg", "clean", "-ay"], check=False)
+    run(["pkg", "autoremove", "-y"], check=False)
+    if root_fstype() == "zfs":
+        out = run(["bectl", "list", "-H", "-C", "creation"], capture=True, check=False) or ""
+        mine = [l.split()[0] for l in out.splitlines() if l.split() and l.split()[0].startswith("auxo-")
+                and "N" not in l.split()[1] and "R" not in l.split()[1]]
+        for be in mine[:-5]:
+            run(["bectl", "destroy", "-o", be], check=False)
+            log(f"removed old boot environment {be}")
+    log("cleanup done")
+
+
+REPO_CONF = """# AuxoBSD — managed by auxo-tweak repo
+FreeBSD: {{ url: "pkg+https://pkg.FreeBSD.org/${{ABI}}/{branch}" }}
+FreeBSD-kmods: {{ url: "pkg+https://pkg.FreeBSD.org/${{ABI}}/kmods_{branch}_${{VERSION_MINOR}}" }}
+"""
+
+
+def cmd_repo(args):
+    require_root()
+    write_file("/usr/local/etc/pkg/repos/FreeBSD.conf", REPO_CONF.format(branch=args.name))
+    run(["pkg", "update", "-f"], check=False)
+    write_conf({"REPO": args.name})
+    log(f"pkg now uses the {args.name} branch; `auxo-update` brings everything onto it")
+
+
+SERVICES = {"ssh": ["sshd"], "sshd": ["sshd"], "cups": ["cupsd"], "printing": ["cupsd"],
+            "bluetooth": ["hcsecd", "sdpd"], "avahi": ["avahi_daemon"]}
+SERVICE_PKGS = {"cupsd": ["cups"], "avahi_daemon": ["avahi-app"]}
+
+
+def cmd_service(args):
+    require_root()
+    for s in SERVICES.get(args.name, [args.name]):
+        if args.state == "on":
+            pkg_install(*SERVICE_PKGS.get(s, []))
+            service_enable(s, now=True)
+        else:
+            service_disable(s, now=True)
+        log(f"{s}: {args.state}")
+
+
+# ── xbps (Void Linux packages) ────────────────────────────────────────
+def cmd_xbps(args):
+    if args.state == "status":
+        auxo_void.status()
+        return
+    require_root()
+    if args.state == "on":
+        auxo_void.setup()
+        write_conf({"XBPS": "on"})
+    else:
+        auxo_void.remove(purge=args.purge)
+        write_conf({"XBPS": "off"})
+
+
+# ── info ──────────────────────────────────────────────────────────────
+def cmd_info(args):
+    c = read_conf()
+    acc = auxo_plasma.current()
+    ver = run(["freebsd-version", "-ku"], capture=True, check=False).split() if not DRY else []
+    print(f"{BOLD}Auxo settings{RESET}")
+    rows = [("accent", f"{ansi(ACCENTS[acc][0])}{acc}{RESET}"),
+            ("freebsd", " / ".join(dict.fromkeys(ver)) or "-"), ("root", root_fstype() or "-")]
+    for k in ("GPU", "NVIDIA", "NVIDIA_MODE", "POWER", "FIREWALL", "DNS", "SNAPSHOTS", "REPO", "XBPS"):
+        rows.append((k.lower(), c.get(k) or "-"))
+    for k, v in rows:
+        print(f"  {k:<12} {v}")
+
+
+def cmd_linux_only(args):
+    print(f"auxo-tweak {args.cmd} is part of Auxo Linux. On AuxoBSD: "
+          + {"desktop": "KDE Plasma is the desktop", "rice": "the Auxo Plasma theme follows `auxo-tweak accent`",
+             "kernel": "the FreeBSD kernel updates with auxo-update", "scheduler": "FreeBSD's ULE scheduler is used",
+             "zram": "ZFS compresses on disk; swap is a normal partition", "flatpak": "Flatpak doesn't run on FreeBSD; "
+             "use pkg, or xbps (auxo-tweak xbps on) for Linux apps",
+             "mirrors": "pkg picks the nearest mirror itself", "gaming": "see `auxo-tweak nvidia` and "
+             "`auxo-tweak xbps on` for Linux games"}.get(args.cmd, "not available"))
+    return 1
+
+
+# ── interactive menu ──────────────────────────────────────────────────
+def menu():
+    items = [("accent", "accent colour"), ("gpu", "graphics: what's detected"), ("drivers", "install graphics drivers"),
+             ("nvidia status", "NVIDIA driver"), ("shell", "login shell"), ("power", "power profile"),
+             ("firewall status", "firewall"), ("xbps status", "Void Linux packages (xbps)"), ("info", "settings")]
+    while True:
+        print(f"\n{BOLD}auxo-tweak{RESET}")
+        for i, (_, label) in enumerate(items, 1):
+            print(f"  {i}) {label}")
+        print("  q) quit")
+        try:
+            ch = input("choose: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if ch in ("", "q"):
+            return 0
+        if not ch.isdigit() or not 1 <= int(ch) <= len(items):
+            continue
+        argv = items[int(ch) - 1][0].split()
+        if argv[0] in ("accent", "shell", "power"):
+            choices = {"accent": list(ACCENTS), "shell": list(SHELLS), "power": list(POWER)}[argv[0]]
+            val = input(f"{argv[0]} ({' | '.join(choices)}): ").strip()
+            if val not in choices:
+                continue
+            argv.append(val)
+        main(argv)
+
+
+def main(argv=None):
+    p = argparse.ArgumentParser(prog="auxo-tweak", description="Change your AuxoBSD system.",
+                                formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
+    sub = p.add_subparsers(dest="cmd")
+    s = sub.add_parser("accent"); s.add_argument("name", nargs="?", choices=list(ACCENTS))
+    s.add_argument("--user"); s.add_argument("--no-loader", action="store_true"); s.set_defaults(fn=cmd_accent)
+    sub.add_parser("gpu").set_defaults(fn=cmd_gpu)
+    s = sub.add_parser("drivers"); s.add_argument("--prune", action="store_true"); s.add_argument("--live", action="store_true")
+    s.set_defaults(fn=cmd_drivers)
+    s = sub.add_parser("nvidia"); s.add_argument("state", choices=["status", "on", "off", "primary", "prime"])
+    s.add_argument("--branch", choices=list(auxo_gpu.NVIDIA)); s.set_defaults(fn=cmd_nvidia)
+    s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
+    s.set_defaults(fn=cmd_shell)
+    s = sub.add_parser("power"); s.add_argument("profile", choices=list(POWER)); s.set_defaults(fn=cmd_power)
+    s = sub.add_parser("firewall"); s.add_argument("state", choices=["on", "off", "status"]); s.set_defaults(fn=cmd_firewall)
+    s = sub.add_parser("dns"); s.add_argument("provider", choices=list(DNS) + ["auto"]); s.set_defaults(fn=cmd_dns)
+    s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status"]); s.set_defaults(fn=cmd_snapshots)
+    sub.add_parser("cleanup").set_defaults(fn=cmd_cleanup)
+    s = sub.add_parser("repo"); s.add_argument("name", choices=["quarterly", "latest"]); s.set_defaults(fn=cmd_repo)
+    s = sub.add_parser("service"); s.add_argument("name"); s.add_argument("state", choices=["on", "off"])
+    s.set_defaults(fn=cmd_service)
+    s = sub.add_parser("xbps"); s.add_argument("state", choices=["on", "off", "status"])
+    s.add_argument("--purge", action="store_true"); s.set_defaults(fn=cmd_xbps)
+    sub.add_parser("info").set_defaults(fn=cmd_info)
+    s = sub.add_parser("session-apply"); s.add_argument("--accent", choices=list(ACCENTS))
+    s.add_argument("--once", action="store_true"); s.set_defaults(fn=cmd_session_apply)
+    for name in LINUX_ONLY:
+        s = sub.add_parser(name); s.add_argument("rest", nargs="*"); s.set_defaults(fn=cmd_linux_only)
+    args = p.parse_args(argv)
+    if not args.cmd:
+        return menu()
+    try:
+        return args.fn(args) or 0
+    except AuxoError as e:
+        print(f"\033[31mauxo-tweak:\033[0m {e}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

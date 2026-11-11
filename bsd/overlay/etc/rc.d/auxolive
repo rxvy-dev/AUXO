@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# AuxoBSD live session: the ISO's root file system (cd9660) is read-only, so this puts
+# writable layers in memory over /etc, /var, /root, /home and /usr/local/etc (unionfs on
+# tmpfs), then creates the live user "auxo" with automatic login and the installer on the
+# desktop. Does nothing on an installed system.
+#
+# PROVIDE: auxolive
+# REQUIRE: root
+# BEFORE: mountcritlocal
+# KEYWORD: nojail
+
+. /etc/rc.subr
+
+name="auxolive"
+start_cmd="auxolive_start"
+stop_cmd=":"
+
+auxolive_start()
+{
+	[ "$(/sbin/mount -p | /usr/bin/awk '$2 == "/" {print $3}')" = "cd9660" ] || return 0
+	echo "AuxoBSD live: writable layers in memory"
+	/sbin/mount -t tmpfs -o mode=755 tmpfs /auxolive
+	/sbin/mount -t tmpfs -o mode=1777 tmpfs /tmp
+	for d in etc var root home usr/local/etc; do
+		/bin/mkdir -p "/auxolive/$d"
+		/sbin/mount -t unionfs -o noatime "/auxolive/$d" "/$d"
+	done
+
+	# the live user: no password, logs in automatically, may use sudo without one
+	/usr/sbin/pw useradd -n auxo -c "AuxoBSD Live" -m -G wheel,operator,video \
+	    -s /usr/local/bin/zsh -w none 2>/dev/null
+	/bin/mkdir -p /usr/local/etc/sudoers.d /usr/local/etc/sddm.conf.d
+	cat > /usr/local/etc/sudoers.d/90-auxo-live <<-SUDO
+	Defaults env_keep += "DISPLAY XAUTHORITY WAYLAND_DISPLAY XDG_RUNTIME_DIR QT_QPA_PLATFORMTHEME"
+	auxo ALL=(ALL:ALL) NOPASSWD: ALL
+	SUDO
+	/bin/chmod 440 /usr/local/etc/sudoers.d/90-auxo-live
+	cat > /usr/local/etc/sddm.conf.d/20-auxo-live.conf <<-SDDM
+	[Autologin]
+	User=auxo
+	Session=plasmax11
+	Relogin=false
+	SDDM
+
+	desk=/home/auxo/Desktop
+	/bin/mkdir -p "$desk"
+	/bin/cp /usr/local/share/auxo/live/auxo-installer.desktop "$desk/"
+	/bin/chmod 755 "$desk/auxo-installer.desktop"
+	AUXO_IN_INSTALLER=1 /usr/local/bin/auxo-tweak accent violet --user auxo --no-loader >/dev/null 2>&1
+	/usr/sbin/chown -R auxo:auxo /home/auxo
+}
+
+load_rc_config $name
+run_rc_command "$1"

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Auxo Update
+Comment=Boot environment first, then update FreeBSD and every package
+Exec=konsole --hold -e auxo-update
+Icon=/usr/local/share/pixmaps/auxobsd-logo.png
+Terminal=false
+Categories=System;

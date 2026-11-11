@@ -1,0 +1,52 @@
+name: AuxoBSD ISO
+
+# Builds the FreeBSD-based AuxoBSD ISO (KDE Plasma, Firefox, Auxo tools, GUI installer) inside a
+# FreeBSD 15.1 VM on a GitHub runner. Start it by hand (Actions → AuxoBSD ISO → Run workflow)
+# or by pushing a tag like bsd-v1.0.0.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["bsd-v*"]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools + installer tests (dry run, no FreeBSD needed)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -yq lua5.4 libegl1 libxkbcommon0 libfontconfig1
+          pip install --quiet PyQt6
+          ./bsd/tests/test-tools.sh
+          python3 bsd/tests/test-installer.py
+
+  iso:
+    needs: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Free disk space (the image needs ~25 GB)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+      - uses: actions/checkout@v4
+      - name: Build in a FreeBSD 15.1 VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "15.1"
+          mem: 12288
+          sync: rsync
+          copyback: true
+          prepare: pkg install -y python3
+          run: |
+            cd bsd
+            WORK=/var/tmp/auxobsd-work ./build.sh   # keep the 15 GB image root out of the synced repo
+            ls -lh out
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: auxobsd-iso
+          path: |
+            bsd/out/*.iso
+            bsd/out/*.sha256
+          compression-level: 0

@@ -1,0 +1,30 @@
+# Build output
+/build/
+/rust/target/
+
+# Generated kernel and ISO
+/iso/boot/auxobsd.elf
+/build/auxobsd.iso
+
+# Generated configuration
+.config
+include/generated/
+build/config/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.elf
+*.iso
+*.bin
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor
+*.swp
+*.swo
+*~
+lib/libauxo/tests/test_string
