@@ -27,6 +27,30 @@ static void button(struct canvas *c, const struct app_ctx *a, struct btn *b, int
     gfx_text(c, &font_bold, x + (w - gfx_text_width(&font_bold, label)) / 2, y + 9, label, fg);
 }
 
+/* word-wrapped text; returns the y below the last line */
+static int wrap(struct canvas *c, const struct font *f, int x, int y, int w, const char *t, uint32_t col)
+{
+    char line[256];
+    while (*t) {
+        size_t n = 0, fit = 0;
+        while (t[n] && t[n] != '\n' && n < sizeof line - 1) {
+            line[n] = t[n]; line[n + 1] = 0;
+            if (gfx_text_width(f, line) > w) break;
+            n++;
+            if (!t[n] || t[n] == ' ' || t[n] == '\n') fit = n;
+        }
+        if (!t[n] || t[n] == '\n') fit = n;      /* the rest fits */
+        if (!fit) fit = n ? n : 1;                 /* one long word: hard break */
+        memcpy(line, t, fit); line[fit] = 0;
+        gfx_text(c, f, x, y, line, col);
+        y += f == &font_ui ? 22 : 24;
+        t += fit;
+        while (*t == ' ') t++;
+        if (*t == '\n') t++;
+    }
+    return y;
+}
+
 static void size_str(uint64_t sectors, char *b, size_t n)
 {
     uint64_t mb = sectors / 2048;
@@ -57,14 +81,11 @@ void installer_paint(const struct app_ctx *a)
 
     if (step == S_WELCOME) {
         gfx_text(c, &font_head, cx, cy, "Install AuxoBSD", k->fg);
-        static const char *const t[] = {
-            "This puts AuxoBSD on a disk of this computer so it starts without the install media,",
-            "and keeps your files (/home/root) between restarts.",
-            "",
-            "It boots on BIOS and UEFI computers. The disk you choose is erased completely.",
-            "IDE, SATA and NVMe disks are supported; USB disks aren't yet.",
-        };
-        for (int i = 0; i < 5; i++) gfx_text_fit(c, &font_ui, cx, cy + 50 + i * 22, cw, t[i], i == 3 ? k->danger : k->dim);
+        int ty = wrap(c, &font_ui, cx, cy + 50, cw, "This puts AuxoBSD on a disk of this computer so it starts without the install "
+                      "media, and keeps your files (/home/root) between restarts.", k->dim);
+        ty = wrap(c, &font_bold, cx, ty + 14, cw, "The disk you choose is erased completely.", k->danger);
+        wrap(c, &font_ui, cx, ty + 14, cw, "It boots on BIOS and UEFI computers. IDE, SATA and NVMe disks are supported; "
+             "USB disks aren't yet.", k->dim);
         button(c, a, &next_b, X + a->w - 160, Y + a->h - 58, 130, "Next", k->accent, k->accent_fg);
     } else if (step == S_DISK) {
         gfx_text(c, &font_head, cx, cy, "Choose a disk", k->fg);
@@ -103,12 +124,12 @@ void installer_paint(const struct app_ctx *a)
         char sz[24];
         size_str(d ? d->sectors : 0, sz, sizeof sz);
         ksnprintf(line, sizeof line, "Everything on %s (%s, %s) will be erased.", d ? d->name : "?", d ? d->model : "?", sz);
-        gfx_text_fit(c, &font_bold, cx, cy + 210, cw, line, k->danger);
-        agree_b = (struct btn){ cx - X, cy + 238 - Y, cw, 26 };
-        gfx_round(c, cx, cy + 240, 20, 20, 4, agree ? k->danger : k->field, 0);
-        gfx_round_frame(c, cx, cy + 240, 20, 20, 4, k->danger);
-        if (agree) gfx_text(c, &font_bold, cx + 4, cy + 241, "✓", 0xffffffff);
-        gfx_text_fit(c, &font_ui, cx + 30, cy + 241, cw - 30, "I understand: erase this disk and install AuxoBSD", k->fg);
+        int by = wrap(c, &font_bold, cx, cy + 210, cw, line, k->danger) + 6;
+        agree_b = (struct btn){ cx - X, by - 2 - Y, cw, 26 };
+        gfx_round(c, cx, by, 20, 20, 4, agree ? k->danger : k->field, 0);
+        gfx_round_frame(c, cx, by, 20, 20, 4, k->danger);
+        if (agree) gfx_text(c, &font_bold, cx + 4, by + 1, "✓", 0xffffffff);
+        gfx_text_fit(c, &font_ui, cx + 30, by + 1, cw - 30, "I understand: erase this disk and install AuxoBSD", k->fg);
         button(c, a, &back_b, X + a->w - 300, Y + a->h - 58, 120, "Back", k->field, k->fg);
         button(c, a, &next_b, X + a->w - 160, Y + a->h - 58, 130, "Install", agree ? k->danger : k->field, agree ? 0xffffffff : k->dim);
     } else if (step == S_RUN || step == S_DONE) {
@@ -119,7 +140,7 @@ void installer_paint(const struct app_ctx *a)
         if (pw > 0) gfx_round(c, cx, cy + 60, pw < 14 ? 14 : pw, 14, 7, failed ? k->danger : k->accent, 0);
         ksnprintf(line, sizeof line, "%d%%", install_pct);
         gfx_text(c, &font_ui, cx, cy + 84, line, k->dim);
-        gfx_text_fit(c, &font_ui, cx, cy + 112, cw, install_msg, failed ? k->danger : k->fg);
+        wrap(c, &font_ui, cx, cy + 112, cw, install_msg, failed ? k->danger : k->fg);
         if (step == S_DONE && !failed) button(c, a, &restart_b, X + a->w - 160, Y + a->h - 58, 130, "Restart", k->accent, k->accent_fg);
         if (step == S_DONE && failed) button(c, a, &back_b, X + a->w - 160, Y + a->h - 58, 130, "Back", k->field, k->fg);
     }
