@@ -20,9 +20,15 @@ PROMPT = "❯ ".encode()     # matched after colour codes are stripped
 class Shell:
     def __init__(self, iso):
         qemu = os.environ.get("QEMU", "qemu-system-x86_64")
-        args = [qemu, "-cdrom", iso, "-serial", "stdio", "-display", "none", "-m", "256M", "-no-reboot"]
-        if os.path.exists("/dev/kvm") and os.access("/dev/kvm", os.W_OK):
+        self.qlog = os.path.join(os.path.dirname(os.path.abspath(iso)), "qemu-debug.log")
+        args = [qemu, "-cdrom", iso, "-serial", "stdio", "-display", "none", "-m", "256M", "-no-reboot",
+                "-d", "cpu_reset,guest_errors", "-D", self.qlog]
+        # Software CPU by default: that's what the suite is verified with. AUXO_KVM=1 opts into KVM.
+        if os.environ.get("AUXO_KVM") == "1" and os.access("/dev/kvm", os.W_OK):
             args += ["-enable-kvm", "-cpu", "host"]
+        self.args = args
+        if os.path.exists(self.qlog):
+            os.remove(self.qlog)
         self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.raw = b""
 
@@ -55,6 +61,17 @@ class Shell:
 
     def text(self, start):
         return clean(self.raw[start:])
+
+    def diagnose(self):
+        """Why QEMU stopped: exit code, the command line and the tail of its reset/error log."""
+        rc = self.p.poll()
+        out = [f"qemu {'exited with ' + str(rc) if rc is not None else 'still running'}: {' '.join(self.args)}"]
+        try:
+            tail = open(self.qlog, errors="replace").read().splitlines()[-25:]
+            out += ["qemu-debug.log:"] + tail if tail else ["qemu-debug.log is empty"]
+        except OSError:
+            out.append("no qemu-debug.log")
+        return "\n".join(out)
 
     def close(self):
         if self.p.poll() is None:
@@ -90,7 +107,10 @@ def main():
     try:
         print("▲ boot")
         ok, log = sh.boot()
-        check("reaches the auxsh prompt", ok, log[-800:])
+        check("reaches the auxsh prompt", ok, (log[-800:] or "(no serial output at all)") + "\n" + sh.diagnose())
+        if not ok:
+            print(f"\n{passed} passed, {failed} failed (stopped: the kernel never reached the shell)")
+            return 1
         check("Auxo banner", "AuxoBSD 0.1.0" in log and "part of Auxo" in log and "auxolinux.com" in log, log)
         check("boot log shows the accent", "accent violet, hostname auxobsd" in log, log)
         check("MOTD greets on start", "Welcome to AuxoBSD, root." in log and "auxo-fetch for a summary" in log, log)
