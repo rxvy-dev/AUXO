@@ -1,0 +1,65 @@
+# Chrono theme — Neon city lights on a deep indigo night.
+[theme]
+name = Tokyo Night
+era = modern
+description = Neon city lights on a deep indigo night.
+variant = dark
+
+[colors]
+bg = #1a1b26
+fg = #c0caf5
+accent = #7aa2f7
+accent_fg = #1a1b26
+selection = #7aa2f755
+window_bg = #1a1b26
+window_fg = #c0caf5
+title_active = #24283b
+title_active2 = #24283b
+title_active_fg = #c0caf5
+title_inactive = #1f2335
+title_inactive2 = #1f2335
+title_inactive_fg = #737aa2
+border_active = #7aa2f7
+border_inactive = #1f2335
+button_bg = #24283b
+button_fg = #c0caf5
+close_bg = #f7768e
+panel_bg = #16161ee8
+panel_fg = #c0caf5
+panel_border = #7aa2f733
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 10
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 40
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:waves
+color1 = #16161e
+color2 = #3d59a1
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

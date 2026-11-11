@@ -1,0 +1,59 @@
+# Chrono theme — yellow title tabs that are only as wide as their title (late-90s media OS look).
+[theme]
+name = Yellow Tab
+era = retro
+description = Yellow title tabs that hug their titles, on a calm blue desktop.
+
+[colors]
+bg = #d8d8d8
+fg = #000000
+accent = #ffcb00
+accent_fg = #000000
+selection = #3366bb
+window_bg = #e8e8e8
+window_fg = #000000
+title_active = #ffcb00
+title_active2 = #f2b600
+title_active_fg = #000000
+title_inactive = #e8e8e8
+title_inactive2 = #d8d8d8
+title_inactive_fg = #555555
+border_active = #777777
+border_inactive = #999999
+bevel_light = #ffffff
+bevel_dark = #999999
+bevel_shadow = #555555
+button_bg = #e8e8e8
+button_fg = #000000
+close_bg = #e8e8e8
+panel_bg = #e8e8e8
+panel_fg = #000000
+panel_border = #888888
+
+[decor]
+style = tab
+title_height = 22
+border_width = 2
+corner_radius = 0
+title_center = false
+title_bold = true
+buttons = close:maximize
+button_shape = bevel
+button_size = 13
+shadow = false
+
+[fonts]
+ui = DejaVu Sans 9
+title = DejaVu Sans Bold 9
+mono = DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 26
+style = bevel
+launcher_label = ✦
+dock = false
+
+[desktop]
+wallpaper = solid
+color1 = #336698

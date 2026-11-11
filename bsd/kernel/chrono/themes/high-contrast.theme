@@ -1,0 +1,64 @@
+# Chrono theme — Maximum legibility: black, white and yellow, thick focus borders.
+[theme]
+name = High Contrast
+era = modern
+description = Maximum legibility: black, white and yellow, thick focus borders.
+variant = dark
+
+[colors]
+bg = #000000
+fg = #ffffff
+accent = #ffff00
+accent_fg = #000000
+selection = #ffff00
+window_bg = #000000
+window_fg = #ffffff
+title_active = #ffff00
+title_active2 = #ffff00
+title_active_fg = #000000
+title_inactive = #000000
+title_inactive2 = #000000
+title_inactive_fg = #ffffff
+border_active = #ffff00
+border_inactive = #ffffff
+button_bg = #000000
+button_fg = #ffffff
+close_bg = #ffffff
+panel_bg = #000000
+panel_fg = #ffffff
+panel_border = #ffffff
+
+[decor]
+style = flat
+title_height = 34
+border_width = 3
+corner_radius = 0
+title_center = false
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 18
+shadow = false
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans Bold 12
+title = Inter, Noto Sans, DejaVu Sans Bold 12
+mono = DejaVu Sans Mono 12
+
+[panel]
+position = bottom
+height = 44
+style = pixel
+launcher_label = Apps
+dock = false
+
+[desktop]
+wallpaper = solid
+color1 = #000000
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

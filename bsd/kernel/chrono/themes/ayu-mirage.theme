@@ -1,0 +1,65 @@
+# Chrono theme — Soft navy dusk with a golden accent, easy on the eyes all day.
+[theme]
+name = Ayu Mirage
+era = modern
+description = Soft navy dusk with a golden accent, easy on the eyes all day.
+variant = dark
+
+[colors]
+bg = #1f2430
+fg = #cccac2
+accent = #ffcc66
+accent_fg = #1f2430
+selection = #ffcc6655
+window_bg = #1f2430
+window_fg = #cccac2
+title_active = #242936
+title_active2 = #242936
+title_active_fg = #cccac2
+title_inactive = #1f2430
+title_inactive2 = #1f2430
+title_inactive_fg = #707a8c
+border_active = #ffcc66
+border_inactive = #242936
+button_bg = #33415e
+button_fg = #cccac2
+close_bg = #f28779
+panel_bg = #1a1f29ee
+panel_fg = #cccac2
+panel_border = #ffcc6633
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 12
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:dunes
+color1 = #1a1f29
+color2 = #33415e
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

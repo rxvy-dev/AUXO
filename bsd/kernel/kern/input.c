@@ -9,6 +9,10 @@
 
 static volatile uint8_t q[QSIZE];
 static volatile uint32_t qhead, qtail;
+/* keys for the Chrono desktop while it's running (the shell gets them via input_push) */
+static volatile uint8_t gq[QSIZE];
+static volatile uint32_t ghead, gtail;
+static volatile int gui;
 
 static void push(uint8_t c)
 {
@@ -16,7 +20,26 @@ static void push(uint8_t c)
     if (n != qtail) { q[qhead] = c; qhead = n; }
 }
 
-static void push_str(const char *s) { while (*s) push((uint8_t)*s++); }
+static void kpush(uint8_t c)               /* a key from the keyboard: shell or desktop */
+{
+    if (!gui) { if (c < 0x80) push(c); return; }
+    uint32_t n = (ghead + 1) % QSIZE;
+    if (n != gtail) { gq[ghead] = c; ghead = n; }
+}
+
+static void push_str(const char *s) { while (*s) kpush((uint8_t)*s++); }
+static void key(uint8_t k, const char *vt) { if (gui) kpush(k); else push_str(vt); }
+
+void input_push(uint8_t c) { push(c); }
+void input_set_gui(int on) { gui = on; }
+
+int input_gui_key(void)
+{
+    if (gtail == ghead) return -1;
+    int c = gq[gtail];
+    gtail = (gtail + 1) % QSIZE;
+    return c;
+}
 
 int input_poll(void)
 {
@@ -61,7 +84,7 @@ void input_kbd_irq(void)
     uint8_t st = inb(0x64);
     if (!(st & 1)) return;
     uint8_t sc = inb(0x60);
-    if (st & 0x20) return;                     /* mouse byte */
+    if (st & 0x20) { mouse_byte(sc); return; } /* a mouse byte that raced in: hand it over */
 
     if (sc == 0xE0) { ext = 1; return; }
     int up = sc & 0x80;
@@ -72,15 +95,18 @@ void input_kbd_irq(void)
         if (sc == 0x1D) { ctrl = !up; return; }  /* right ctrl */
         if (up) return;
         switch (sc) {
-        case 0x48: push_str("\033[A"); break;   /* up */
-        case 0x50: push_str("\033[B"); break;   /* down */
-        case 0x4D: push_str("\033[C"); break;   /* right */
-        case 0x4B: push_str("\033[D"); break;   /* left */
-        case 0x47: push_str("\033[H"); break;   /* home */
-        case 0x4F: push_str("\033[F"); break;   /* end */
-        case 0x53: push_str("\033[3~"); break;  /* delete */
-        case 0x1C: push('\n'); break;           /* keypad enter */
-        case 0x35: push('/'); break;            /* keypad / */
+        case 0x48: key(KEY_UP, "\033[A"); break;
+        case 0x50: key(KEY_DOWN, "\033[B"); break;
+        case 0x4D: key(KEY_RIGHT, "\033[C"); break;
+        case 0x4B: key(KEY_LEFT, "\033[D"); break;
+        case 0x47: key(KEY_HOME, "\033[H"); break;
+        case 0x4F: key(KEY_END, "\033[F"); break;
+        case 0x53: key(KEY_DEL, "\033[3~"); break;
+        case 0x49: key(KEY_PGUP, "\033[5~"); break;
+        case 0x51: key(KEY_PGDN, "\033[6~"); break;
+        case 0x1C: kpush('\n'); break;          /* keypad enter */
+        case 0x35: kpush('/'); break;           /* keypad / */
+        case 0x5B: case 0x5C: kpush(KEY_SUPER); break;   /* Super / Windows key */
         }
         return;
     }
@@ -91,12 +117,13 @@ void input_kbd_irq(void)
     if (sc == 0x3A) { caps = !caps; return; }
     if (sc >= sizeof keymap) return;
 
+    if (sc == 0x0F && shift && gui) { kpush(KEY_SHIFT_TAB); return; }
     char c = shift ? keymap_shift[sc] : keymap[sc];
     if (!c) return;
     if (caps && c >= 'a' && c <= 'z' && !shift) c -= 32;
     else if (caps && c >= 'A' && c <= 'Z' && shift) c += 32;
     if (ctrl && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) c &= 0x1F;
-    push((uint8_t)c);
+    kpush((uint8_t)c);
 }
 
 void input_init(void)
@@ -110,3 +137,6 @@ void input_init(void)
     }
     outb(0x21, inb(0x21) & (uint8_t)~unmask);
 }
+
+int input_shift(void) { return shift; }
+int input_ctrl(void) { return ctrl; }

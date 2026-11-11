@@ -1,0 +1,64 @@
+# Chrono theme — Dial-up nights: ANSI cyan, magenta and yellow on pure black.
+[theme]
+name = Bulletin Board
+era = retro
+description = Dial-up nights: ANSI cyan, magenta and yellow on pure black.
+variant = dark
+
+[colors]
+bg = #000000
+fg = #aaaaaa
+accent = #55ffff
+accent_fg = #000000
+selection = #55ffff55
+window_bg = #000000
+window_fg = #aaaaaa
+title_active = #0000aa
+title_active2 = #0000aa
+title_active_fg = #ffff55
+title_inactive = #000000
+title_inactive2 = #000000
+title_inactive_fg = #7f7f7f
+border_active = #55ffff
+border_inactive = #555555
+button_bg = #000000
+button_fg = #aaaaaa
+close_bg = #ff55ff
+panel_bg = #0000aa
+panel_fg = #aaaaaa
+panel_border = #55ffff
+
+[decor]
+style = flat
+title_height = 24
+border_width = 2
+corner_radius = 0
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 12
+shadow = false
+
+[fonts]
+ui = JetBrains Mono, DejaVu Sans Mono 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 28
+style = pixel
+launcher_label = [MENU]
+dock = false
+
+[desktop]
+wallpaper = pattern:checker
+color1 = #000000
+color2 = #00002a
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

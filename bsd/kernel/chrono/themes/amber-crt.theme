@@ -1,0 +1,64 @@
+# Chrono theme — An amber phosphor terminal from the early 80s, scanlines and all.
+[theme]
+name = Amber CRT
+era = retro
+description = An amber phosphor terminal from the early 80s, scanlines and all.
+variant = dark
+
+[colors]
+bg = #120a00
+fg = #ffb000
+accent = #ffb000
+accent_fg = #120a00
+selection = #ffb00055
+window_bg = #120a00
+window_fg = #ffb000
+title_active = #120a00
+title_active2 = #120a00
+title_active_fg = #ffb000
+title_inactive = #120a00
+title_inactive2 = #120a00
+title_inactive_fg = #a87000
+border_active = #ffb000
+border_inactive = #3d2700
+button_bg = #120a00
+button_fg = #ffb000
+close_bg = #ffb000
+panel_bg = #000000
+panel_fg = #ffb000
+panel_border = #ffb000
+
+[decor]
+style = flat
+title_height = 24
+border_width = 1
+corner_radius = 0
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 12
+shadow = false
+
+[fonts]
+ui = JetBrains Mono, DejaVu Sans Mono 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 26
+style = pixel
+launcher_label = READY
+dock = false
+
+[desktop]
+wallpaper = pattern:scanlines
+color1 = #0a0600
+color2 = #1f1400
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

@@ -1,0 +1,65 @@
+# Chrono theme — Graphite black, IBM-style blues and a single pink spark.
+[theme]
+name = Oxocarbon
+era = modern
+description = Graphite black, IBM-style blues and a single pink spark.
+variant = dark
+
+[colors]
+bg = #161616
+fg = #f2f4f8
+accent = #78a9ff
+accent_fg = #161616
+selection = #78a9ff55
+window_bg = #161616
+window_fg = #f2f4f8
+title_active = #262626
+title_active2 = #262626
+title_active_fg = #f2f4f8
+title_inactive = #161616
+title_inactive2 = #161616
+title_inactive_fg = #6f6f6f
+border_active = #78a9ff
+border_inactive = #262626
+button_bg = #393939
+button_fg = #f2f4f8
+close_bg = #ee5396
+panel_bg = #0b0b0bee
+panel_fg = #f2f4f8
+panel_border = #78a9ff33
+
+[decor]
+style = flat
+title_height = 30
+border_width = 1
+corner_radius = 0
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = IBM Plex Sans, Inter, DejaVu Sans 10
+title = IBM Plex Sans, Inter, DejaVu Sans Bold 10
+mono = IBM Plex Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 32
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:dots
+color1 = #0b0b0b
+color2 = #262626
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

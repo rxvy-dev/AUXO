@@ -12,6 +12,11 @@ mb2_start:
         .long mb2_end - mb2_start
         .long 0x100000000 - (MB2_MAGIC + 0 + (mb2_end - mb2_start))
         .align 8
+        .short 5                                 /* framebuffer tag: 1024x768x32 for the Chrono desktop */
+        .short 1                                 /* optional: a text-mode boot still works */
+        .long 20
+        .long 1024, 768, 32
+        .align 8
         .short 0                                 /* end tag */
         .short 0
         .long 8
@@ -154,9 +159,11 @@ boot_gdtr:
         .short . - boot_gdt - 1
         .long  boot_gdt
 
-        .section .bss, "aw", @nobits        /* I like /* */ /* */
+        .section .bss, "aw", @nobits
         .align 4096
+        .global pml4, boot_pdpt
 pml4:   .skip 4096
+boot_pdpt:
 pdpt:   .skip 4096
 pd:     .skip 4096 * 4
         .align 16

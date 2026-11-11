@@ -1,0 +1,59 @@
+# Chrono theme — blue, white, black and orange with hard pixel gadgets, like 80s home computers.
+[theme]
+name = Topaz
+era = retro
+description = Four colours, hard pixel gadgets and a deep blue screen.
+
+[colors]
+bg = #0055aa
+fg = #ffffff
+accent = #ff8800
+accent_fg = #000000
+selection = #ff8800
+window_bg = #0055aa
+window_fg = #ffffff
+title_active = #ffffff
+title_active2 = #0055aa
+title_active_fg = #0055aa
+title_inactive = #0055aa
+title_inactive2 = #0055aa
+title_inactive_fg = #ffffff
+border_active = #000022
+border_inactive = #000022
+bevel_light = #ffffff
+bevel_dark = #000022
+bevel_shadow = #000022
+button_bg = #ffffff
+button_fg = #000022
+close_bg = #ff8800
+panel_bg = #ffffff
+panel_fg = #0055aa
+panel_border = #000022
+
+[decor]
+style = pixel
+title_height = 20
+border_width = 2
+corner_radius = 0
+title_center = false
+title_bold = true
+buttons = close:minimize,maximize
+button_shape = square
+button_size = 18
+shadow = false
+
+[fonts]
+ui = Topaz, DejaVu Sans Mono Bold 9
+title = Topaz, DejaVu Sans Mono Bold 9
+mono = Topaz, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 22
+style = pixel
+launcher_label = Workbench
+dock = false
+
+[desktop]
+wallpaper = solid
+color1 = #0055aa

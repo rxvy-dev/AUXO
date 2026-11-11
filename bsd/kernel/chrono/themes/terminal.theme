@@ -1,0 +1,64 @@
+# Chrono theme — Flat, monospace, square. Green on black, nothing else.
+[theme]
+name = Terminal
+era = modern
+description = Flat, monospace, square. Green on black, nothing else.
+variant = dark
+
+[colors]
+bg = #0b0f0b
+fg = #b8f5b8
+accent = #39ff6a
+accent_fg = #000000
+selection = #39ff6a44
+window_bg = #0b0f0b
+window_fg = #b8f5b8
+title_active = #0b0f0b
+title_active2 = #0b0f0b
+title_active_fg = #39ff6a
+title_inactive = #0b0f0b
+title_inactive2 = #0b0f0b
+title_inactive_fg = #4f7a4f
+border_active = #39ff6a
+border_inactive = #1f3a1f
+button_bg = #0b0f0b
+button_fg = #39ff6a
+close_bg = #39ff6a
+panel_bg = #000000
+panel_fg = #b8f5b8
+panel_border = #39ff6a
+
+[decor]
+style = flat
+title_height = 24
+border_width = 1
+corner_radius = 0
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 12
+shadow = false
+
+[fonts]
+ui = JetBrains Mono, DejaVu Sans Mono 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 26
+style = pixel
+launcher_label = $_
+dock = false
+
+[desktop]
+wallpaper = pattern:scanlines
+color1 = #050805
+color2 = #0f1a0f
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

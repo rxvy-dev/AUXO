@@ -1,0 +1,65 @@
+# Chrono theme — Acid yellow and electric cyan on a rain-slick night.
+[theme]
+name = Cyberpunk
+era = modern
+description = Acid yellow and electric cyan on a rain-slick night.
+variant = dark
+
+[colors]
+bg = #0d0d14
+fg = #e8f7ff
+accent = #fcee0a
+accent_fg = #0d0d14
+selection = #00f0ff44
+window_bg = #101018
+window_fg = #e8f7ff
+title_active = #16161f
+title_active2 = #16161f
+title_active_fg = #fcee0a
+title_inactive = #111118
+title_inactive2 = #111118
+title_inactive_fg = #8a93a3
+border_active = #00f0ff
+border_inactive = #2a2a38
+button_bg = #1d1d28
+button_fg = #e8f7ff
+close_bg = #ff2a6d
+panel_bg = #0d0d14ee
+panel_fg = #e8f7ff
+panel_border = #fcee0a
+
+[decor]
+style = neon
+title_height = 30
+border_width = 1
+corner_radius = 0
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 13
+shadow = true
+shadow_size = 24
+shadow_alpha = 0.6
+
+[fonts]
+ui = Rajdhani, Inter, Noto Sans, DejaVu Sans 11
+title = Rajdhani, Inter, Noto Sans, DejaVu Sans Bold 11
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 38
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:circuit
+color1 = #07070c
+color2 = #1a0f2e
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

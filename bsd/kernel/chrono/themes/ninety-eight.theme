@@ -1,0 +1,66 @@
+# Chrono theme — late-90s grey bevels, gradient title bars, teal desktop.
+[theme]
+name = Ninety-Eight
+era = retro
+description = Late-90s grey bevels with a navy-to-sky title gradient, Tahoma and a teal desktop.
+
+[colors]
+bg = #c0c0c0
+fg = #000000
+accent = #000080
+accent_fg = #ffffff
+selection = #000080
+window_bg = #c0c0c0
+window_fg = #000000
+title_active = #000080
+title_active2 = #1084d0
+title_active_fg = #ffffff
+title_inactive = #808080
+title_inactive2 = #b5b5b5
+title_inactive_fg = #f0f0f0
+border_active = #c0c0c0
+border_inactive = #c0c0c0
+bevel_light = #ffffff
+bevel_dark = #808080
+bevel_shadow = #000000
+button_bg = #c0c0c0
+button_fg = #000000
+close_bg = #c0c0c0
+panel_bg = #c0c0c0
+panel_fg = #000000
+panel_border = #ffffff
+
+[decor]
+style = bevel
+title_height = 20
+border_width = 4
+corner_radius = 0
+title_center = false
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = bevel
+button_size = 14
+shadow = false
+
+[fonts]
+ui = Tahoma, Liberation Sans, DejaVu Sans 9
+title = Tahoma, Liberation Sans, DejaVu Sans Bold 9
+mono = Liberation Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 30
+style = bevel
+launcher_label = Start
+dock = false
+
+[desktop]
+wallpaper = solid
+color1 = #008080
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

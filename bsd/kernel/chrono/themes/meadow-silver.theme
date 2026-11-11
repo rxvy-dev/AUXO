@@ -1,0 +1,62 @@
+# Chrono theme — Meadow in silver: bright metallic title bars and taskbar.
+[theme]
+name = Meadow Silver
+era = retro
+description = Meadow in silver: bright metallic title bars and taskbar.
+
+[colors]
+bg = #ece9d8
+fg = #000000
+accent = #2f7a22
+accent_fg = #ffffff
+selection = #6b6ba8
+window_bg = #ffffff
+window_fg = #000000
+title_active = #c9c9db
+title_active2 = #eeeef4
+title_active_fg = #1b1b2a
+title_inactive = #e6e6ee
+title_inactive2 = #f2f2f6
+title_inactive_fg = #5f5f72
+border_active = #a4a4ba
+border_inactive = #d2d2de
+bevel_light = #ffffff
+bevel_dark = #aca899
+bevel_shadow = #716f64
+button_bg = #d4d4e0
+button_fg = #1b1b2a
+close_bg = #e2552c
+panel_bg = #b9b9cc
+panel_fg = #111122
+panel_border = #e6e6f0
+
+[decor]
+style = meadow
+title_height = 28
+border_width = 3
+corner_radius = 8
+title_center = false
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = roundrect
+button_size = 21
+shadow = true
+shadow_size = 8
+shadow_alpha = 0.3
+
+[fonts]
+ui = Tahoma, Noto Sans, DejaVu Sans 9
+title = Trebuchet MS, Noto Sans, DejaVu Sans Bold 10
+mono = DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 32
+style = gloss
+launcher_label = start
+dock = false
+
+[desktop]
+wallpaper = pattern:hills
+color1 = #3d7bd9
+color2 = #4d9a2a

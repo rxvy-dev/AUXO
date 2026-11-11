@@ -1,0 +1,57 @@
+# Chrono theme — translucent glass windows and dock.
+[theme]
+name = Liquid Glass
+era = modern
+description = Translucent glass title bars, a glass dock and a soft aurora.
+
+[colors]
+bg = #20242c
+fg = #f4f6fb
+accent = #8cc8ff
+accent_fg = #0a0d12
+selection = #8cc8ff55
+window_bg = #1a1d24
+window_fg = #f4f6fb
+title_active = #ffffff2e
+title_active2 = #ffffff1a
+title_active_fg = #ffffff
+title_inactive = #ffffff16
+title_inactive2 = #ffffff10
+title_inactive_fg = #c8ccd6
+border_active = #ffffff40
+border_inactive = #ffffff20
+button_bg = #ffffff26
+button_fg = #ffffff
+close_bg = #ff5f57
+panel_bg = #ffffff22
+panel_fg = #ffffff
+panel_border = #ffffff55
+
+[decor]
+style = glass
+title_height = 36
+border_width = 1
+corner_radius = 16
+title_center = true
+buttons = close,minimize,maximize:
+button_shape = gel
+button_size = 13
+shadow = true
+shadow_size = 30
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 30
+style = glass
+dock = true
+
+[desktop]
+wallpaper = pattern:aurora
+color1 = #0e1a3a
+color2 = #4a1d5c

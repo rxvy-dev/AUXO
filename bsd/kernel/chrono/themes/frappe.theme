@@ -1,0 +1,65 @@
+# Chrono theme — The middle sister of Mocha and Latte: soft slate with mauve.
+[theme]
+name = Frappé
+era = modern
+description = The middle sister of Mocha and Latte: soft slate with mauve.
+variant = dark
+
+[colors]
+bg = #303446
+fg = #c6d0f5
+accent = #ca9ee6
+accent_fg = #232634
+selection = #ca9ee655
+window_bg = #303446
+window_fg = #c6d0f5
+title_active = #292c3c
+title_active2 = #292c3c
+title_active_fg = #c6d0f5
+title_inactive = #303446
+title_inactive2 = #303446
+title_inactive_fg = #838ba7
+border_active = #ca9ee6
+border_inactive = #292c3c
+button_bg = #414559
+button_fg = #c6d0f5
+close_bg = #e78284
+panel_bg = #232634ee
+panel_fg = #c6d0f5
+panel_border = #ca9ee644
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 12
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:blobs
+color1 = #232634
+color2 = #51576d
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

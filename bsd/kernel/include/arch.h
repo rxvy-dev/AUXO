@@ -13,6 +13,18 @@ struct trapframe {
 static inline void outb(uint16_t p, uint8_t v) { __asm__ volatile("outb %0, %1" :: "a"(v), "Nd"(p)); }
 static inline uint8_t inb(uint16_t p) { uint8_t v; __asm__ volatile("inb %1, %0" : "=a"(v) : "Nd"(p)); return v; }
 static inline void outw(uint16_t p, uint16_t v) { __asm__ volatile("outw %0, %1" :: "a"(v), "Nd"(p)); }
+static inline uint16_t inw(uint16_t p) { uint16_t v; __asm__ volatile("inw %1, %0" : "=a"(v) : "Nd"(p)); return v; }
+static inline void outl(uint16_t p, uint32_t v) { __asm__ volatile("outl %0, %1" :: "a"(v), "Nd"(p)); }
+static inline uint32_t inl(uint16_t p) { uint32_t v; __asm__ volatile("inl %1, %0" : "=a"(v) : "Nd"(p)); return v; }
+static inline void insw(uint16_t p, void *d, uint32_t n) { __asm__ volatile("rep insw" : "+D"(d), "+c"(n) : "d"(p) : "memory"); }
+static inline void outsw(uint16_t p, const void *s, uint32_t n) { __asm__ volatile("rep outsw" : "+S"(s), "+c"(n) : "d"(p)); }
+static inline uint32_t mmio_r32(volatile void *base, uint32_t off) { return *(volatile uint32_t *)((uintptr_t)base + off); }
+static inline void mmio_w32(volatile void *base, uint32_t off, uint32_t v) { *(volatile uint32_t *)((uintptr_t)base + off) = v; }
+static inline uint8_t mmio_r8(volatile void *base, uint32_t off) { return *(volatile uint8_t *)((uintptr_t)base + off); }
+static inline void mmio_w8(volatile void *base, uint32_t off, uint8_t v) { *(volatile uint8_t *)((uintptr_t)base + off) = v; }
+static inline uint16_t mmio_r16(volatile void *base, uint32_t off) { return *(volatile uint16_t *)((uintptr_t)base + off); }
+static inline void mmio_w16(volatile void *base, uint32_t off, uint16_t v) { *(volatile uint16_t *)((uintptr_t)base + off) = v; }
+static inline void mb(void) { __asm__ volatile("mfence" ::: "memory"); }
 static inline void io_wait(void) { outb(0x80, 0); }
 static inline void cpuid(uint32_t leaf, uint32_t r[4])
 {
@@ -36,6 +48,14 @@ void pic_eoi(int irq);
 void pit_init(uint32_t hz);
 void trap_dispatch(struct trapframe *tf);
 uint64_t kernel_ticks(void);
+void     kdelay_ms(uint32_t ms);          /* busy-waits on the PIT tick (interrupts must be on) */
+
+/* vm.c: the boot page tables identity-map the low 4 GiB; devices above that get mapped on demand */
+void *vm_map_mmio(uint64_t phys, uint64_t len, int uncached);   /* NULL if it can't */
+
+/* rust: give up the CPU to the next runnable thread */
+void rs_yield(void);
+static inline void wait_tick(void) { __asm__ volatile("sti; hlt"); rs_yield(); }
 
 /* assembly */
 void gdt_flush(const void *gdtr);

@@ -7,11 +7,28 @@ PYTHON   ?= python3
 QEMU     ?= qemu-system-x86_64
 USE_RUST ?= 1
 VERSION  := $(shell cat VERSION)
+.DEFAULT_GOAL := all
 
 CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -m64 -march=x86-64 -mtune=generic -Iinclude -ffreestanding -fno-pic -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -fno-tree-loop-distribute-patterns -DAUXO_VERSION='"$(VERSION)"'
 LDFLAGS := -n -nostdlib --no-warn-rwx-segments -z max-page-size=0x1000 -T linker.ld
 
-SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c)
+# The Chrono desktop (kern/chrono.c) and its drawing library (kern/gfx.c) use SSE floating point.
+# They only run on the "chrono" thread, the one thread that touches XMM registers, so nothing
+# else has to save them. Thread stacks are only 8-byte aligned on entry; GCC realigns.
+GUI_OBJS   := build/kern/gfx.o build/kern/chrono.o build/kern/browser.o build/kern/aether.o build/kern/installer.o
+GUI_CFLAGS := $(filter-out -mgeneral-regs-only,$(CFLAGS)) -msse2 -mfpmath=sse -mincoming-stack-boundary=3 -fno-math-errno
+$(GUI_OBJS): CFLAGS := $(GUI_CFLAGS)
+# BearSSL (third_party/bearssl, MIT): TLS for HTTPS. Integer-only; no OS hooks, we seed it ourselves.
+BEARSSL_CFLAGS := $(filter-out -Wall -Wextra,$(CFLAGS)) -Ithird_party/shim -Ithird_party/bearssl -DBR_USE_URANDOM=0 \
+  -DBR_USE_GETENTROPY=0 -DBR_USE_UNIX_TIME=0 -DBR_USE_WIN32_TIME=0 -DBR_USE_WIN32_RAND=0 -DBR_AES_X86NI=0 \
+  -DBR_SSE2=0 -DBR_POWER8=0 -DBR_RDRAND=0 -DBR_64=1
+build/third_party/bearssl/%.o: CFLAGS := $(BEARSSL_CFLAGS)
+build/net/http.o: CFLAGS += -Ithird_party/bearssl -Ithird_party/shim
+build/net/http.o: include/trust_anchors.h
+
+$(GUI_OBJS): include/gfx.h include/fonts.h include/chrono_themes.h include/chrono.h
+
+SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c) $(wildcard net/*.c) $(wildcard disk/*.c) $(wildcard third_party/bearssl/*.c)
 SRCS_S := $(wildcard arch/x86_64/*.S)
 OBJS := $(patsubst %.c,build/%.o,$(SRCS_C)) $(patsubst %.S,build/%.o,$(SRCS_S))
 
@@ -30,7 +47,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run test accents accents-check clean menuconfig
+.PHONY: all rust check iso run run-text test accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -67,6 +84,21 @@ accents:
 accents-check:
 >$(PYTHON) -I tools/gen-accents.py --check $(PALETTE) include/auxo_accents.h
 
+# Chrono themes: chrono/themes/*.theme (copied from github.com/rxvy-dev/chrono) → C tables
+chrono-themes:
+>$(PYTHON) -I tools/gen-chrono.py chrono/themes include/chrono_themes.h
+
+chrono-themes-check:
+>$(PYTHON) -I tools/gen-chrono.py --check chrono/themes include/chrono_themes.h
+
+# HTTPS root certificates (Mozilla's, via certifi or ca-certificates; needs python cryptography)
+trust:
+>$(PYTHON) tools/gen-trust.py "" include/trust_anchors.h
+
+# desktop fonts (needs Pillow and the DejaVu fonts); the generated header is committed
+fonts:
+>$(PYTHON) -I tools/gen-fonts.py include/fonts.h
+
 check: build/auxobsd.elf
 >grub-file --is-x86-multiboot2 $< && echo "multiboot2: OK"
 
@@ -77,7 +109,10 @@ build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg
 >grub-mkrescue -o $@ iso
 
 run: iso
->$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 256M
+>$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 256M -vga std
+
+run-text: iso
+>$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 256M -display curses
 
 # boots the ISO headless in QEMU and drives auxsh over the serial port
 test: iso

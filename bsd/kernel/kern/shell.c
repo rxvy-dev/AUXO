@@ -5,6 +5,10 @@
 #include "arch.h"
 #include "rs.h"
 #include "auxo.h"
+#include "chrono.h"
+#include "pci.h"
+#include "net.h"
+#include "vfs.h"
 
 #define LINE_MAX 160
 #define HIST     16
@@ -201,6 +205,244 @@ static int cmd_history(int argc, char **argv)
     return 0;
 }
 
+static int cmd_lspci(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    for (int i = 0; i < pci_count(); i++) {
+        const struct pci_dev *d = pci_get(i);
+        char nm[64];
+        pci_describe(d, nm, sizeof nm);
+        kprintf("%02x:%02x.%x %-16s %04x:%04x  %s%s%s", d->bus, d->dev, d->fn, pci_class_name(d->class, d->subclass),
+                d->vendor, d->device, nm, d->driver ? "  [" : "", d->driver ? d->driver : "");
+        if (d->driver) kprintf("]");
+        kprintf("\n");
+    }
+    return 0;
+}
+
+static int cmd_ifconfig(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    const struct nic *n = net_nic();
+    if (!n) { kprintf("net: %s\n", net_status()); return 1; }
+    kprintf("%s: %s, mac %02x:%02x:%02x:%02x:%02x:%02x, link %s\n", n->driver, n->model, n->mac[0], n->mac[1], n->mac[2],
+            n->mac[3], n->mac[4], n->mac[5], n->link((struct nic *)n) ? "up" : "down");
+    if (!net_ready()) { kprintf("  %s\n", net_status()); return 0; }
+    char a[16], m[16], g[16], d[16];
+    ip_fmt(net_ip(), a, sizeof a); ip_fmt(net_mask(), m, sizeof m); ip_fmt(net_gateway(), g, sizeof g); ip_fmt(net_dns(), d, sizeof d);
+    kprintf("  inet %s netmask %s gateway %s dns %s\n", a, m, g, d);
+    const struct pci_dev *w = pci_wifi();
+    if (w) { char nm[64]; pci_describe(w, nm, sizeof nm); kprintf("  wifi: %s (no driver yet)\n", nm); }
+    return 0;
+}
+
+static int cmd_ping(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: ping HOST [-c COUNT]\n"); return 1; }
+    int count = 4;
+    if (argc > 3 && !strcmp(argv[2], "-c")) count = katoi(argv[3]);
+    if (net_wait_ready(5000) < 0) { kprintf("ping: no network (%s)\n", net_status()); return 1; }
+    uint32_t ip;
+    if (net_resolve(argv[1], &ip, 5000) < 0) { kprintf("ping: can't resolve %s\n", argv[1]); return 1; }
+    char a[16];
+    ip_fmt(ip, a, sizeof a);
+    kprintf("PING %s (%s)\n", argv[1], a);
+    int got = 0;
+    for (int i = 0; i < count; i++) {
+        int rtt = net_ping(ip, (uint16_t)(i + 1), 2000);
+        if (rtt >= 0) { got++; kprintf("reply from %s: seq=%d time=%d ms\n", a, i + 1, rtt); }
+        else kprintf("seq=%d timed out\n", i + 1);
+        if (i + 1 < count) kdelay_ms(rtt >= 0 && rtt < 1000 ? 1000 - (uint32_t)rtt : 0);
+    }
+    kprintf("%d sent, %d received\n", count, got);
+    return got ? 0 : 1;
+}
+
+/* get URL: fetch over HTTP/HTTPS and print the start of the body */
+static int cmd_get(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: get URL [-n BYTES]   (http:// or https://)\n"); return 1; }
+    int show = argc > 3 && !strcmp(argv[2], "-n") ? katoi(argv[3]) : 600;
+    if (net_wait_ready(8000) < 0) { kprintf("get: no network (%s)\n", net_status()); return 1; }
+    size_t cap = 1 << 20;
+    uint64_t pg = pmm_alloc_contig(cap / PAGE_SIZE);
+    if (!pg) { kprintf("get: out of memory\n"); return 1; }
+    char *buf = (char *)(uintptr_t)pg;
+    static struct http_result r;
+    char url[512];
+    if (strncmp(argv[1], "http://", 7) && strncmp(argv[1], "https://", 8)) ksnprintf(url, sizeof url, "http://%s", argv[1]);
+    else strlcpy(url, argv[1], sizeof url);
+    int rc = http_get(url, buf, cap, &r, 0);
+    if (rc < 0) kprintf("get: %s\n", r.error);
+    else {
+        kprintf("HTTP %d, %lu bytes, %s\n%s\n", r.status, (unsigned long)r.len, r.content_type[0] ? r.content_type : "?", r.url);
+        size_t n = r.len < (size_t)show ? r.len : (size_t)show;
+        console_write(r.body, n);
+        if (n < r.len) kprintf("\n… (%lu more bytes)\n", (unsigned long)(r.len - n));
+        else kprintf("\n");
+    }
+    for (size_t i = 0; i < cap / PAGE_SIZE; i++) pmm_free_page(pg + i * PAGE_SIZE);
+    return rc < 0;
+}
+
+/* files: the in-memory filesystem (saved to disk on an installed system) */
+static char cwd[VFS_PATH] = "/home/root";
+
+static void abspath(const char *p, char *out, size_t n)
+{
+    if (p[0] == '/') strlcpy(out, p, n);
+    else if (!strcmp(p, "~")) strlcpy(out, "/home/root", n);
+    else if (p[0] == '~' && p[1] == '/') ksnprintf(out, n, "/home/root/%s", p + 2);
+    else ksnprintf(out, n, "%s/%s", cwd, p);
+}
+
+static int cmd_ls(int argc, char **argv)
+{
+    char dir[VFS_PATH];
+    abspath(argc > 1 ? argv[1] : ".", dir, sizeof dir);
+    size_t dl = strlen(dir);
+    if (dl > 2 && !strcmp(dir + dl - 2, "/.")) dir[dl -= 2] = 0;
+    int shown = 0;
+    char last[VFS_PATH] = "";
+    for (int i = 0; i < vfs_count(); i++) {
+        const char *p = vfs_path(i);
+        if (!strcmp(p, dir)) { kprintf("%8lu  %s\n", (unsigned long)vfs_size(i), p); return 0; }
+        if (strncmp(p, dir, dl) || (dl > 1 && p[dl] != '/')) continue;
+        const char *rest = p + (dl > 1 ? dl + 1 : 1);
+        const char *slash = strchr(rest, '/');
+        if (slash) {                                         /* a subdirectory: show once */
+            char sub[VFS_PATH]; size_t sl = (size_t)(slash - rest);
+            memcpy(sub, rest, sl); sub[sl] = 0;
+            if (!strcmp(sub, last)) continue;
+            strlcpy(last, sub, sizeof last);
+            c_rgb(auxo_c1()); kprintf("%8s  %s/\n", "dir", sub); c_reset();
+        } else kprintf("%8lu  %s\n", (unsigned long)vfs_size(i), rest);
+        shown++;
+    }
+    if (!shown) kprintf("(empty)\n");
+    return 0;
+}
+
+static int cmd_cat(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: cat FILE\n"); return 1; }
+    char p[VFS_PATH]; const char *d; size_t n;
+    abspath(argv[1], p, sizeof p);
+    if (vfs_read(p, &d, &n) < 0) { kprintf("cat: %s: no such file\n", argv[1]); return 1; }
+    console_write(d, n);
+    if (n && d[n - 1] != '\n') kprintf("\n");
+    return 0;
+}
+
+static int cmd_rm(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: rm FILE\n"); return 1; }
+    char p[VFS_PATH];
+    abspath(argv[1], p, sizeof p);
+    if (vfs_remove(p) < 0) { kprintf("rm: %s: no such file\n", argv[1]); return 1; }
+    return 0;
+}
+
+static int cmd_cp(int argc, char **argv)
+{
+    if (argc < 3) { kprintf("usage: cp FROM TO\n"); return 1; }
+    char a[VFS_PATH], b[VFS_PATH]; const char *d; size_t n;
+    abspath(argv[1], a, sizeof a); abspath(argv[2], b, sizeof b);
+    if (vfs_read(a, &d, &n) < 0) { kprintf("cp: %s: no such file\n", argv[1]); return 1; }
+    return vfs_write(b, d, n) < 0;
+}
+
+static int cmd_mv(int argc, char **argv)
+{
+    if (cmd_cp(argc, argv)) return 1;
+    char a[VFS_PATH]; abspath(argv[1], a, sizeof a);
+    vfs_remove(a);
+    return 0;
+}
+
+static int cmd_touch(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: touch FILE\n"); return 1; }
+    char p[VFS_PATH]; abspath(argv[1], p, sizeof p);
+    if (!vfs_exists(p)) vfs_write(p, "", 0);
+    return 0;
+}
+
+static int cmd_pwd(int argc, char **argv) { (void)argc; (void)argv; kprintf("%s\n", cwd); return 0; }
+static int cmd_cd(int argc, char **argv)
+{
+    char p[VFS_PATH];
+    abspath(argc > 1 ? argv[1] : "~", p, sizeof p);
+    size_t l = strlen(p);
+    while (l > 1 && p[l - 1] == '/') p[--l] = 0;
+    strlcpy(cwd, p, sizeof cwd);
+    return 0;
+}
+
+static int cmd_aether(int argc, char **argv)
+{
+    if (!chrono_running()) { kprintf("aether: needs the Chrono desktop (it's a graphical editor)\n"); return 1; }
+    if (argc < 2) { chrono_request_open(APP_AETHER); return 0; }
+    char p[VFS_PATH]; abspath(argv[1], p, sizeof p);
+    chrono_request_edit(p);
+    return 0;
+}
+
+static int cmd_browse(int argc, char **argv)
+{
+    if (!chrono_running()) { kprintf("browse: needs the Chrono desktop; try get URL\n"); return 1; }
+    chrono_request_url(argc > 1 ? argv[1] : "about:home");
+    return 0;
+}
+
+/* chrono: the desktop, from the shell. Only posts requests; the Chrono thread does the drawing. */
+static int cmd_chrono(int argc, char **argv)
+{
+    static const char *const apps[APP_COUNT] = { "terminal", "settings", "about", "browser", "aether", "installer" };
+    const char *sub = argc > 1 ? argv[1] : "status";
+    if (!strcmp(sub, "themes")) {
+        for (int i = 0; chrono_theme_id(i); i++) {
+            int on = chrono_running() && i == chrono_current_theme();
+            if (on) c_rgb(auxo_c1());
+            kprintf("%s %-18s %-22s %s\n", on ? "●" : " ", chrono_theme_id(i), chrono_theme_name(i),
+                    chrono_theme_retro(i) ? "retro" : "modern");
+            if (on) c_reset();
+        }
+        return 0;
+    }
+    if (!strcmp(sub, "help") || !strcmp(sub, "--help")) {
+        kprintf("usage: chrono [status]           desktop and theme\n"
+                "       chrono themes             list the Chrono themes\n"
+                "       chrono theme NAME         switch theme\n"
+                "       chrono open APP           terminal, settings, about, browser, aether, installer\n");
+        return 0;
+    }
+    if (!chrono_running()) {
+        kprintf("chrono: the desktop isn't running (text mode). Boot the \"AuxoBSD\" GRUB entry for Chrono.\n");
+        return !strcmp(sub, "status") ? 0 : 1;
+    }
+    if (!strcmp(sub, "status")) {
+        kprintf("Chrono desktop on %dx%d, theme %s (%s)\n", fb_width(), fb_height(),
+                chrono_theme_name(chrono_current_theme()), chrono_theme_id(chrono_current_theme()));
+        return 0;
+    }
+    if (!strcmp(sub, "theme") && argc > 2) {
+        int i = chrono_theme_find(argv[2]);
+        if (i < 0) { kprintf("chrono: no theme '%s' (see chrono themes)\n", argv[2]); return 1; }
+        chrono_request_theme(i);
+        kprintf("theme → %s\n", chrono_theme_name(i));
+        return 0;
+    }
+    if (!strcmp(sub, "open") && argc > 2) {
+        for (int a = 0; a < APP_COUNT; a++)
+            if (!strcmp(argv[2], apps[a])) { chrono_request_open(a); return 0; }
+        kprintf("chrono: no app '%s' (terminal, settings, about, browser, aether, installer)\n", argv[2]);
+        return 1;
+    }
+    kprintf("chrono: try chrono help\n");
+    return 1;
+}
+
 static int cmd_reboot(int argc, char **argv) { (void)argc; (void)argv; kprintf("rebooting...\n"); machine_reboot(); }
 static int cmd_poweroff(int argc, char **argv) { (void)argc; (void)argv; kprintf("powering off...\n"); machine_poweroff(); }
 
@@ -216,6 +458,21 @@ static const struct cmd cmds[] = {
     { "uptime",      cmd_uptime,      "time since boot" },
     { "free",        cmd_free,        "physical memory and kernel heap" },
     { "ps",          cmd_ps,          "kernel threads" },
+    { "ls",          cmd_ls,          "list files" },
+    { "cat",         cmd_cat,         "print a file" },
+    { "cp",          cmd_cp,          "copy a file" },
+    { "mv",          cmd_mv,          "move / rename a file" },
+    { "rm",          cmd_rm,          "delete a file" },
+    { "touch",       cmd_touch,       "create an empty file" },
+    { "cd",          cmd_cd,          "change directory" },
+    { "pwd",         cmd_pwd,         "current directory" },
+    { "aether",      cmd_aether,      "open a file in Aether, the code editor" },
+    { "browse",      cmd_browse,      "open a page in the Browser" },
+    { "lspci",       cmd_lspci,       "PCI devices and their drivers" },
+    { "ifconfig",    cmd_ifconfig,    "network card, address, gateway, DNS" },
+    { "ping",        cmd_ping,        "ICMP echo: ping HOST [-c N]" },
+    { "get",         cmd_get,         "fetch a web page: get URL (http or https)" },
+    { "chrono",      cmd_chrono,      "the Chrono desktop: themes, theme NAME, open APP" },
     { "demo",        cmd_demo,        "run the scheduler / syscall demo threads" },
     { "cmdline",     cmd_cmdline,     "the kernel command line from the boot loader" },
     { "history",     cmd_history,     "recent commands" },

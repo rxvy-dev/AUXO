@@ -1,0 +1,60 @@
+# Chrono theme — warm chunky bevels in palette colours, like 90s Unix workstations.
+[theme]
+name = Motif
+era = retro
+description = Warm, chunky bevelled frames in palette colours, like 90s Unix workstations.
+
+[colors]
+bg = #ae9e8c
+fg = #000000
+accent = #b24d7a
+accent_fg = #ffffff
+selection = #4f7fa0
+window_bg = #c4b8a8
+window_fg = #000000
+title_active = #b24d7a
+title_active2 = #b24d7a
+title_active_fg = #ffffff
+title_inactive = #8a7d70
+title_inactive2 = #8a7d70
+title_inactive_fg = #e8e0d6
+border_active = #b24d7a
+border_inactive = #8a7d70
+bevel_light = #e0a8c0
+bevel_dark = #6e2e4a
+bevel_shadow = #3a1626
+button_bg = #b24d7a
+button_fg = #ffffff
+close_bg = #b24d7a
+panel_bg = #ae9e8c
+panel_fg = #000000
+panel_border = #ece4da
+
+[decor]
+style = motif
+title_height = 22
+border_width = 6
+corner_radius = 0
+title_center = true
+title_bold = true
+buttons = menu:minimize,maximize
+button_shape = bevel
+button_size = 16
+shadow = false
+
+[fonts]
+ui = Nimbus Sans, DejaVu Sans 9
+title = Nimbus Sans, DejaVu Sans Bold 9
+mono = DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 44
+style = bevel
+launcher_label = Apps
+dock = false
+
+[desktop]
+wallpaper = pattern:weave
+color1 = #4f7fa0
+color2 = #446f8e

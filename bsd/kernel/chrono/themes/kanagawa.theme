@@ -1,0 +1,65 @@
+# Chrono theme — Ink and indigo from the great wave: muted blues, wave foam and a warm sakura accent.
+[theme]
+name = Kanagawa
+era = modern
+description = Ink and indigo from the great wave: muted blues, wave foam and a warm sakura accent.
+variant = dark
+
+[colors]
+bg = #1f1f28
+fg = #dcd7ba
+accent = #7e9cd8
+accent_fg = #1f1f28
+selection = #7e9cd855
+window_bg = #1f1f28
+window_fg = #dcd7ba
+title_active = #2a2a37
+title_active2 = #2a2a37
+title_active_fg = #dcd7ba
+title_inactive = #1f1f28
+title_inactive2 = #1f1f28
+title_inactive_fg = #727169
+border_active = #7e9cd8
+border_inactive = #2a2a37
+button_bg = #363646
+button_fg = #dcd7ba
+close_bg = #e46876
+panel_bg = #16161dee
+panel_fg = #dcd7ba
+panel_border = #7e9cd844
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 10
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 40
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:waves
+color1 = #16161d
+color2 = #2d4f67
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

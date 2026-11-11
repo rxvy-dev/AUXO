@@ -1,0 +1,65 @@
+# Chrono theme — Hot pink, lime and orange on warm charcoal — loud and proud.
+[theme]
+name = Monokai
+era = modern
+description = Hot pink, lime and orange on warm charcoal — loud and proud.
+variant = dark
+
+[colors]
+bg = #272822
+fg = #f8f8f2
+accent = #f92672
+accent_fg = #ffffff
+selection = #f9267255
+window_bg = #272822
+window_fg = #f8f8f2
+title_active = #1e1f1c
+title_active2 = #1e1f1c
+title_active_fg = #f8f8f2
+title_inactive = #272822
+title_inactive2 = #272822
+title_inactive_fg = #75715e
+border_active = #f92672
+border_inactive = #3e3d32
+button_bg = #3e3d32
+button_fg = #f8f8f2
+close_bg = #f92672
+panel_bg = #1e1f1cee
+panel_fg = #f8f8f2
+panel_border = #a6e22e55
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 6
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = JetBrains Mono, DejaVu Sans Mono 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 36
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:circuit
+color1 = #1e1f1c
+color2 = #3e3d32
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

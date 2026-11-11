@@ -1,0 +1,62 @@
+# Chrono theme — glossy blue rounded title bars over green hills (early-2000s look).
+[theme]
+name = Meadow
+era = retro
+description = Glossy blue rounded title bars over sunny green hills.
+
+[colors]
+bg = #ece9d8
+fg = #000000
+accent = #3a8a2c
+accent_fg = #ffffff
+selection = #316ac5
+window_bg = #ffffff
+window_fg = #000000
+title_active = #0a5fe8
+title_active2 = #0054e3
+title_active_fg = #ffffff
+title_inactive = #6584d4
+title_inactive2 = #6c8fdc
+title_inactive_fg = #ffffff
+border_active = #0831d9
+border_inactive = #7a9ae6
+bevel_light = #ffffff
+bevel_dark = #aca899
+bevel_shadow = #716f64
+button_bg = #2763e6
+button_fg = #ffffff
+close_bg = #e2552c
+panel_bg = #245edb
+panel_fg = #ffffff
+panel_border = #3c81f3
+
+[decor]
+style = meadow
+title_height = 28
+border_width = 3
+corner_radius = 8
+title_center = false
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = roundrect
+button_size = 21
+shadow = true
+shadow_size = 8
+shadow_alpha = 0.3
+
+[fonts]
+ui = Tahoma, Noto Sans, DejaVu Sans 9
+title = Trebuchet MS, Noto Sans, DejaVu Sans Bold 10
+mono = DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 32
+style = gloss
+launcher_label = start
+dock = false
+
+[desktop]
+wallpaper = pattern:hills
+color1 = #3d7bd9
+color2 = #4d9a2a

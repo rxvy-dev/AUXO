@@ -1,0 +1,65 @@
+# Chrono theme — The famous dark theme, purple and pink after midnight.
+[theme]
+name = Dracula
+era = modern
+description = The famous dark theme, purple and pink after midnight.
+variant = dark
+
+[colors]
+bg = #282a36
+fg = #f8f8f2
+accent = #bd93f9
+accent_fg = #282a36
+selection = #bd93f955
+window_bg = #282a36
+window_fg = #f8f8f2
+title_active = #44475a
+title_active2 = #44475a
+title_active_fg = #f8f8f2
+title_inactive = #343746
+title_inactive2 = #343746
+title_inactive_fg = #9ea8c7
+border_active = #bd93f9
+border_inactive = #343746
+button_bg = #44475a
+button_fg = #f8f8f2
+close_bg = #ff5555
+panel_bg = #21222cee
+panel_fg = #f8f8f2
+panel_border = #bd93f944
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 8
+title_center = true
+buttons = menu:minimize,maximize,close
+button_shape = roundrect
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 34
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:blobs
+color1 = #21222c
+color2 = #6272a4
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

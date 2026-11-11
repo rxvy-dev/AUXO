@@ -1,0 +1,65 @@
+# Chrono theme — Cherry-blossom pink and paper white for spring.
+[theme]
+name = Sakura
+era = modern
+description = Cherry-blossom pink and paper white for spring.
+variant = light
+
+[colors]
+bg = #fff5f7
+fg = #4a3b40
+accent = #e2537a
+accent_fg = #ffffff
+selection = #e2537a55
+window_bg = #fffafb
+window_fg = #4a3b40
+title_active = #ffe4ea
+title_active2 = #ffe4ea
+title_active_fg = #4a3b40
+title_inactive = #fff5f7
+title_inactive2 = #fff5f7
+title_inactive_fg = #8a7178
+border_active = #e2537a
+border_inactive = #f3d2da
+button_bg = #ffd6df
+button_fg = #4a3b40
+close_bg = #e2537a
+panel_bg = #fff0f3ee
+panel_fg = #4a3b40
+panel_border = #e2537a44
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 14
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.25
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:blobs
+color1 = #ffe4ea
+color2 = #f7b6c6
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

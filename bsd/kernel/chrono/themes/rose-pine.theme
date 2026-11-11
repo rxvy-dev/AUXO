@@ -1,0 +1,66 @@
+# Chrono theme — All natural pine, faux fur and a bit of soho vibes.
+[theme]
+name = Rosé Pine
+era = modern
+description = All natural pine, faux fur and a bit of soho vibes.
+variant = dark
+pair = rose-pine-dawn
+
+[colors]
+bg = #191724
+fg = #e0def4
+accent = #ebbcba
+accent_fg = #191724
+selection = #ebbcba55
+window_bg = #191724
+window_fg = #e0def4
+title_active = #26233a
+title_active2 = #26233a
+title_active_fg = #e0def4
+title_inactive = #1f1d2e
+title_inactive2 = #1f1d2e
+title_inactive_fg = #908caa
+border_active = #ebbcba
+border_inactive = #1f1d2e
+button_bg = #26233a
+button_fg = #e0def4
+close_bg = #eb6f92
+panel_bg = #1f1d2eee
+panel_fg = #e0def4
+panel_border = #ebbcba33
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 14
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.5
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = true
+
+[desktop]
+wallpaper = pattern:rings
+color1 = #191724
+color2 = #403d52
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

@@ -26,7 +26,11 @@ static uint32_t pal[16] = {
     0xffffff,
 };
 
-static volatile uint16_t *const vga = (volatile uint16_t *)0xB8000;
+/* The text grid: VGA text memory at boot, or a RAM grid the Chrono Terminal window draws
+ * (console_attach_grid). Cells use the VGA layout: low byte CP437 glyph, high byte colours. */
+static volatile uint16_t *vga = (volatile uint16_t *)0xB8000;
+static int grid_w = VGA_W, grid_h = VGA_H, textmode = 1;
+static volatile uint32_t grid_gen;          /* bumped on every change, so the GUI knows to redraw */
 static int cx, cy;
 static uint8_t fg = C_FG;
 static int serial_color = 1;
@@ -103,6 +107,7 @@ void console_set_accent(uint32_t c1, uint32_t c2)
 {
     for (int i = 0; i <= C_ACC5 - C_ACC0; i++) pal[C_ACC0 + i] = lerp(c1, c2, i, C_ACC5 - C_ACC0);
     vga_load_palette();
+    grid_gen++;                                   /* Chrono redraws the Terminal and its accents */
 }
 
 static uint8_t nearest(uint32_t rgb)
@@ -136,14 +141,16 @@ static inline uint16_t cell(uint8_t ch) { return (uint16_t)((C_BG << 12) | (fg <
 
 static void vga_cursor(void)
 {
-    uint16_t pos = (uint16_t)(cy * VGA_W + cx);
+    grid_gen++;
+    if (!textmode) return;
+    uint16_t pos = (uint16_t)(cy * grid_w + cx);
     outb(0x3D4, 0x0F); outb(0x3D5, (uint8_t)(pos & 0xFF));
     outb(0x3D4, 0x0E); outb(0x3D5, (uint8_t)(pos >> 8));
 }
 
 static void vga_clear(void)
 {
-    for (int i = 0; i < VGA_W * VGA_H; i++) vga[i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+    for (int i = 0; i < grid_w * grid_h; i++) vga[i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
     cx = cy = 0;
     vga_cursor();
 }
@@ -154,13 +161,13 @@ static void vga_glyph(uint8_t c)
     else if (c == '\r') cx = 0;
     else if (c == '\t') cx = (cx + 8) & ~7;
     else if (c == '\b') { if (cx > 0) cx--; }
-    else { vga[cy * VGA_W + cx] = cell(c); cx++; }
+    else { vga[cy * grid_w + cx] = cell(c); cx++; }
 
-    if (cx >= VGA_W) { cx = 0; cy++; }
-    if (cy >= VGA_H) {
-        for (int i = 0; i < VGA_W * (VGA_H - 1); i++) vga[i] = vga[i + VGA_W];
-        for (int i = 0; i < VGA_W; i++) vga[(VGA_H - 1) * VGA_W + i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
-        cy = VGA_H - 1;
+    if (cx >= grid_w) { cx = 0; cy++; }
+    if (cy >= grid_h) {
+        for (int i = 0; i < grid_w * (grid_h - 1); i++) vga[i] = vga[i + grid_w];
+        for (int i = 0; i < grid_w; i++) vga[(grid_h - 1) * grid_w + i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+        cy = grid_h - 1;
     }
 }
 
@@ -228,7 +235,7 @@ static void vga_putc(char ch)
         if (c == 'm') sgr(par, np);
         else if (c == 'J' && np && par[0] == 2) vga_clear();
         else if (c == 'H') { cx = cy = 0; }
-        else if (c == 'K') { for (int x = cx; x < VGA_W; x++) vga[cy * VGA_W + x] = cell(' '); }
+        else if (c == 'K') { for (int x = cx; x < grid_w; x++) vga[cy * grid_w + x] = cell(' '); }
         return;
     }
     if (c == 0x1b) { state = 1; return; }
@@ -243,6 +250,28 @@ static void vga_putc(char ch)
     if (c == '\b') { vga_glyph('\b'); return; }
     vga_glyph(c);
 }
+
+/* ── the Chrono Terminal's grid ─────────────────────────────────────── */
+void console_attach_grid(uint16_t *cells, int w, int h)
+{
+    /* keep what's on screen: copy the text console's rows into the new grid, bottom-aligned */
+    int used = cx || cy ? cy + 1 : 0;            /* nothing written yet: copy nothing */
+    int rows = used < h ? used : h, from = used - rows;
+    for (int i = 0; i < w * h; i++) cells[i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+    for (int y = 0; y < rows; y++)
+        for (int x = 0; x < w && x < grid_w; x++) cells[y * w + x] = vga[(from + y) * grid_w + x];
+    vga = cells;
+    grid_w = w; grid_h = h; textmode = 0;
+    cy = rows - 1 < 0 ? 0 : rows - 1; cx = 0;
+    grid_gen++;
+}
+
+void console_grid_info(int *w, int *h, int *cur_x, int *cur_y, uint32_t *gen)
+{
+    *w = grid_w; *h = grid_h; *cur_x = cx; *cur_y = cy; *gen = grid_gen;
+}
+
+const uint32_t *console_palette(void) { return pal; }
 
 /* ── public ─────────────────────────────────────────────────────────── */
 void console_init(void) { serial_init(); vga_load_palette(); vga_clear(); }

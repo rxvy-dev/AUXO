@@ -4,7 +4,7 @@ use crate::{ffi, heap, irq, rprintln};
 use core::ptr::addr_of_mut;
 
 pub const MAXPROC: usize = 64;
-pub const KSTACK: usize = 16 * 1024;
+pub const KSTACK: usize = 64 * 1024;   // Chrono's painting is stack-hungry
 const QUANTUM_TICKS: u64 = 10; // 100 ms at 100 Hz
 
 #[derive(Clone, Copy, PartialEq)]

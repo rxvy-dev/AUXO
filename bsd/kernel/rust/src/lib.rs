@@ -80,6 +80,10 @@ pub unsafe extern "C" fn rs_heap_stats(total: *mut usize, used: *mut usize) {
     *used = u;
 }
 
+/// Give the CPU to the next runnable thread (cooperative wait loops).
+#[no_mangle]
+pub unsafe extern "C" fn rs_yield() { proc::yield_cpu() }
+
 /// Called by `thread_trampoline` when a thread's entry function returns.
 #[no_mangle]
 pub unsafe extern "C" fn rs_thread_exit() -> ! { proc::exit_current(0) }

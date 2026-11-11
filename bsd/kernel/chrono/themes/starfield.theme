@@ -1,0 +1,57 @@
+# Chrono theme — deep space with an amber accent.
+[theme]
+name = Starfield
+era = modern
+description = Deep space, quiet stars and an amber accent.
+
+[colors]
+bg = #0a0b10
+fg = #e6e1d6
+accent = #ffb347
+accent_fg = #0a0b10
+selection = #ffb34755
+window_bg = #08090d
+window_fg = #e6e1d6
+title_active = #14151cee
+title_active2 = #14151cee
+title_active_fg = #ffb347
+title_inactive = #0f1015ee
+title_inactive2 = #0f1015ee
+title_inactive_fg = #7a7668
+border_active = #ffb34766
+border_inactive = #2a2b33
+button_bg = #24252e
+button_fg = #e6e1d6
+close_bg = #ff5c57
+panel_bg = #0a0b10d8
+panel_fg = #e6e1d6
+panel_border = #ffb34733
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 10
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 24
+shadow_alpha = 0.6
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:stars
+color1 = #05060a
+color2 = #141a2e

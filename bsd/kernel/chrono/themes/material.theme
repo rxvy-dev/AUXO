@@ -1,0 +1,65 @@
+# Chrono theme — Big friendly shapes; the accent colour comes from the wallpaper.
+[theme]
+name = Material You
+era = modern
+description = Big friendly shapes; the accent colour comes from the wallpaper.
+variant = dark
+
+[colors]
+bg = #1c1b1f
+fg = #e6e1e5
+accent = wallpaper
+accent_fg = #1c1b1f
+selection = wallpaper55
+window_bg = #1c1b1f
+window_fg = #e6e1e5
+title_active = #2b2930
+title_active2 = #2b2930
+title_active_fg = #e6e1e5
+title_inactive = #232127
+title_inactive2 = #232127
+title_inactive_fg = #938f99
+border_active = #2b2930
+border_inactive = #232127
+button_bg = #2b2930
+button_fg = #e6e1e5
+close_bg = #f2b8b5
+panel_bg = #1c1b1fee
+panel_fg = #e6e1e5
+panel_border = #ffffff12
+
+[decor]
+style = flat
+title_height = 36
+border_width = 0
+corner_radius = 18
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.4
+
+[fonts]
+ui = Roboto, Inter, Noto Sans, DejaVu Sans 10
+title = Roboto, Inter, Noto Sans, DejaVu Sans Bold 10
+mono = Roboto Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 48
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:material
+color1 = #1c1b1f
+color2 = #5b4b8a
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

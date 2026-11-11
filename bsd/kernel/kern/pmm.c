@@ -58,31 +58,49 @@ void pmm_init(uint32_t mbi_addr)
     range_used((uint64_t)(uintptr_t)__kernel_start,
                (uint64_t)(uintptr_t)(__kernel_end - __kernel_start));
     range_used(mbi_addr, total);                                /* boot info */
+    for (const uint8_t *p = mbi + 8; p < mbi + total; ) {        /* modules (the install image) */
+        const struct mb2_tag *t = (const struct mb2_tag *)p;
+        if (t->type == 0) break;
+        if (t->type == 3) {
+            uint32_t start = *(const uint32_t *)(p + 8), end = *(const uint32_t *)(p + 12);
+            range_used(start, end - start);
+        }
+        p += ALIGN_UP(t->size, 8);
+    }
 }
+
+/* threads allocate too: keep the bitmap consistent with interrupts off */
+static uint64_t irq_off(void) { uint64_t f; __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory"); return f; }
+static void irq_restore(uint64_t f) { if (f & 0x200) __asm__ volatile("sti" ::: "memory"); }
 
 uint64_t pmm_alloc_page(void)
 {
+    uint64_t fl = irq_off();
     for (size_t n = 0; n < MAX_FRAMES; n++) {
         size_t f = (hint + n) % MAX_FRAMES;
-        if (!is_used(f)) { set_used(f); hint = f + 1; return (uint64_t)f * PAGE_SIZE; }
+        if (!is_used(f)) { set_used(f); hint = f + 1; irq_restore(fl); return (uint64_t)f * PAGE_SIZE; }
     }
+    irq_restore(fl);
     return 0;
 }
 
 uint64_t pmm_alloc_contig(size_t pages)
 {
     size_t run = 0;
+    uint64_t fl = irq_off();
     for (size_t f = 256; f < MAX_FRAMES; f++) {
         run = is_used(f) ? 0 : run + 1;
         if (run == pages) {
             size_t start = f + 1 - pages;
             for (size_t i = 0; i < pages; i++) set_used(start + i);
+            irq_restore(fl);
             return (uint64_t)start * PAGE_SIZE;
         }
     }
+    irq_restore(fl);
     return 0;
 }
 
-void   pmm_free_page(uint64_t a) { set_free(a / PAGE_SIZE); }
+void   pmm_free_page(uint64_t a) { uint64_t fl = irq_off(); set_free(a / PAGE_SIZE); irq_restore(fl); }
 size_t pmm_free_pages(void)  { return free_count; }
 size_t pmm_total_pages(void) { return total_count; }

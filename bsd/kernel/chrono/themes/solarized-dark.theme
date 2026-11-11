@@ -1,0 +1,66 @@
+# Chrono theme — Ethan Schoonover's precise, low-contrast palette, dark.
+[theme]
+name = Solarized Dark
+era = modern
+description = Ethan Schoonover's precise, low-contrast palette, dark.
+variant = dark
+pair = solarized-light
+
+[colors]
+bg = #002b36
+fg = #93a1a1
+accent = #268bd2
+accent_fg = #fdf6e3
+selection = #268bd255
+window_bg = #002b36
+window_fg = #93a1a1
+title_active = #073642
+title_active2 = #073642
+title_active_fg = #93a1a1
+title_inactive = #03303b
+title_inactive2 = #03303b
+title_inactive_fg = #7d9198
+border_active = #268bd2
+border_inactive = #03303b
+button_bg = #073642
+button_fg = #93a1a1
+close_bg = #dc322f
+panel_bg = #002b36ee
+panel_fg = #93a1a1
+panel_border = #586e7555
+
+[decor]
+style = flat
+title_height = 30
+border_width = 1
+corner_radius = 6
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 36
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:dunes
+color1 = #002b36
+color2 = #073642
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

@@ -37,6 +37,7 @@ size_t strlen(const char *s);
 int    strcmp(const char *a, const char *b);
 int    strncmp(const char *a, const char *b, size_t n);
 char  *strchr(const char *s, int c);
+char  *strrchr(const char *s, int c);
 size_t strlcpy(char *d, const char *s, size_t n);
 int    katoi(const char *s);
 
@@ -49,6 +50,12 @@ size_t   pmm_free_pages(void);
 size_t   pmm_total_pages(void);
 
 /* bootinfo.c: what the Multiboot2 loader told us */
+struct fbinfo {
+    uint64_t addr;
+    uint32_t pitch, width, height;
+    uint8_t  bpp, type, rpos, rsize, gpos, gsize, bpos, bsize;
+};
+const struct fbinfo *boot_framebuffer(void);     /* NULL in text mode */
 void        bootinfo_init(uint32_t mbi_addr);
 const char *boot_cmdline(void);       /* "" when none */
 const char *boot_loader(void);        /* e.g. "GRUB 2.12", "" when unknown */
@@ -59,6 +66,44 @@ int  input_getc(void);                /* blocks (hlt) until a byte arrives */
 int  input_poll(void);                /* -1 when nothing is queued */
 void input_serial_irq(void);
 void input_kbd_irq(void);
+
+/* fb.c: the linear framebuffer (graphics mode) */
+int  fb_init(void);                               /* 1 if a usable 24/32-bit RGB framebuffer is there */
+int  fb_width(void);
+int  fb_height(void);
+void fb_present(const uint32_t *src, int stride, int x, int y, int w, int h);   /* XRGB → screen */
+
+/* mouse.c: PS/2 mouse on IRQ12 (IntelliMouse wheel when available) */
+struct mouse_event { int dx, dy, wheel, buttons; };
+int  mouse_init(void);                            /* 0 if there's no PS/2 mouse */
+int  mouse_poll(struct mouse_event *ev);          /* 1 when an event was taken */
+void mouse_irq(void);
+void mouse_byte(uint8_t b);
+
+/* rtc.c: the CMOS real-time clock */
+struct rtc_time { int year, month, day, hour, minute, second; };
+void rtc_read(struct rtc_time *t);
+
+/* console.c: the grid the Chrono Terminal window draws */
+void console_attach_grid(uint16_t *cells, int w, int h);
+void console_grid_info(int *w, int *h, int *cur_x, int *cur_y, uint32_t *gen);
+const uint32_t *console_palette(void);
+void input_push(uint8_t c);                       /* feed the shell, as if typed */
+void input_set_gui(int on);                       /* keyboard goes to the desktop instead of the shell */
+int  input_gui_key(void);                         /* -1 when none; KEY_* or a byte */
+#define KEY_SUPER 0x81
+#define KEY_UP    0x82                            /* the desktop gets these instead of VT100 escapes */
+#define KEY_DOWN  0x83
+#define KEY_LEFT  0x84
+#define KEY_RIGHT 0x85
+#define KEY_HOME  0x86
+#define KEY_END   0x87
+#define KEY_DEL   0x88
+#define KEY_PGUP  0x89
+#define KEY_PGDN  0x8A
+#define KEY_SHIFT_TAB 0x8B
+int  input_shift(void);                           /* shift held (for selections) */
+int  input_ctrl(void);
 
 /* power.c */
 void machine_reboot(void) __attribute__((noreturn));

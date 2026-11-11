@@ -1,0 +1,59 @@
+# Chrono theme — the default: calm dark flat design.
+[theme]
+name = Midnight
+era = modern
+variant = dark
+pair = daylight
+description = The default: a calm dark desktop with rounded windows and a floating panel.
+
+[colors]
+bg = #1e2128
+fg = #e6e8ee
+accent = #4a8ef5
+accent_fg = #ffffff
+selection = #5b9cff55
+window_bg = #191b21
+window_fg = #e6e8ee
+title_active = #262a33
+title_active2 = #262a33
+title_active_fg = #e6e8ee
+title_inactive = #1f2229
+title_inactive2 = #1f2229
+title_inactive_fg = #7d8391
+border_active = #3a3f4b
+border_inactive = #2a2e36
+button_bg = #353a45
+button_fg = #c9cdd6
+close_bg = #e5484d
+panel_bg = #16181ee0
+panel_fg = #e6e8ee
+panel_border = #ffffff14
+
+[decor]
+style = flat
+title_height = 34
+border_width = 1
+corner_radius = 12
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 16
+shadow = true
+shadow_size = 26
+shadow_alpha = 0.5
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 44
+style = floating
+dock = false
+
+[desktop]
+wallpaper = gradient
+color1 = #11141b
+color2 = #2a3552

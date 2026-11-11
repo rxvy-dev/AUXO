@@ -83,3 +83,12 @@ int katoi(const char *s)
     while (*s >= '0' && *s <= '9') v = v * 10 + (*s++ - '0');
     return neg ? -v : v;
 }
+
+char *strrchr(const char *s, int c)
+{
+    const char *last = 0;
+    for (;; s++) {
+        if (*s == (char)c) last = s;
+        if (!*s) return (char *)last;
+    }
+}

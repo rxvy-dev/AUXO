@@ -1,0 +1,55 @@
+# Chrono theme — black and white, nothing else.
+[theme]
+name = Mono
+era = modern
+description = Black, white and nothing else. Sharp corners, no shadows.
+
+[colors]
+bg = #ffffff
+fg = #000000
+accent = #000000
+accent_fg = #ffffff
+selection = #00000033
+window_bg = #ffffff
+window_fg = #000000
+title_active = #000000
+title_active2 = #000000
+title_active_fg = #ffffff
+title_inactive = #ffffff
+title_inactive2 = #ffffff
+title_inactive_fg = #000000
+border_active = #000000
+border_inactive = #000000
+button_bg = #000000
+button_fg = #ffffff
+close_bg = #000000
+panel_bg = #ffffff
+panel_fg = #000000
+panel_border = #000000
+
+[decor]
+style = flat
+title_height = 28
+border_width = 2
+corner_radius = 0
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = flat
+button_size = 14
+shadow = false
+
+[fonts]
+ui = JetBrains Mono, DejaVu Sans Mono 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 30
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:checker
+color1 = #ffffff
+color2 = #f0f0f0

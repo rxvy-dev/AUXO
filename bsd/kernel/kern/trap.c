@@ -6,6 +6,12 @@
 static volatile uint64_t ticks;
 uint64_t kernel_ticks(void) { return ticks; }
 
+void kdelay_ms(uint32_t ms)
+{
+    uint64_t until = ticks + (ms + 1000 / AUXO_HZ - 1) / (1000 / AUXO_HZ) + 1;
+    while (ticks < until) __asm__ volatile("sti; hlt");
+}
+
 static const char *const exc_name[32] = {
     "Divide Error", "Debug", "NMI", "Breakpoint", "Overflow", "Bound Range",
     "Invalid Opcode", "Device N/A", "Double Fault", "Coproc Overrun", "Invalid TSS",
@@ -35,6 +41,7 @@ void trap_dispatch(struct trapframe *tf)
         int irq = (int)tf->vector - 32;
         if (irq == 1) input_kbd_irq();          /* read the device before EOI so it can raise again */
         else if (irq == 4) input_serial_irq();
+        else if (irq == 12) mouse_irq();
         pic_eoi(irq);                 /* EOI first: the scheduler may not return here */
         if (irq == 0) { ticks++; rs_tick(); }
     } else if (tf->vector == 0x80) {

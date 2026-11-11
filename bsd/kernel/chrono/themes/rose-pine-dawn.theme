@@ -1,0 +1,66 @@
+# Chrono theme — Rosé Pine's soft morning variant.
+[theme]
+name = Rosé Pine Dawn
+era = modern
+description = Rosé Pine's soft morning variant.
+variant = light
+pair = rose-pine
+
+[colors]
+bg = #faf4ed
+fg = #575279
+accent = #d7827e
+accent_fg = #26233a
+selection = #d7827e55
+window_bg = #faf4ed
+window_fg = #575279
+title_active = #f2e9e1
+title_active2 = #f2e9e1
+title_active_fg = #575279
+title_inactive = #fffaf3
+title_inactive2 = #fffaf3
+title_inactive_fg = #797593
+border_active = #d7827e
+border_inactive = #fffaf3
+button_bg = #f2e9e1
+button_fg = #575279
+close_bg = #b4637a
+panel_bg = #fffaf3ee
+panel_fg = #575279
+panel_border = #d7827e44
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 14
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.22
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = true
+
+[desktop]
+wallpaper = pattern:rings
+color1 = #faf4ed
+color2 = #dfdad9
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

@@ -1,0 +1,66 @@
+# Chrono theme — Catppuccin-style pastels on a soft light base.
+[theme]
+name = Latte
+era = modern
+description = Catppuccin-style pastels on a soft light base.
+variant = light
+pair = mocha
+
+[colors]
+bg = #eff1f5
+fg = #4c4f69
+accent = #8839ef
+accent_fg = #ffffff
+selection = #8839ef55
+window_bg = #eff1f5
+window_fg = #4c4f69
+title_active = #e6e9ef
+title_active2 = #e6e9ef
+title_active_fg = #4c4f69
+title_inactive = #dce0e8
+title_inactive2 = #dce0e8
+title_inactive_fg = #6c6f85
+border_active = #8839ef
+border_inactive = #dce0e8
+button_bg = #e6e9ef
+button_fg = #4c4f69
+close_bg = #d20f39
+panel_bg = #eff1f5e8
+panel_fg = #4c4f69
+panel_border = #8839ef33
+
+[decor]
+style = flat
+title_height = 32
+border_width = 2
+corner_radius = 12
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.25
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = true
+
+[desktop]
+wallpaper = pattern:blobs
+color1 = #eff1f5
+color2 = #cba6f7
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

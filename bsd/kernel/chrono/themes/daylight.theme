@@ -1,0 +1,61 @@
+# Chrono theme — clean light flat design.
+[theme]
+name = Daylight
+era = modern
+variant = light
+pair = midnight
+description = Clean, bright and flat, with soft shadows and a floating panel.
+
+[colors]
+bg = #f6f7f9
+fg = #1d2026
+accent = #3b82f6
+accent_fg = #ffffff
+selection = #3b82f640
+window_bg = #ffffff
+window_fg = #1d2026
+title_active = #f6f7f9
+title_active2 = #f6f7f9
+title_active_fg = #1d2026
+title_inactive = #fbfbfc
+title_inactive2 = #fbfbfc
+title_inactive_fg = #747a85
+border_active = #d4d7dd
+border_inactive = #e3e5e9
+button_bg = #e4e6ea
+button_fg = #4a4f59
+close_bg = #ef4444
+panel_bg = #ffffffd9
+panel_fg = #1d2026
+panel_border = #00000014
+
+[decor]
+style = flat
+title_height = 34
+border_width = 1
+corner_radius = 12
+title_center = true
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 16
+shadow = true
+shadow_size = 26
+shadow_alpha = 0.22
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 44
+style = floating
+launcher_label =
+dock = false
+
+[desktop]
+wallpaper = gradient
+color1 = #c9d8f0
+color2 = #f3e2ea

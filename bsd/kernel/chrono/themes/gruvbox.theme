@@ -1,0 +1,57 @@
+# Chrono theme — retro groove: warm earthy dark.
+[theme]
+name = Gruvbox
+era = modern
+description = Warm, earthy and easy on the eyes.
+
+[colors]
+bg = #282828
+fg = #ebdbb2
+accent = #fe8019
+accent_fg = #282828
+selection = #fe801955
+window_bg = #282828
+window_fg = #ebdbb2
+title_active = #3c3836
+title_active2 = #3c3836
+title_active_fg = #ebdbb2
+title_inactive = #32302f
+title_inactive2 = #32302f
+title_inactive_fg = #928374
+border_active = #fe8019
+border_inactive = #504945
+button_bg = #504945
+button_fg = #ebdbb2
+close_bg = #fb4934
+panel_bg = #1d2021f0
+panel_fg = #ebdbb2
+panel_border = #504945
+
+[decor]
+style = flat
+title_height = 30
+border_width = 2
+corner_radius = 4
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = flat
+button_size = 14
+shadow = true
+shadow_size = 16
+shadow_alpha = 0.5
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = JetBrains Mono, DejaVu Sans Mono Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 32
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:dots
+color1 = #282828
+color2 = #3c3836

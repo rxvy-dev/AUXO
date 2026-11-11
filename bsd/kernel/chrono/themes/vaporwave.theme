@@ -1,0 +1,65 @@
+# Chrono theme — Pastel pink, cyan and a sunset gradient, straight from 1998's dreams.
+[theme]
+name = Vaporwave
+era = modern
+description = Pastel pink, cyan and a sunset gradient, straight from 1998's dreams.
+variant = dark
+
+[colors]
+bg = #2b1745
+fg = #fbe7ff
+accent = #ff71ce
+accent_fg = #2b1745
+selection = #ff71ce55
+window_bg = #2b1745
+window_fg = #fbe7ff
+title_active = #ff71ce
+title_active2 = #01cdfe
+title_active_fg = #2b1745
+title_inactive = #3a2160
+title_inactive2 = #3a2160
+title_inactive_fg = #b39ddb
+border_active = #ff71ce
+border_inactive = #4a2c75
+button_bg = #4a2c75
+button_fg = #fbe7ff
+close_bg = #ff71ce
+panel_bg = #1d0f33ee
+panel_fg = #fbe7ff
+panel_border = #01cdfe88
+
+[decor]
+style = flat
+title_height = 28
+border_width = 2
+corner_radius = 0
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = bevel
+button_size = 14
+shadow = true
+shadow_size = 18
+shadow_alpha = 0.5
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 36
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:grid
+color1 = #1d0f33
+color2 = #ff71ce
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

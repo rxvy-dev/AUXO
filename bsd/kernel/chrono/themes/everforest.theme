@@ -1,0 +1,65 @@
+# Chrono theme — Comfortable greens and earthy tones, easy on the eyes.
+[theme]
+name = Everforest
+era = modern
+description = Comfortable greens and earthy tones, easy on the eyes.
+variant = dark
+
+[colors]
+bg = #2d353b
+fg = #d3c6aa
+accent = #a7c080
+accent_fg = #2d353b
+selection = #a7c08055
+window_bg = #2d353b
+window_fg = #d3c6aa
+title_active = #343f44
+title_active2 = #343f44
+title_active_fg = #d3c6aa
+title_inactive = #2e383c
+title_inactive2 = #2e383c
+title_inactive_fg = #859289
+border_active = #a7c080
+border_inactive = #2e383c
+button_bg = #343f44
+button_fg = #d3c6aa
+close_bg = #e67e80
+panel_bg = #272e33ee
+panel_fg = #d3c6aa
+panel_border = #a7c08033
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 10
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 40
+style = floating
+dock = false
+
+[desktop]
+wallpaper = pattern:topo
+color1 = #232a2e
+color2 = #475258
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

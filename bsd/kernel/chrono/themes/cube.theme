@@ -1,0 +1,59 @@
+# Chrono theme — black title bars on grey, crisp and austere (late-80s workstations).
+[theme]
+name = Cube
+era = retro
+description = Black title bars on grey, crisp and austere.
+
+[colors]
+bg = #aaaaaa
+fg = #000000
+accent = #555555
+accent_fg = #ffffff
+selection = #555555
+window_bg = #aaaaaa
+window_fg = #000000
+title_active = #000000
+title_active2 = #000000
+title_active_fg = #ffffff
+title_inactive = #555555
+title_inactive2 = #555555
+title_inactive_fg = #cccccc
+border_active = #000000
+border_inactive = #555555
+bevel_light = #ffffff
+bevel_dark = #555555
+bevel_shadow = #000000
+button_bg = #aaaaaa
+button_fg = #000000
+close_bg = #aaaaaa
+panel_bg = #aaaaaa
+panel_fg = #000000
+panel_border = #ffffff
+
+[decor]
+style = cube
+title_height = 20
+border_width = 2
+corner_radius = 0
+title_center = true
+title_bold = true
+buttons = minimize:close
+button_shape = bevel
+button_size = 14
+shadow = false
+
+[fonts]
+ui = Nimbus Sans, Helvetica, DejaVu Sans 10
+title = Nimbus Sans, Helvetica, DejaVu Sans Bold 10
+mono = DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 26
+style = bevel
+launcher_label = ■
+dock = false
+
+[desktop]
+wallpaper = solid
+color1 = #555566

@@ -1,0 +1,65 @@
+# Chrono theme — The editor classic on the whole desktop: slate grey with a calm blue.
+[theme]
+name = One Dark
+era = modern
+description = The editor classic on the whole desktop: slate grey with a calm blue.
+variant = dark
+
+[colors]
+bg = #282c34
+fg = #abb2bf
+accent = #61afef
+accent_fg = #1e2127
+selection = #61afef55
+window_bg = #282c34
+window_fg = #abb2bf
+title_active = #21252b
+title_active2 = #21252b
+title_active_fg = #d7dae0
+title_inactive = #282c34
+title_inactive2 = #282c34
+title_inactive_fg = #7f8794
+border_active = #61afef
+border_inactive = #21252b
+button_bg = #3a3f4b
+button_fg = #abb2bf
+close_bg = #e06c75
+panel_bg = #21252bee
+panel_fg = #abb2bf
+panel_border = #61afef33
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 8
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = roundrect
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 34
+style = flat
+dock = false
+
+[desktop]
+wallpaper = pattern:topo
+color1 = #21252b
+color2 = #2c313c
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita

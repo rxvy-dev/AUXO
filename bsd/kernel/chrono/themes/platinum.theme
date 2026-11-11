@@ -1,0 +1,66 @@
+# Chrono theme — light grey ridged title bars and a quiet patterned desktop, as on late-90s Macs.
+[theme]
+name = Platinum
+era = retro
+description = Ridged grey title bars, centred titles and a soft patterned desktop.
+
+[colors]
+bg = #dddddd
+fg = #000000
+accent = #3333cc
+accent_fg = #ffffff
+selection = #ccccff
+window_bg = #eeeeee
+window_fg = #000000
+title_active = #dddddd
+title_active2 = #c8c8c8
+title_active_fg = #000000
+title_inactive = #eeeeee
+title_inactive2 = #e4e4e4
+title_inactive_fg = #888888
+border_active = #000000
+border_inactive = #777777
+bevel_light = #ffffff
+bevel_dark = #999999
+bevel_shadow = #555555
+button_bg = #dddddd
+button_fg = #000000
+close_bg = #dddddd
+panel_bg = #dddddd
+panel_fg = #000000
+panel_border = #888888
+
+[decor]
+style = platinum
+title_height = 20
+border_width = 1
+corner_radius = 0
+title_center = true
+title_bold = true
+buttons = close:minimize,maximize
+button_shape = bevel
+button_size = 13
+shadow = true
+shadow_size = 6
+shadow_alpha = 0.35
+
+[fonts]
+ui = Charcoal, Chicago, DejaVu Sans 9
+title = Charcoal, Chicago, DejaVu Sans Bold 9
+mono = Monaco, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 24
+style = flat
+launcher_label = ◆
+dock = false
+
+[desktop]
+wallpaper = pattern:platinum
+color1 = #8c8cb8
+color2 = #7676a6
+
+[cursor]
+theme = Adwaita
+size = 24

@@ -1,0 +1,59 @@
+# Chrono theme — soothing pastel dark (mocha).
+[theme]
+name = Mocha
+era = modern
+variant = dark
+pair = latte
+description = Soothing pastels on a warm dark base.
+
+[colors]
+bg = #1e1e2e
+fg = #cdd6f4
+accent = #cba6f7
+accent_fg = #1e1e2e
+selection = #cba6f755
+window_bg = #1e1e2e
+window_fg = #cdd6f4
+title_active = #313244
+title_active2 = #313244
+title_active_fg = #cdd6f4
+title_inactive = #24243a
+title_inactive2 = #24243a
+title_inactive_fg = #7f849c
+border_active = #cba6f7
+border_inactive = #45475a
+button_bg = #45475a
+button_fg = #cdd6f4
+close_bg = #f38ba8
+panel_bg = #181825ee
+panel_fg = #cdd6f4
+panel_border = #cba6f744
+
+[decor]
+style = flat
+title_height = 32
+border_width = 2
+corner_radius = 12
+title_center = true
+buttons = :minimize,maximize,close
+button_shape = circle
+button_size = 14
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.45
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = bottom
+height = 42
+style = floating
+dock = true
+
+[desktop]
+wallpaper = pattern:aurora
+color1 = #11111b
+color2 = #302d41

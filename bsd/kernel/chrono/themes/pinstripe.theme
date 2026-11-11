@@ -1,0 +1,62 @@
+# Chrono theme — pinstriped title bars and gel traffic-light buttons (2001 look).
+[theme]
+name = Pinstripe
+era = retro
+description = Pinstriped title bars, gel traffic-light buttons and a deep blue backdrop.
+
+[colors]
+bg = #ececec
+fg = #000000
+accent = #3875d7
+accent_fg = #ffffff
+selection = #b5d5ff
+window_bg = #ffffff
+window_fg = #000000
+title_active = #ececec
+title_active2 = #d6d6d6
+title_active_fg = #222222
+title_inactive = #f4f4f4
+title_inactive2 = #eaeaea
+title_inactive_fg = #737373
+border_active = #9a9a9a
+border_inactive = #c4c4c4
+bevel_light = #ffffff
+bevel_dark = #aaaaaa
+bevel_shadow = #666666
+button_bg = #d0d0d0
+button_fg = #333333
+close_bg = #ff5f57
+panel_bg = #f2f2f2d8
+panel_fg = #000000
+panel_border = #ffffff80
+
+[decor]
+style = pinstripe
+title_height = 24
+border_width = 1
+corner_radius = 7
+title_center = true
+title_bold = false
+buttons = close,minimize,maximize:
+button_shape = gel
+button_size = 13
+shadow = true
+shadow_size = 22
+shadow_alpha = 0.5
+
+[fonts]
+ui = Lucida Grande, Inter, DejaVu Sans 10
+title = Lucida Grande, Inter, DejaVu Sans 10
+mono = Monaco, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 24
+style = flat
+launcher_label =
+dock = true
+
+[desktop]
+wallpaper = pattern:aurora
+color1 = #0d2f6e
+color2 = #3c7fd1

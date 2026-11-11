@@ -1,0 +1,57 @@
+# Chrono theme — arctic, north-bluish palette.
+[theme]
+name = Nord
+era = modern
+description = The arctic, north-bluish palette, flat and calm.
+
+[colors]
+bg = #2e3440
+fg = #eceff4
+accent = #88c0d0
+accent_fg = #2e3440
+selection = #88c0d055
+window_bg = #2e3440
+window_fg = #eceff4
+title_active = #3b4252
+title_active2 = #3b4252
+title_active_fg = #eceff4
+title_inactive = #2e3440
+title_inactive2 = #2e3440
+title_inactive_fg = #7b8394
+border_active = #4c566a
+border_inactive = #3b4252
+button_bg = #434c5e
+button_fg = #d8dee9
+close_bg = #bf616a
+panel_bg = #2e3440f0
+panel_fg = #eceff4
+panel_border = #4c566a
+
+[decor]
+style = flat
+title_height = 32
+border_width = 1
+corner_radius = 8
+title_center = false
+buttons = :minimize,maximize,close
+button_shape = flat
+button_size = 14
+shadow = true
+shadow_size = 20
+shadow_alpha = 0.4
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = Inter, Noto Sans, DejaVu Sans Bold 10
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 34
+style = flat
+dock = false
+
+[desktop]
+wallpaper = gradient
+color1 = #3b4252
+color2 = #5e81ac

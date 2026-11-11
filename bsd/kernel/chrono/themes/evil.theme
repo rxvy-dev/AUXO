@@ -1,0 +1,67 @@
+# Chrono theme — Pitch black and blood red. Sharp edges, gothic type, no mercy.
+[theme]
+name = Evil
+era = modern
+description = Pitch black and blood red. Sharp edges, gothic type, no mercy.
+variant = dark
+
+[colors]
+bg = #070707
+fg = #e8dede
+accent = #c4001a
+accent_fg = #ffffff
+selection = #c4001a66
+window_bg = #0c0c0c
+window_fg = #e8dede
+title_active = #1a0003
+title_active2 = #000000
+title_active_fg = #ff2a3d
+title_inactive = #0c0c0c
+title_inactive2 = #0c0c0c
+title_inactive_fg = #8a7a7a
+border_active = #c4001a
+border_inactive = #2a0a0d
+button_bg = #140205
+button_fg = #ff2a3d
+close_bg = #c4001a
+panel_bg = #000000f2
+panel_fg = #e8dede
+panel_border = #c4001a
+
+[decor]
+style = flat
+title_height = 30
+border_width = 2
+corner_radius = 0
+title_center = true
+title_bold = true
+buttons = :minimize,maximize,close
+button_shape = square
+button_size = 12
+shadow = true
+shadow_size = 30
+shadow_alpha = 0.8
+
+[fonts]
+ui = Inter, Noto Sans, DejaVu Sans 10
+title = UnifrakturMaguntia, Cinzel, Noto Serif, DejaVu Serif Bold 11
+mono = JetBrains Mono, DejaVu Sans Mono 10
+
+[panel]
+position = top
+height = 32
+style = flat
+launcher_label = ✝
+dock = false
+
+[desktop]
+wallpaper = pattern:topo
+color1 = #000000
+color2 = #5a0010
+
+[cursor]
+theme = Adwaita
+size = 24
+
+[icons]
+theme = Adwaita
