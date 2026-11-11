@@ -34,6 +34,21 @@ jobs:
       - name: Boot in QEMU and drive auxsh
         run: make test
 
+      - name: Diagnose a failed boot (where the CPU faulted)
+        if: failure()
+        run: |
+          readelf -lW build/auxobsd.elf | sed -n '/Program Headers/,/^$/p'
+          readelf -SW build/auxobsd.elf | grep -vE "debug|symtab|strtab"
+          timeout 25 qemu-system-x86_64 -cdrom build/auxobsd.iso -display none -m 256M -no-reboot \
+              -serial file:build/serial.log -d int,cpu_reset,guest_errors -D build/qemu-int.log || true
+          echo "--- serial"; head -c 2000 build/serial.log || true; echo
+          echo "--- exceptions (last 15)"; grep -E "check_exception|Triple fault|^ *[0-9]+: v=" build/qemu-int.log | tail -15 || true
+          echo "--- where"
+          for rip in $(grep -oE "pc=[0-9a-f]+|RIP=[0-9a-f]+" build/qemu-int.log | tail -4 | cut -d= -f2 | sort -u); do
+              printf '%s  ' "$rip"; addr2line -f -C -e build/auxobsd.elf "0x$rip" | tr '\n' ' '; echo
+          done
+          grep -B2 -A12 "check_exception" build/qemu-int.log | tail -60 || true
+
       - name: Upload ISO and QEMU logs
         if: always()
         uses: actions/upload-artifact@v4
