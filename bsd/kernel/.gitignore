@@ -5,6 +5,7 @@
 # Generated kernel and ISO
 /iso/boot/auxobsd.elf
 /iso/boot/rootfs.tar
+/iso/boot/install.img
 /build/auxobsd.iso
 
 # Generated configuration

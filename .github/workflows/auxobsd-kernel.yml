@@ -10,7 +10,7 @@ on:
 jobs:
   kernel:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: bsd/kernel
@@ -20,7 +20,7 @@ jobs:
       - name: Install the toolchain
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-common xorriso mtools
+          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools ovmf
           rustup target add x86_64-unknown-none
 
       - name: Accents match the Auxo Linux palette
@@ -29,6 +29,9 @@ jobs:
       - name: Root filesystem (GCC, binutils, make, BusyBox from Ubuntu packages)
         run: make rootfs
 
+      - name: Installer boot template (GRUB for BIOS + an EFI system partition)
+        run: make install-image
+
       - name: Build
         run: |
           rustc --version; gcc --version | head -1; qemu-system-x86_64 --version | head -1
@@ -36,6 +39,9 @@ jobs:
 
       - name: Boot in QEMU and drive auxsh
         run: make test
+
+      - name: Install onto a blank disk, then boot it (BIOS and UEFI)
+        run: make test-install
 
       - name: Diagnose a failed boot (where the CPU faulted)
         if: failure()

@@ -11,6 +11,8 @@
 #include "vfs.h"
 #include "fs.h"
 #include "uproc.h"
+#include "disk.h"
+#include "install.h"
 
 #define LINE_MAX 1024
 #define HIST     16
@@ -206,6 +208,73 @@ static int cmd_history(int argc, char **argv)
     int from = nhist > HIST ? nhist - HIST : 0;
     for (int i = from; i < nhist; i++) kprintf("%4d  %s\n", i + 1, hist[i % HIST]);
     return 0;
+}
+
+static int cmd_lsblk(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    if (!disk_count()) { kprintf("no disks found (IDE, SATA/AHCI and NVMe are supported)\n"); return 0; }
+    for (int i = 0; i < disk_count(); i++) {
+        struct disk *d = disk_get(i);
+        uint64_t mb = d->sectors / 2048;
+        kprintf("%-7s %-5s %6lu %s  %s\n", d->name, d->bus, (unsigned long)(mb >= 10240 ? mb / 1024 : mb), mb >= 10240 ? "GB" : "MB", d->model);
+    }
+    return 0;
+}
+
+/* disktest NAME: write a pattern near the end of the disk, read it back (destroys those sectors) */
+static int cmd_disktest(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: disktest DISK   (overwrites 64 sectors near its end)\n"); return 1; }
+    struct disk *d = 0;
+    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1])) d = disk_get(i);
+    if (!d) { kprintf("disktest: no disk %s\n", argv[1]); return 1; }
+    uint8_t *a = (uint8_t *)(uintptr_t)pmm_alloc_contig(8), *b = (uint8_t *)(uintptr_t)pmm_alloc_contig(8);
+    if (!a || !b) return 1;
+    for (int i = 0; i < 32768; i++) a[i] = (uint8_t)(i * 7 + 13);
+    uint64_t lba = d->sectors - 100;
+    int w = d->write(d, lba, 64, a), r = d->read(d, lba, 64, b);
+    int same = !memcmp(a, b, 32768);
+    kprintf("%s: write %s, read %s, data %s\n", d->name, w ? "failed" : "ok", r ? "failed" : "ok", same ? "matches" : "DIFFERS");
+    for (int i = 0; i < 8; i++) { pmm_free_page((uint64_t)(uintptr_t)a + (uint64_t)i * 4096); pmm_free_page((uint64_t)(uintptr_t)b + (uint64_t)i * 4096); }
+    return !same;
+}
+
+static int cmd_sync(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    if (!store_where()) { kprintf("sync: this is a live system: files are only in memory (install AuxoBSD to keep them)\n"); return 1; }
+    int r = store_save();
+    kprintf(r == 0 ? "saved /home/root to %s\n" : "sync: couldn't write to %s\n", store_where());
+    return r != 0;
+}
+
+/* install DISK [HOSTNAME]: the installer, from the shell */
+static int cmd_install(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: install DISK [HOSTNAME] [--yes]   (see lsblk; the disk is erased)\n"); return 1; }
+    int yes = !strcmp(argv[argc - 1], "--yes");
+    if (yes) argc--;
+    int idx = -1;
+    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1])) idx = i;
+    if (idx < 0) { kprintf("install: no disk %s (see lsblk)\n", argv[1]); return 1; }
+    struct disk *d = disk_get(idx);
+    if (!yes) {
+        char ans[16], q[160];
+        ksnprintf(q, sizeof q, "Erase %s (%s, %lu MB) and install AuxoBSD? Type yes: ", d->name, d->model, (unsigned long)(d->sectors / 2048));
+        shell_readline(q, ans, sizeof ans);
+        if (strcmp(ans, "yes")) { kprintf("not installing\n"); return 1; }
+    }
+    struct install_req r = { idx, "auxobsd", auxo.accent };
+    strlcpy(r.hostname, argc > 2 ? argv[2] : auxo.hostname, sizeof r.hostname);
+    if (install_start(&r) < 0) { kprintf("install: already running\n"); return 1; }
+    int last = -1;
+    while (install_state == 1) {
+        if (install_pct / 10 != last) { last = install_pct / 10; kprintf("  %3d%%  %s\n", install_pct, install_msg); }
+        kdelay_ms(200);
+    }
+    kprintf("%s\n", install_msg);
+    return install_state != 2;
 }
 
 static int cmd_lspci(int argc, char **argv)
@@ -472,6 +541,10 @@ static const struct cmd cmds[] = {
     { "edit",        cmd_aether,      "open a file in the desktop's built-in editor" },
     { "browse",      cmd_browse,      "open a page in the Browser" },
     { "strace",      cmd_strace,      "run a program and show its system calls" },
+    { "install",     cmd_install,     "install AuxoBSD on a disk (or use the Install app)" },
+    { "sync",        cmd_sync,        "save /home/root to the disk now (installed systems)" },
+    { "lsblk",       cmd_lsblk,       "disks (IDE, SATA, NVMe)" },
+    { "disktest",    cmd_disktest,    "write and read back a test pattern on a disk" },
     { "lspci",       cmd_lspci,       "PCI devices and their drivers" },
     { "ifconfig",    cmd_ifconfig,    "network card, address, gateway, DNS" },
     { "ping",        cmd_ping,        "ICMP echo: ping HOST [-c N]" },

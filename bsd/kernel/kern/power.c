@@ -1,9 +1,11 @@
 /* reboot / poweroff without ACPI: the 8042 reset line, then the emulators' shutdown ports. */
 #include "kern.h"
+#include "install.h"
 #include "arch.h"
 
 void machine_reboot(void)
 {
+    store_save();                             /* installed system: keep /home/root */
     cli();
     for (int i = 0; i < 100000 && (inb(0x64) & 2); i++)
         ;
@@ -15,6 +17,7 @@ void machine_reboot(void)
 
 void machine_poweroff(void)
 {
+    store_save();
     cli();
     outw(0x604, 0x2000);                      /* QEMU (q35 / i440fx with ACPI PM at 0x600) */
     outw(0xB004, 0x2000);                     /* Bochs, older QEMU */

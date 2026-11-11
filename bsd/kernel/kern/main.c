@@ -7,6 +7,8 @@
 #include "net.h"
 #include "vfs.h"
 #include "fs.h"
+#include "disk.h"
+#include "install.h"
 
 #define HEAP_PAGES 4096   /* 16 MiB kernel heap, managed by Rust (thread stacks, fs nodes) */
 
@@ -83,6 +85,16 @@ void kmain(uint32_t mbi)
     char gname[64] = "none";
     if (gpu) pci_describe(gpu, gname, sizeof gname);
     ok("pci"); kprintf("%d devices, display: %s\n", pci_count(), gname);
+    disk_init();
+    if (disk_count()) {
+        ok("disk");
+        for (int i = 0; i < disk_count(); i++) {
+            struct disk *d = disk_get(i);
+            kprintf("%s%s %s %lu GB", i ? ", " : "", d->name, d->bus, (unsigned long)(d->sectors * 512 / 1000000000));
+        }
+        kprintf("\n");
+        if (store_init() == 0) { ok("home"); kprintf("/home/root is kept on %s (saved every 10 s)\n", store_where()); }
+    }
     net_init();                       /* the net thread: Ethernet driver + DHCP, in the background */
     if (rs_spawn("auxsh", shell_main, 0) < 0) panic("cannot start the shell");
     pit_init(AUXO_HZ);

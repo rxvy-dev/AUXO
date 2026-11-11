@@ -47,7 +47,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test rootfs accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test test-install rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -104,15 +104,20 @@ check: build/auxobsd.elf
 
 iso: build/auxobsd.iso
 
-build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg $(wildcard build/rootfs.tar)
+build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg $(wildcard build/rootfs.tar) $(wildcard build/install.img)
 >cp $< iso/boot/auxobsd.elf
 >if [ -f build/rootfs.tar ]; then cp build/rootfs.tar iso/boot/rootfs.tar; else rm -f iso/boot/rootfs.tar; fi
+>if [ -f build/install.img ]; then cp build/install.img iso/boot/install.img; else rm -f iso/boot/install.img; fi
 >grub-mkrescue -o $@ iso
 
 # the root filesystem: real Linux programs (GCC 13, binutils, make, BusyBox) from Ubuntu packages.
 # ROOTFS_SET=full adds Python 3, GTK 4 and Aether.
 rootfs:
 >sh tools/mkrootfs.sh build
+
+# the boot template the installer writes (GRUB for BIOS + an EFI system partition)
+install-image:
+>sh tools/mkdisk-template.sh build
 
 run: iso
 >$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 1G -vga std
@@ -123,6 +128,10 @@ run-text: iso
 # boots the ISO headless in QEMU and drives auxsh over the serial port
 test: iso
 >$(PYTHON) -I tests/test-shell.py build/auxobsd.iso
+
+# installs onto a blank disk image, then boots it with BIOS and (if OVMF is there) UEFI
+test-install: iso
+>$(PYTHON) -I tests/test-install.py build/auxobsd.iso
 
 menuconfig:
 >$(PYTHON) config/kconfig.py menuconfig
