@@ -1258,13 +1258,20 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     return -ENOSYS;
 }
 
+int sys_trace;                              /* auxsh `strace`: log every system call */
+
 void syscall_dispatch(struct trapframe *tf)
 {
     __asm__ volatile("sti");
     struct task *t = task_current();
     if (!t) { tf->rax = (uint64_t)-ENOSYS; return; }
     t->tf = tf;
+    uint64_t nr = tf->rax, a0 = tf->rdi, a1 = tf->rsi, a2 = tf->rdx;
+    char s0[48] = "";
+    if (sys_trace && (nr == 2 || nr == 59 || nr == 4 || nr == 6 || nr == 21 || nr == 80 || nr == 89)) copyin_str(t->mm, s0, a0, sizeof s0);
+    if (sys_trace && (nr == 257 || nr == 262 || nr == 267 || nr == 269 || nr == 332 || nr == 439)) copyin_str(t->mm, s0, a1, sizeof s0);
     long r = syscall_body(t, tf);
+    if (sys_trace) kprintf("[%d %s] %lu(%lx, %lx, %lx%s%s%s) = %ld\n", t->pid, t->name, nr, a0, a1, a2, s0[0] ? ", \"" : "", s0, s0[0] ? "\"" : "", r);
     tf->rax = (uint64_t)r;
     uproc_signals(t, tf);
 }

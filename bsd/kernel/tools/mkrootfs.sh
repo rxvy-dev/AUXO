@@ -18,8 +18,8 @@ mkdir -p "$WORK/debs" "$ROOT"
 
 PKGS="gcc cpp binutils libc6-dev make busybox-static"
 if [ "$SET" = full ]; then
-    PKGS="$PKGS python3 python3-gi gir1.2-gtk-4.0 gir1.2-gtksource-5 libgtk-4-1 libgtksourceview-5-0
-          fonts-dejavu-core adwaita-icon-theme gsettings-desktop-schemas shared-mime-info"
+    PKGS="$PKGS python3 python3-gi python3-gi-cairo python3-cairo libc-bin gir1.2-gtk-4.0 gir1.2-gtksource-5 libgtk-4-1 libgtksourceview-5-0
+          fonts-dejavu-core fonts-dejavu-mono fonts-dejavu-extra adwaita-icon-theme gsettings-desktop-schemas shared-mime-info"
 fi
 
 echo "rootfs: resolving $SET packages"
@@ -54,6 +54,28 @@ if [ -x "$ROOT/usr/bin/busybox" ]; then
         [ -e "$ROOT/usr/bin/$app" ] || ln -s busybox "$ROOT/usr/bin/$app"
     done
 fi
+if [ "$SET" = full ]; then
+    # Aether, straight from GitHub (AETHER_SRC=dir to use a local checkout)
+    rm -rf "$ROOT/usr/share/aether"
+    if [ -n "${AETHER_SRC:-}" ]; then cp -a "$AETHER_SRC" "$ROOT/usr/share/aether"
+    else git clone -q --depth 1 "${AETHER_REPO:-https://github.com/rxvy-dev/aether}" "$ROOT/usr/share/aether"; fi
+    rm -rf "$ROOT/usr/share/aether/.git" "$ROOT/usr/share/aether/docs"
+    ln -sf ../share/aether/bin/aether "$ROOT/usr/bin/aether"
+    # GTK reads compiled GSettings schemas and the pixbuf loader list
+    if command -v glib-compile-schemas >/dev/null && [ -d "$ROOT/usr/share/glib-2.0/schemas" ]; then
+        glib-compile-schemas "$ROOT/usr/share/glib-2.0/schemas"
+    fi
+    LOADERS=$(ls -d "$ROOT"/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0 2>/dev/null || true)
+    if [ -n "$LOADERS" ] && command -v gdk-pixbuf-query-loaders >/dev/null; then
+        gdk-pixbuf-query-loaders "$LOADERS"/loaders/*.so 2>/dev/null | sed "s|$ROOT||g" > "$LOADERS/loaders.cache" || true
+    fi
+    # fonts and icons: DejaVu and Adwaita are plenty
+    find "$ROOT/usr/share/fonts" -mindepth 1 -maxdepth 2 -not -path '*dejavu*' -not -name truetype -exec rm -rf {} + 2>/dev/null || true
+    for d in "$ROOT"/usr/share/icons/*; do case "$(basename "$d")" in Adwaita|hicolor) ;; *) rm -rf "$d" ;; esac; done
+    rm -rf "$ROOT/usr/share/texmf" "$ROOT/usr/share/X11/locale" "$ROOT/usr/lib/x86_64-linux-gnu/dri" \
+           "$ROOT/usr/lib/x86_64-linux-gnu/libLLVM"* "$ROOT/usr/lib/x86_64-linux-gnu/libgallium"* 2>/dev/null || true
+fi
+
 # drop what a live system doesn't need
 rm -rf "$ROOT/usr/share/doc" "$ROOT/usr/share/man" "$ROOT/usr/share/info" "$ROOT/usr/share/lintian" \
        "$ROOT/usr/share/locale" "$ROOT/usr/lib/x86_64-linux-gnu/gconv" "$ROOT/usr/share/bug"

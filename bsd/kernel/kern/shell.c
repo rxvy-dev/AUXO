@@ -23,6 +23,7 @@ struct cmd {
 };
 
 static const struct cmd cmds[];
+static int cmd_strace(int argc, char **argv);
 
 /* ── line editor ────────────────────────────────────────────────────── */
 static char hist[HIST][LINE_MAX];
@@ -468,8 +469,9 @@ static const struct cmd cmds[] = {
     { "touch",       cmd_touch,       "create an empty file" },
     { "cd",          cmd_cd,          "change directory" },
     { "pwd",         cmd_pwd,         "current directory" },
-    { "aether",      cmd_aether,      "open a file in Aether, the code editor" },
+    { "edit",        cmd_aether,      "open a file in the desktop's built-in editor" },
     { "browse",      cmd_browse,      "open a page in the Browser" },
+    { "strace",      cmd_strace,      "run a program and show its system calls" },
     { "lspci",       cmd_lspci,       "PCI devices and their drivers" },
     { "ifconfig",    cmd_ifconfig,    "network card, address, gateway, DNS" },
     { "ping",        cmd_ping,        "ICMP echo: ping HOST [-c N]" },
@@ -483,6 +485,20 @@ static const struct cmd cmds[] = {
     { "halt",        cmd_poweroff,    0 },
     { 0, 0, 0 },
 };
+
+extern int sys_trace;
+static void run(char *line);
+static int cmd_strace(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: strace PROGRAM [ARGS]   (every system call, on the console)\n"); return 1; }
+    char buf[LINE_MAX] = "";
+    size_t o = 0;
+    for (int i = 1; i < argc && o < sizeof buf - 2; i++) o += (size_t)ksnprintf(buf + o, sizeof buf - o, "%s%s", i > 1 ? " " : "", argv[i]);
+    sys_trace = 1;
+    run(buf);
+    sys_trace = 0;
+    return 0;
+}
 
 static void run(char *line)
 {
