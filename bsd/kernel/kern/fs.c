@@ -168,7 +168,7 @@ int fs_lookup_parent(struct node *cwd, const char *path, struct node **dir, char
 
 static void free_data(struct node *n)
 {
-    if (n->cap) for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
+    if (n->cap && !n->maps) for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
     n->data = 0; n->cap = 0; n->size = 0;
 }
 
@@ -271,7 +271,8 @@ int fs_reserve(struct node *n, uint64_t want)
     uint8_t *d = (uint8_t *)(uintptr_t)pg;
     if (n->size) memcpy(d, n->data, n->size);
     memset(d + n->size, 0, cap - n->size);
-    if (n->cap) for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
+    /* pages a program has mapped shared stay where they are (leaked, rather than reused under it) */
+    if (n->cap && !n->maps) for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
     n->data = d;
     n->cap = cap;
     return 0;

@@ -19,6 +19,7 @@ struct node {
     uint64_t size, cap;            /* cap > 0: data is ours (whole pages); 0: borrowed (rootfs image) */
     uint32_t mtime;
     int      refs;                 /* open files + mappings; unlinked nodes are freed at 0 */
+    int      maps;                 /* shared mappings of its pages: they must never move */
     int      unlinked;
     void    *priv;                 /* pipes, sockets */
 };

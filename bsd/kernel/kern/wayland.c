@@ -139,14 +139,8 @@ static const struct { const char *iface; int version, type; } GLOBALS[] = {
 };
 #define NGLOBALS (int)(sizeof GLOBALS / sizeof *GLOBALS)
 
-static const char KEYMAP[] =
-    "xkb_keymap {\n"
-    "  xkb_keycodes { include \"evdev+aliases(qwerty)\" };\n"
-    "  xkb_types { include \"complete\" };\n"
-    "  xkb_compat { include \"complete\" };\n"
-    "  xkb_symbols { include \"pc+us+inet(evdev)\" };\n"
-    "  xkb_geometry { include \"pc(pc105)\" };\n"
-    "};\n";
+#include "xkb_keymap.h"
+#define KEYMAP XKB_KEYMAP
 
 static void send_keymap(int c, uint32_t kid)
 {
@@ -524,7 +518,8 @@ static void drop_client(int c)
 static void client_io(int c)
 {
     struct client *k = &cl[c];
-    for (;;) {
+    /* a bounded amount per frame: a chatty client mustn't starve the desktop */
+    for (int rounds = 0; rounds < 16; rounds++) {
         struct file *files[16];
         int nf = 0;
         long r = unix_recv(k->s, k->in + k->inlen, 4096 - (size_t)k->inlen, files, &nf, 16);

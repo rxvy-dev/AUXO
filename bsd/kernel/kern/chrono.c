@@ -1172,6 +1172,7 @@ void chrono_main(uintptr_t arg)
             if (menu_open) { int h = menu_item_at(mx, my); if (h != hover_item) { hover_item = h; dirty = 1; } }
         }
         int k;
+        sync_wl_focus();
         if (focus >= 0 && wins[focus].used && wins[focus].app == APP_WAYLAND && !menu_open) {
             /* a Wayland window has the keyboard: raw keycodes, presses and releases */
             while ((k = input_raw_key()) >= 0) {

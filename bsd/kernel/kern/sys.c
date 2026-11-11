@@ -635,6 +635,8 @@ void task_exit(struct task *t, int status)
     /* children of this process are now nobody's */
     for (int i = 0; i < 128; i++) { struct task *c = task_slot(i); if (c->used && c->ppid == t->tgid && c != t) c->ppid = 0; }
     t->exit_status = status;
+    struct task *parent = t->ppid > 0 ? task_by_pid(t->ppid) : 0;
+    if (parent) parent->pending |= 1ULL << 16;              /* SIGCHLD */
     t->state = 2;                                           /* zombie: the parent's wait4 reaps it */
     /* nobody will wait for orphans: reap now */
     if (t->detached || (t->ppid && !task_by_pid(t->ppid))) task_free(t);
@@ -776,6 +778,13 @@ static int fd_ready(struct task *t, int fd, int events)
     int r = 0;
     if (f->kind == 5) { if (unix_readable(f->priv)) r |= 1; if (unix_writable(f->priv)) r |= 4; if (((struct usock *)f->priv)->peer_closed) r |= 0x10; }
     else if (f->kind == 6) { if (*(uint64_t *)f->priv) r |= 1; r |= 4; }
+    else if (f->kind == 7) {                                   /* an epoll set is readable when a member is */
+        struct { int n; struct { int fd; uint32_t events; uint64_t data; } e[64]; } *ep = f->priv;
+        for (int i = 0; i < ep->n; i++) {
+            struct file *m = getf(t, ep->e[i].fd);
+            if (m && m->kind != 7 && (ep->e[i].events & 0xFF) && fd_ready(t, ep->e[i].fd, (int)(ep->e[i].events & 0xFF))) { r |= 1; break; }
+        }
+    }
     else if (f->kind == 1) { if (pipe_readable(f)) r |= 1; }
     else if (f->kind == 2) { if (pipe_writable(f)) r |= 4; }
     else if (f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY) { if (tty_readable()) r |= 1; r |= 4; }
@@ -1291,6 +1300,71 @@ static long sys_sockname(struct task *t, long fd, uint64_t ua, uint64_t ulen)
     return 0;
 }
 
+/* epoll: an interest list polled like poll(2); level-triggered (EPOLLONESHOT honoured) */
+struct epoll { int n; struct { int fd; uint32_t events; uint64_t data; } e[64]; };
+
+static long sys_epoll_create(struct task *t, long flags)
+{
+    struct epoll *ep = rs_kmalloc(sizeof *ep);
+    if (!ep) return -ENOMEM;
+    memset(ep, 0, sizeof *ep);
+    struct file *f = file_new(7, 0, 2);
+    if (!f) { rs_kfree(ep); return -ENOMEM; }
+    f->priv = ep;
+    strlcpy(f->path, "anon_inode:[eventpoll]", sizeof f->path);
+    int fd = alloc_fd(t, f, 0, (flags & 02000000) != 0);
+    if (fd < 0) file_put(f);
+    return fd;
+}
+
+static long sys_epoll_ctl(struct task *t, long epfd, long op, long fd, uint64_t uev)
+{
+    struct file *f = getf(t, epfd);
+    if (!f || f->kind != 7) return -EBADF;
+    struct epoll *ep = f->priv;
+    if (!getf(t, fd)) return -EBADF;
+    struct { uint32_t events; uint64_t data; } __attribute__((packed)) ev = { 0, 0 };
+    if (op != 2 && copyin(t->mm, &ev, uev, 12) < 0) return -EFAULT;
+    int i;
+    for (i = 0; i < ep->n; i++) if (ep->e[i].fd == fd) break;
+    if (op == 1) {                                               /* ADD */
+        if (i < ep->n) return -EEXIST;
+        if (ep->n >= 64) return -ENOMEM;
+        ep->e[ep->n].fd = (int)fd; ep->e[ep->n].events = ev.events; ep->e[ep->n].data = ev.data; ep->n++;
+        return 0;
+    }
+    if (i == ep->n) return -ENOENT;
+    if (op == 2) { ep->e[i] = ep->e[--ep->n]; return 0; }       /* DEL */
+    ep->e[i].events = ev.events; ep->e[i].data = ev.data;       /* MOD */
+    return 0;
+}
+
+static long sys_epoll_wait(struct task *t, long epfd, uint64_t uev, long max, int64_t timeout_ms)
+{
+    struct file *f = getf(t, epfd);
+    if (!f || f->kind != 7) return -EBADF;
+    struct epoll *ep = f->priv;
+    if (max <= 0) return -EINVAL;
+    uint64_t until = timeout_ms < 0 ? ~0ULL : kernel_ticks() + (uint64_t)(timeout_ms + 9) / 10;
+    for (;;) {
+        int n = 0;
+        for (int i = 0; i < ep->n && n < max; i++) {
+            uint32_t want = ep->e[i].events & 0x7FF;
+            if (!want) continue;
+            int r = fd_ready(t, ep->e[i].fd, (int)(want & 0xFF));
+            if (r & 0x20) { ep->e[i] = ep->e[--ep->n]; i--; continue; }   /* closed fd: forget it */
+            if (!r) continue;
+            struct { uint32_t events; uint64_t data; } __attribute__((packed)) out = { (uint32_t)r, ep->e[i].data };
+            if (copyout(t->mm, uev + (uint64_t)n * 12, &out, 12) < 0) return -EFAULT;
+            n++;
+            if (ep->e[i].events & (1u << 30)) ep->e[i].events = 0;          /* EPOLLONESHOT */
+        }
+        if (n || kernel_ticks() >= until) return n;
+        if (t->pending & ~t->sigmask) return -EINTR;
+        wait_tick();
+    }
+}
+
 static long sys_eventfd(struct task *t, uint64_t init, long flags)
 {
     uint64_t *c = rs_kmalloc(8);
@@ -1322,10 +1396,10 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 6: return sys_fstatat(t, AT_FDCWD, a, b, 0x100, 0);
     case 7: return sys_poll(t, a, (long)b, (int64_t)(int)c);
     case 8: return sys_lseek(t, (long)a, (int64_t)b, (long)c);
-    case 9: return sys_mmap(t, a, b, (long)c, (long)d, (long)(int)e, f);
+    case 9: { mm_lock(t->mm); long r = sys_mmap(t, a, b, (long)c, (long)d, (long)(int)e, f); mm_unlock(t->mm); return r; }
     case 10: return mm_protect(t->mm, a, b, (uint32_t)(c & 7));
     case 11: return mm_unmap(t->mm, a, b);
-    case 12: return sys_brk(t, a);
+    case 12: { mm_lock(t->mm); long r = sys_brk(t, a); mm_unlock(t->mm); return r; }
     case 13: {                                                 /* rt_sigaction */
         if (a < 1 || a > 64) return -EINVAL;
         struct sigact *sa = &t->sig[a - 1];
@@ -1353,7 +1427,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 22: return sys_pipe2(t, a, 0);
     case 23: { int64_t ms = -1; if (e) { int64_t tv[2]; if (copyin(t->mm, tv, e, 16) == 0) ms = tv[0] * 1000 + tv[1] / 1000; } return sys_select(t, (long)a, b, c, d, ms); }
     case 24: rs_yield(); return 0;
-    case 25: return sys_mremap(t, a, b, c, (long)d);
+    case 25: { mm_lock(t->mm); long r = sys_mremap(t, a, b, c, (long)d); mm_unlock(t->mm); return r; }
     case 26: case 27: case 28: return 0;                       /* msync, mincore, madvise */
     case 32: { struct file *fl = getf(t, (long)a); if (!fl) return -EBADF; int n = alloc_fd(t, fl, 0, 0); if (n >= 0) fl->refs++; return n; }
     case 33: return sys_dup3(t, (long)a, (long)b, 0);
@@ -1445,7 +1519,20 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 202: return sys_futex(t, a, (long)b, c, d);
     case 203: return 0;
     case 204: { uint64_t mask = 1; if (b < 8) return -EINVAL; return copyout(t->mm, c, &mask, 8) < 0 ? -EFAULT : 8; }
-    case 213: case 291: return -ENOSYS;                        /* epoll: not yet */
+    case 213: return sys_epoll_create(t, 0);
+    case 291: return sys_epoll_create(t, (long)a);
+    case 233: return sys_epoll_ctl(t, (long)a, (long)b, (long)c, d);
+    case 232: case 281: case 441: return sys_epoll_wait(t, (long)a, b, (long)c, (int64_t)(int)d);
+    case 221: return 0;                                        /* fadvise64 */
+    case 436: {                                                /* close_range */
+        uint64_t last = b < MAXFD ? b : MAXFD - 1;
+        for (uint64_t fd = a; fd <= last; fd++) {
+            if (!t->files->fd[fd]) continue;
+            if (c & 4) t->files->cloexec[fd] = 1;
+            else { file_put(t->files->fd[fd]); t->files->fd[fd] = 0; }
+        }
+        return 0;
+    }
     case 217: return sys_getdents64(t, (long)a, b, c);
     case 218: t->clear_child_tid = a; return t->pid;
     case 228: { int64_t ts[2]; now_ts((int)a, &ts[0], &ts[1]); return copyout(t->mm, b, ts, 16); }
@@ -1456,7 +1543,6 @@ static long syscall_body(struct task *t, struct trapframe *tf)
                 while (kernel_ticks() < until) { if (t->pending & ~t->sigmask) return -EINTR; rs_sleep(until - kernel_ticks()); }
                 return 0; }
     case 231: exit_group(t, (int)(a & 0xFF) << 8);
-    case 232: case 233: case 281: return -ENOSYS;
     case 234: return sys_kill(t, (long)b, (long)c);
     case 247: return -ECHILD;                                  /* waitid: rarely used; not yet */
     case 257: return sys_openat(t, (long)(int)a, b, (long)c, (long)d);

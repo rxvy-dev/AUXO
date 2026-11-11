@@ -22,6 +22,7 @@ struct vma {
     struct node *file;             /* NULL: anonymous */
     uint64_t off;                  /* file offset of `start` */
     uint64_t flen;                 /* bytes of file data from `off`; the rest reads as zero */
+    int counted;                   /* this shared mapping has pinned the file's pages (node->maps) */
 };
 
 struct mm {
@@ -30,7 +31,11 @@ struct mm {
     int nv, cap;
     uint64_t brk_start, brk;
     int refs;
+    volatile int lock_owner, lock_depth;   /* threads share an mm: one changes it at a time */
 };
+
+void mm_lock(struct mm *m);
+void mm_unlock(struct mm *m);
 
 struct mm *mm_new(void);
 struct mm *mm_clone(struct mm *m);                 /* fork: copies every private page */

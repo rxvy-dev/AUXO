@@ -17,6 +17,26 @@
 
 extern char __entry_start[], __entry_end[];
 
+void mm_lock(struct mm *m)
+{
+    int me = rs_current_pid();
+    for (;;) {
+        uint64_t f;
+        __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+        if (!m->lock_depth || m->lock_owner == me) { m->lock_owner = me; m->lock_depth++; if (f & 0x200) __asm__ volatile("sti"); return; }
+        if (f & 0x200) __asm__ volatile("sti");
+        rs_yield();
+    }
+}
+
+void mm_unlock(struct mm *m)
+{
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    if (--m->lock_depth == 0) m->lock_owner = 0;
+    if (f & 0x200) __asm__ volatile("sti");
+}
+
 static uint64_t *table(uint64_t e) { return (uint64_t *)(uintptr_t)ADDR(e); }
 
 static uint64_t zpage(void)
@@ -93,7 +113,7 @@ static int vma_insert(struct mm *m, const struct vma *v)
     while (i > 0 && m->v[i - 1].start > v->start) { m->v[i] = m->v[i - 1]; i--; }
     m->v[i] = *v;
     m->nv++;
-    if (v->file) v->file->refs++;
+    if (v->file) { v->file->refs++; if (v->counted) v->file->maps++; }
     return 0;
 }
 
@@ -130,7 +150,7 @@ static int carve(struct mm *m, uint64_t s, uint64_t e)
             v->start = e;
             continue;
         }
-        if (v->file) fs_put(v->file);                        /* wholly inside: drop it */
+        if (v->file) { if (v->counted) v->file->maps--; fs_put(v->file); }   /* wholly inside: drop it */
         memmove(v, v + 1, (size_t)(m->nv - i - 1) * sizeof *v);
         m->nv--;
         i--;
@@ -138,7 +158,7 @@ static int carve(struct mm *m, uint64_t s, uint64_t e)
     return 0;
 }
 
-int mm_unmap(struct mm *m, uint64_t s, uint64_t len)
+static int mm_unmap_l(struct mm *m, uint64_t s, uint64_t len)
 {
     uint64_t e = (s + len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     s &= ~(PAGE_SIZE - 1);
@@ -146,17 +166,17 @@ int mm_unmap(struct mm *m, uint64_t s, uint64_t len)
     return carve(m, s, e);
 }
 
-int mm_map(struct mm *m, uint64_t s, uint64_t len, uint32_t prot, int shared, struct node *file, uint64_t off, uint64_t flen)
+static int mm_map_l(struct mm *m, uint64_t s, uint64_t len, uint32_t prot, int shared, struct node *file, uint64_t off, uint64_t flen)
 {
     uint64_t e = (s + len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     s &= ~(PAGE_SIZE - 1);
     if (e > USER_TOP || e <= s) return -12;
-    mm_unmap(m, s, e - s);
-    struct vma v = { s, e, prot, (uint32_t)shared, file, off, flen };
+    mm_unmap_l(m, s, e - s);
+    struct vma v = { s, e, prot, (uint32_t)shared, file, off, flen, 0 };
     return vma_insert(m, &v);
 }
 
-int mm_protect(struct mm *m, uint64_t s, uint64_t len, uint32_t prot)
+static int mm_protect_l(struct mm *m, uint64_t s, uint64_t len, uint32_t prot)
 {
     uint64_t e = (s + len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     s &= ~(PAGE_SIZE - 1);
@@ -200,7 +220,7 @@ uint64_t mm_find_free(struct mm *m, uint64_t len, uint64_t below)
     return 0;
 }
 
-int mm_fault(struct mm *m, uint64_t addr, int write)
+static int mm_fault_l(struct mm *m, uint64_t addr, int write)
 {
     struct vma *v = mm_vma_at(m, addr);
     if (!v || !v->prot) return -14;
@@ -220,6 +240,7 @@ int mm_fault(struct mm *m, uint64_t addr, int write)
         uint64_t need = v->off + (v->end - v->start);
         if ((!f->cap || f->cap < need) && fs_reserve(f, need) < 0) return -12;
         *p = ((uint64_t)(uintptr_t)f->data + v->off + rel) | SHR | prot_bits(v->prot);
+        if (!v->counted) { v->counted = 1; f->maps++; }
         return 0;
     }
     uint64_t pg = zpage();
@@ -236,7 +257,23 @@ int mm_fault(struct mm *m, uint64_t addr, int write)
     return 0;
 }
 
+int mm_unmap(struct mm *m, uint64_t s, uint64_t len) { mm_lock(m); int r = mm_unmap_l(m, s, len); mm_unlock(m); return r; }
+int mm_map(struct mm *m, uint64_t s, uint64_t len, uint32_t prot, int shared, struct node *file, uint64_t off, uint64_t flen)
+{ mm_lock(m); int r = mm_map_l(m, s, len, prot, shared, file, off, flen); mm_unlock(m); return r; }
+int mm_protect(struct mm *m, uint64_t s, uint64_t len, uint32_t prot) { mm_lock(m); int r = mm_protect_l(m, s, len, prot); mm_unlock(m); return r; }
+int mm_fault(struct mm *m, uint64_t addr, int write) { mm_lock(m); int r = mm_fault_l(m, addr, write); mm_unlock(m); return r; }
+
 struct mm *mm_clone(struct mm *src)
+{
+    mm_lock(src);
+    struct mm *r = 0;
+    extern struct mm *mm_clone_l(struct mm *);
+    r = mm_clone_l(src);
+    mm_unlock(src);
+    return r;
+}
+
+struct mm *mm_clone_l(struct mm *src)
 {
     struct mm *m = mm_new();
     if (!m) return 0;
@@ -272,7 +309,7 @@ static void free_tables(uint64_t *t, int lvl)
 void mm_put(struct mm *m)
 {
     if (!m || --m->refs > 0) return;
-    for (int i = 0; i < m->nv; i++) if (m->v[i].file) fs_put(m->v[i].file);
+    for (int i = 0; i < m->nv; i++) if (m->v[i].file) { if (m->v[i].counted) m->v[i].file->maps--; fs_put(m->v[i].file); }
     uint64_t *pml4 = (uint64_t *)(uintptr_t)m->pml4;
     for (int i = 0; i < 256; i++) if (pml4[i] & P) free_tables(table(pml4[i]), 3);
     pmm_free_page(m->pml4);
@@ -286,7 +323,7 @@ static void *uaddr(struct mm *m, uint64_t a, int write)
     if (a >= USER_TOP || a < 0x1000) return 0;
     uint64_t *p = pte(m, a, 0);
     if (!p || !(*p & P) || !(*p & US) || (write && !(*p & RW))) {
-        if (mm_fault(m, a, write) < 0) return 0;
+        if (mm_fault_l(m, a, write) < 0) return 0;
         p = pte(m, a, 0);
         if (!p || !(*p & US) || (write && !(*p & RW))) return 0;
     }
@@ -296,38 +333,44 @@ static void *uaddr(struct mm *m, uint64_t a, int write)
 int copyin(struct mm *m, void *dst, uint64_t src, size_t n)
 {
     uint8_t *d = dst;
+    mm_lock(m);
     while (n) {
         void *s = uaddr(m, src, 0);
-        if (!s) return -14;
+        if (!s) { mm_unlock(m); return -14; }
         size_t chunk = PAGE_SIZE - (src & (PAGE_SIZE - 1));
         if (chunk > n) chunk = n;
         memcpy(d, s, chunk);
         d += chunk; src += chunk; n -= chunk;
     }
+    mm_unlock(m);
     return 0;
 }
 
 int copyout(struct mm *m, uint64_t dst, const void *src, size_t n)
 {
     const uint8_t *s = src;
+    mm_lock(m);
     while (n) {
         void *d = uaddr(m, dst, 1);
-        if (!d) return -14;
+        if (!d) { mm_unlock(m); return -14; }
         size_t chunk = PAGE_SIZE - (dst & (PAGE_SIZE - 1));
         if (chunk > n) chunk = n;
         memcpy(d, s, chunk);
         s += chunk; dst += chunk; n -= chunk;
     }
+    mm_unlock(m);
     return 0;
 }
 
 long copyin_str(struct mm *m, char *dst, uint64_t src, size_t cap)
 {
+    mm_lock(m);
     for (size_t i = 0; i < cap; i++) {
         char *s = uaddr(m, src + i, 0);
-        if (!s) return -14;
+        if (!s) { mm_unlock(m); return -14; }
         dst[i] = *s;
-        if (!*s) return (long)i;
+        if (!*s) { mm_unlock(m); return (long)i; }
     }
+    mm_unlock(m);
     return -36;                                       /* ENAMETOOLONG */
 }

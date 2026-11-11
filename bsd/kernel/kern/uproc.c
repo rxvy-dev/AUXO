@@ -69,7 +69,7 @@ void file_put(struct file *f)
         if (!p->readers && !p->writers) { pmm_free_page((uint64_t)(uintptr_t)p->buf); rs_kfree(p); }
     }
     if (f->kind == 5 && f->priv) unix_close(f->priv);
-    if (f->kind == 6 && f->priv) rs_kfree(f->priv);
+    if ((f->kind == 6 || f->kind == 7) && f->priv) rs_kfree(f->priv);
     if (f->node) fs_put(f->node);
     rs_kfree(f);
 }
