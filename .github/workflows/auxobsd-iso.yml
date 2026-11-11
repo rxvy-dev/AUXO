@@ -1,12 +1,14 @@
 name: AuxoBSD ISO
 
 # Builds the FreeBSD-based AuxoBSD ISO (KDE Plasma, Firefox, Auxo tools, GUI installer) inside a
-# FreeBSD 15.1 VM on a GitHub runner. Start it by hand (Actions → AuxoBSD ISO → Run workflow)
-# or by pushing a tag like bsd-v1.0.0.
+# FreeBSD 15.1 VM on a GitHub runner. Runs on pushes to the auxo-freebsd branch that touch the
+# FreeBSD edition, on tags like bsd-v1.0.0, or by hand (Actions → AuxoBSD ISO → Run workflow).
 on:
   workflow_dispatch:
   push:
     tags: ["bsd-v*"]
+    branches: ["auxo-freebsd"]
+    paths: ["bsd/**", "!bsd/kernel/**", "packages/auxo-tools/**", ".github/workflows/auxobsd-iso.yml"]
 
 jobs:
   tests:
