@@ -84,7 +84,7 @@ struct task {
     char   name[16];
     char   exe[128];
     uint32_t umask;
-    int    is_thread;
+    int    is_thread, detached;
     uint64_t start_tick;
     struct trapframe *tf;          /* the trap frame of the current syscall */
 };
@@ -92,6 +92,7 @@ struct task {
 struct task *task_current(void);   /* NULL on kernel threads */
 struct task *task_by_pid(int pid);
 int  uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd);   /* pid or -errno */
+int  uproc_spawn_detached(const char *path, char *const argv[], char *const envp[], const char *cwd);   /* reaped on exit */
 int  uproc_wait(int pid, int *status);                                     /* from kernel threads */
 void uproc_kill_fg(int sig);                                               /* Ctrl-C */
 int  uproc_count(void);

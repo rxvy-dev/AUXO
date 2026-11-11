@@ -80,6 +80,18 @@ static const char keymap_shift[0x3A] = {
 };
 
 static int shift, ctrl, caps, ext;
+#define RAWQ 128
+static uint16_t rawq[RAWQ];
+static volatile int rhead, rtail;
+
+/* next raw key event: Linux keycode, bit 15 set on release; -1 when none */
+int input_raw_key(void)
+{
+    if (rhead == rtail) return -1;
+    int k = rawq[rtail];
+    rtail = (rtail + 1) % RAWQ;
+    return k;
+}
 
 void input_kbd_irq(void)
 {
@@ -90,6 +102,13 @@ void input_kbd_irq(void)
 
     if (sc == 0xE0) { ext = 1; return; }
     int up = sc & 0x80;
+    if (gui) {                                     /* raw keys for Wayland clients: Linux keycodes */
+        static const uint8_t e0[128] = { [0x1C] = 96, [0x1D] = 97, [0x35] = 98, [0x38] = 100, [0x47] = 102, [0x48] = 103,
+            [0x49] = 104, [0x4B] = 105, [0x4D] = 106, [0x4F] = 107, [0x50] = 108, [0x51] = 109, [0x52] = 110, [0x53] = 111,
+            [0x5B] = 125, [0x5C] = 126, [0x5D] = 127 };
+        uint8_t code = ext ? e0[sc & 0x7F] : (uint8_t)(sc & 0x7F);
+        if (code && ((rhead + 1) % RAWQ) != rtail) { rawq[rhead] = (uint16_t)(code | (up ? 0x8000 : 0)); rhead = (rhead + 1) % RAWQ; }
+    }
     sc &= 0x7F;
 
     if (ext) {

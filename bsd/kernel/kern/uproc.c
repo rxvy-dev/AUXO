@@ -5,6 +5,7 @@
 #include "rs.h"
 #include "fs.h"
 #include "uproc.h"
+#include "unix.h"
 
 #define MAXTASK 128
 static struct task tasks[MAXTASK];
@@ -67,6 +68,8 @@ void file_put(struct file *f)
         if (f->kind == 1) p->readers--; else p->writers--;
         if (!p->readers && !p->writers) { pmm_free_page((uint64_t)(uintptr_t)p->buf); rs_kfree(p); }
     }
+    if (f->kind == 5 && f->priv) unix_close(f->priv);
+    if (f->kind == 6 && f->priv) rs_kfree(f->priv);
     if (f->node) fs_put(f->node);
     rs_kfree(f);
 }
@@ -164,6 +167,22 @@ int tty_read(void *kbuf, size_t n, int nonblock)
 long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
 {
     (void)t;
+    if (f->kind == 5) {                                    /* socket */
+        for (;;) {
+            long r = unix_recv(f->priv, kbuf, n, 0, 0, 0);
+            if (r != -11 || (f->flags & 04000)) return r;
+            if (t && (t->pending & ~t->sigmask)) return -4;
+            wait_tick();
+        }
+    }
+    if (f->kind == 6) {                                    /* eventfd */
+        uint64_t *cnt = f->priv;
+        while (!*cnt) { if (f->flags & 04000) return -11; if (t && (t->pending & ~t->sigmask)) return -4; wait_tick(); }
+        if (n < 8) return -22;
+        memcpy(kbuf, cnt, 8);
+        *cnt = 0;
+        return 8;
+    }
     if ((f->flags & 3) == 1) return -9;
     if (f->kind == 1) {
         struct pipe *p = f->priv;
@@ -200,6 +219,22 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
 long file_write(struct task *t, struct file *f, const void *kbuf, size_t n)
 {
     (void)t;
+    if (f->kind == 5) {
+        size_t done = 0;
+        while (done < n) {
+            long r = unix_send(f->priv, (const uint8_t *)kbuf + done, n - done, 0, 0);
+            if (r == -11) { if (f->flags & 04000) return done ? (long)done : -11; wait_tick(); continue; }
+            if (r < 0) return done ? (long)done : r;
+            done += (size_t)r;
+        }
+        return (long)done;
+    }
+    if (f->kind == 6) {
+        if (n < 8) return -22;
+        uint64_t v; memcpy(&v, kbuf, 8);
+        *(uint64_t *)f->priv += v;
+        return 8;
+    }
     if ((f->flags & 3) == 0 && f->kind != 2) return -9;
     if (f->kind == 2) {
         struct pipe *p = f->priv;
@@ -250,7 +285,7 @@ static void user_start(uintptr_t arg)
     struct task *t = st->t;
     t->pid = t->tgid = t->pgid = rs_current_pid();
     t->start_tick = kernel_ticks();
-    fg_pgid = t->pgid;
+    if (!t->detached) fg_pgid = t->pgid;
     struct trapframe tf;
     int r = exec_load(t, st->path, st->argv, st->envp, &tf);
     rs_kfree(st->argv);
@@ -265,11 +300,16 @@ static void user_start(uintptr_t arg)
     user_return(&tf);
 }
 
-int uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd)
+static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached);
+int uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 0); }
+int uproc_spawn_detached(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 1); }
+
+static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached)
 {
     struct task *t = task_alloc();
     if (!t) return -11;
     t->ppid = 0;
+    t->detached = detached;
     t->umask = 022;
     t->files = rs_kmalloc(sizeof *t->files);
     t->sig = rs_kmalloc(sizeof(struct sigact) * 64);
@@ -297,7 +337,7 @@ int uproc_spawn(const char *path, char *const argv[], char *const envp[], const 
     strlcpy(nm, b ? b + 1 : path, sizeof nm);
     int pid = rs_spawn(nm, user_start, (uintptr_t)st);
     if (pid < 0) { task_free(t); return -11; }
-    for (int i = 0; i < 1000 && t->pid != pid; i++) rs_yield();
+    for (int i = 0; i < 1000 && t->pid != pid && !detached; i++) rs_yield();
     return pid;
 }
 

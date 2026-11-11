@@ -6,6 +6,7 @@
 #include "fs.h"
 #include "uproc.h"
 #include "auxo.h"
+#include "unix.h"
 
 struct task *task_alloc(void);
 void task_free(struct task *t);
@@ -24,6 +25,8 @@ enum { EPERM = 1, ENOENT, ESRCH, EINTR, EIO, ENXIO, E2BIG, ENOEXEC, EBADF, ECHIL
        EOPNOTSUPP = 95 };
 
 #define AT_FDCWD -100
+#define EMSGSIZE_ 90
+#define ENOPROTOOPT_ 92
 
 static uint64_t rdmsr(uint32_t m) { uint32_t lo, hi; __asm__ volatile("rdmsr" : "=a"(lo), "=d"(hi) : "c"(m)); return (uint64_t)hi << 32 | lo; }
 static void wrmsr(uint32_t m, uint64_t v) { __asm__ volatile("wrmsr" :: "c"(m), "a"((uint32_t)v), "d"((uint32_t)(v >> 32))); }
@@ -634,7 +637,7 @@ void task_exit(struct task *t, int status)
     t->exit_status = status;
     t->state = 2;                                           /* zombie: the parent's wait4 reaps it */
     /* nobody will wait for orphans: reap now */
-    if (t->ppid && !task_by_pid(t->ppid)) task_free(t);
+    if (t->detached || (t->ppid && !task_by_pid(t->ppid))) task_free(t);
     rs_thread_exit();
 }
 
@@ -771,7 +774,9 @@ static int fd_ready(struct task *t, int fd, int events)
     struct file *f = getf(t, fd);
     if (!f) return 0x20;                                  /* POLLNVAL */
     int r = 0;
-    if (f->kind == 1) { if (pipe_readable(f)) r |= 1; }
+    if (f->kind == 5) { if (unix_readable(f->priv)) r |= 1; if (unix_writable(f->priv)) r |= 4; if (((struct usock *)f->priv)->peer_closed) r |= 0x10; }
+    else if (f->kind == 6) { if (*(uint64_t *)f->priv) r |= 1; r |= 4; }
+    else if (f->kind == 1) { if (pipe_readable(f)) r |= 1; }
     else if (f->kind == 2) { if (pipe_writable(f)) r |= 4; }
     else if (f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY) { if (tty_readable()) r |= 1; r |= 4; }
     else r |= 5;
@@ -1073,6 +1078,233 @@ static long sys_prlimit(struct task *t, long res, uint64_t unew, uint64_t uold)
     return 0;
 }
 
+/* ── sockets (AF_UNIX) ──────────────────────────────────────────────── */
+static struct usock *getsock(struct task *t, long fd, long *err)
+{
+    *err = 0;
+    struct file *f = getf(t, fd);
+    if (!f) { *err = -EBADF; return 0; }
+    if (f->kind != 5) { *err = -ENOTSOCK; return 0; }
+    return f->priv;
+}
+
+static long sock_fd(struct task *t, struct usock *u, long flags)
+{
+    struct file *f = file_new(5, 0, 2 | (int)(flags & 04000));
+    if (!f) { unix_close(u); return -ENOMEM; }
+    f->priv = u;
+    strlcpy(f->path, "socket:[unix]", sizeof f->path);
+    int fd = alloc_fd(t, f, 0, (flags & 02000000) != 0);
+    if (fd < 0) file_put(f);
+    return fd;
+}
+
+static long sys_socket(struct task *t, long domain, long type)
+{
+    if (domain != 1) return -EAFNOSUPPORT;            /* AF_UNIX only, so far */
+    struct usock *u = unix_new();
+    if (!u) return -ENOMEM;
+    return sock_fd(t, u, type);
+}
+
+static long sun_path(struct task *t, uint64_t uaddr, uint64_t len, char *out)
+{
+    uint8_t sa[110];
+    memset(sa, 0, sizeof sa);
+    if (len < 3 || len > sizeof sa) return -EINVAL;
+    if (copyin(t->mm, sa, uaddr, len) < 0) return -EFAULT;
+    if (sa[0] != 1) return -EAFNOSUPPORT;
+    memcpy(out, sa + 2, len - 2);
+    out[len - 2] = 0;
+    return 0;
+}
+
+static long sys_bind(struct task *t, long fd, uint64_t ua, uint64_t len)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    char p[110];
+    if ((r = sun_path(t, ua, len, p)) < 0) return r;
+    return unix_bind(u, p, t->cwd);
+}
+
+static long sys_connect(struct task *t, long fd, uint64_t ua, uint64_t len)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    char p[110];
+    if ((r = sun_path(t, ua, len, p)) < 0) return r;
+    return unix_connect(u, p, t->cwd);
+}
+
+static long sys_accept(struct task *t, long fd, long flags)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    struct file *lf = getf(t, fd);
+    struct usock *c;
+    while (!(c = unix_accept(u))) {
+        if (lf->flags & 04000) return -EAGAIN;
+        if (t->pending & ~t->sigmask) return -EINTR;
+        wait_tick();
+    }
+    return sock_fd(t, c, flags);
+}
+
+static long sys_socketpair(struct task *t, long type, uint64_t usv)
+{
+    struct usock *a, *b;
+    if (unix_pair(&a, &b) < 0) return -ENOMEM;
+    long fa = sock_fd(t, a, type);
+    if (fa < 0) { unix_close(b); return fa; }
+    long fb = sock_fd(t, b, type);
+    if (fb < 0) { sys_close(t, fa); return fb; }
+    int sv[2] = { (int)fa, (int)fb };
+    return copyout(t->mm, usv, sv, 8);
+}
+
+static long sys_sendmsg(struct task *t, long fd, uint64_t umsg, long flags)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    struct file *sf = getf(t, fd);
+    uint64_t m[7];
+    if (copyin(t->mm, m, umsg, 56) < 0) return -EFAULT;
+    /* passed descriptors */
+    struct file *files[UNIX_MAXFDS];
+    int nf = 0;
+    if (m[4] && m[5] >= 16) {
+        uint8_t ctl[512];
+        size_t cl = m[5] < sizeof ctl ? (size_t)m[5] : sizeof ctl;
+        if (copyin(t->mm, ctl, m[4], cl) < 0) return -EFAULT;
+        for (size_t o = 0; o + 16 <= cl; ) {
+            uint64_t len; int lvl, type;
+            memcpy(&len, ctl + o, 8); memcpy(&lvl, ctl + o + 8, 4); memcpy(&type, ctl + o + 12, 4);
+            if (len < 16 || o + len > cl) break;
+            if (lvl == 1 && type == 1)
+                for (size_t k = 16; k + 4 <= len && nf < UNIX_MAXFDS; k += 4) {
+                    int pfd; memcpy(&pfd, ctl + o + k, 4);
+                    struct file *pf = getf(t, pfd);
+                    if (!pf) return -EBADF;
+                    files[nf++] = pf;
+                }
+            o += (len + 7) & ~7ULL;
+        }
+    }
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    size_t total = 0;
+    for (uint64_t i = 0; i < m[3] && i < 64; i++) {
+        uint64_t iov[2];
+        if (copyin(t->mm, iov, m[2] + i * 16, 16) < 0) { rs_kfree(kb); return -EFAULT; }
+        if (total + iov[1] > KBUF) { rs_kfree(kb); return -EMSGSIZE_; }
+        if (copyin(t->mm, kb + total, iov[0], iov[1]) < 0) { rs_kfree(kb); return -EFAULT; }
+        total += iov[1];
+    }
+    size_t done = 0;
+    r = 0;
+    for (;;) {
+        r = unix_send(u, kb + done, total - done, done ? 0 : files, done ? 0 : nf);
+        if (r > 0) { done += (size_t)r; if (done == total) break; continue; }
+        if (r == -EAGAIN && !(flags & 0x40) && !(sf->flags & 04000)) { wait_tick(); continue; }
+        break;
+    }
+    rs_kfree(kb);
+    if (!done && r < 0) { if (r == -EPIPE && !(flags & 0x4000)) t->pending |= 1ULL << 12; return r; }
+    return (long)done;
+}
+
+static long sys_recvmsg(struct task *t, long fd, uint64_t umsg, long flags)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    struct file *sf = getf(t, fd);
+    uint64_t m[7];
+    if (copyin(t->mm, m, umsg, 56) < 0) return -EFAULT;
+    size_t want = 0;
+    uint64_t iov[64][2];
+    uint64_t niov = m[3] < 64 ? m[3] : 64;
+    for (uint64_t i = 0; i < niov; i++) { if (copyin(t->mm, iov[i], m[2] + i * 16, 16) < 0) return -EFAULT; want += iov[i][1]; }
+    if (want > KBUF) want = KBUF;
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    struct file *files[UNIX_MAXFDS];
+    int nf = 0;
+    for (;;) {
+        r = unix_recv(u, kb, want, files, &nf, UNIX_MAXFDS);
+        if (r != -EAGAIN || (flags & 0x40) || (sf->flags & 04000)) break;
+        if (t->pending & ~t->sigmask) { r = -EINTR; break; }
+        wait_tick();
+    }
+    if (r < 0) { rs_kfree(kb); return r; }
+    size_t o = 0;
+    for (uint64_t i = 0; i < niov && o < (size_t)r; i++) {
+        size_t c = (size_t)r - o < iov[i][1] ? (size_t)r - o : iov[i][1];
+        if (copyout(t->mm, iov[i][0], kb + o, c) < 0) { rs_kfree(kb); return -EFAULT; }
+        o += c;
+    }
+    rs_kfree(kb);
+    uint64_t clen = 0;
+    int mflags = 0;
+    if (nf) {
+        uint8_t ctl[16 + 4 * UNIX_MAXFDS];
+        uint64_t len = 16 + 4 * (uint64_t)nf;
+        int lvl = 1, type = 1;
+        memcpy(ctl, &len, 8); memcpy(ctl + 8, &lvl, 4); memcpy(ctl + 12, &type, 4);
+        for (int i = 0; i < nf; i++) {
+            int nfd = alloc_fd(t, files[i], 0, (flags & 0x40000000) != 0);   /* MSG_CMSG_CLOEXEC */
+            if (nfd < 0) { file_put(files[i]); nfd = -1; }
+            memcpy(ctl + 16 + 4 * i, &nfd, 4);
+        }
+        if (m[5] >= len) { copyout(t->mm, m[4], ctl, len); clen = (len + 7) & ~7ULL; }
+        else mflags |= 8;                                    /* MSG_CTRUNC */
+    }
+    copyout(t->mm, umsg + 40, &clen, 8);
+    copyout(t->mm, umsg + 48, &mflags, 4);
+    uint32_t zero = 0;
+    if (m[0]) copyout(t->mm, umsg + 8, &zero, 4);
+    return r;
+}
+
+static long sys_sockopt(struct task *t, long fd, long level, long opt, uint64_t uval, uint64_t ulen)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    if (level != 1) return -ENOPROTOOPT_;
+    int v = 0;
+    if (opt == 17) {                                        /* SO_PEERCRED */
+        int cred[3] = { 1, 0, 0 };
+        uint32_t l = 12;
+        copyout(t->mm, uval, cred, 12);
+        return copyout(t->mm, ulen, &l, 4);
+    }
+    if (opt == 3) v = 1;                                    /* SO_TYPE: stream */
+    else if (opt == 7 || opt == 8) v = 256 * 1024;          /* buffers */
+    else if (opt == 30) v = 1;                              /* SO_ACCEPTCONN etc. */
+    uint32_t l = 4;
+    copyout(t->mm, uval, &v, 4);
+    return copyout(t->mm, ulen, &l, 4);
+}
+
+static long sys_sockname(struct task *t, long fd, uint64_t ua, uint64_t ulen)
+{
+    long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
+    (void)u;
+    uint16_t fam = 1;
+    uint32_t l = 2;
+    if (ua) copyout(t->mm, ua, &fam, 2);
+    if (ulen) copyout(t->mm, ulen, &l, 4);
+    return 0;
+}
+
+static long sys_eventfd(struct task *t, uint64_t init, long flags)
+{
+    uint64_t *c = rs_kmalloc(8);
+    if (!c) return -ENOMEM;
+    *c = init;
+    struct file *f = file_new(6, 0, 2 | (int)(flags & 04000));
+    if (!f) { rs_kfree(c); return -ENOMEM; }
+    f->priv = c;
+    strlcpy(f->path, "anon_inode:[eventfd]", sizeof f->path);
+    int fd = alloc_fd(t, f, 0, (flags & 02000000) != 0);
+    if (fd < 0) file_put(f);
+    return fd;
+}
+
 /* ── the table ──────────────────────────────────────────────────────── */
 static long syscall_body(struct task *t, struct trapframe *tf)
 {
@@ -1127,7 +1359,21 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 33: return sys_dup3(t, (long)a, (long)b, 0);
     case 35: return sys_nanosleep(t, a);
     case 39: return t->tgid;
-    case 41: return -EAFNOSUPPORT;                             /* socket: not yet */
+    case 41: return sys_socket(t, (long)a, (long)b);
+    case 42: return sys_connect(t, (long)a, b, c);
+    case 43: return sys_accept(t, (long)a, 0);
+    case 288: return sys_accept(t, (long)a, (long)d);
+    case 44: { if (e) return sys_write(t, (long)a, b, c); return sys_write(t, (long)a, b, c); }
+    case 45: return sys_read(t, (long)a, b, c);
+    case 46: return sys_sendmsg(t, (long)a, b, (long)c);
+    case 47: return sys_recvmsg(t, (long)a, b, (long)c);
+    case 48: { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; if (u->peer) u->peer->peer_closed = 1; return 0; }
+    case 49: return sys_bind(t, (long)a, b, c);
+    case 50: { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; return unix_listen(u); }
+    case 51: case 52: return sys_sockname(t, (long)a, b, c);
+    case 53: return sys_socketpair(t, (long)b, d);
+    case 54: return 0;
+    case 55: return sys_sockopt(t, (long)a, (long)b, (long)c, d, e);
     case 56: return sys_clone(t, a, b, c, d, e);
     case 57: return sys_clone(t, 17, 0, 0, 0, 0);
     case 58: return sys_clone(t, 0x4000 | 0x100 | 17, 0, 0, 0, 0);
@@ -1226,9 +1472,14 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 271: { int64_t ms = -1; if (c) { int64_t ts[2]; if (copyin(t->mm, ts, c, 16) == 0) ms = ts[0] * 1000 + ts[1] / 1000000; } return sys_poll(t, a, (long)b, ms); }
     case 273: case 274: return 0;                              /* robust lists */
     case 280: return 0;                                        /* utimensat */
-    case 284: case 290: return -ENOSYS;                        /* eventfd: not yet */
+    case 284: return sys_eventfd(t, a, 0);
+    case 290: return sys_eventfd(t, a, (long)b);
     case 292: return sys_dup3(t, (long)a, (long)b, (long)c);
     case 293: return sys_pipe2(t, a, (long)b);
+    case 285: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF;   /* fallocate */
+                uint64_t want = c + d;
+                if (!(b & 1) && want > fl->node->size) return fs_truncate(fl->node, want);
+                return 0; }
     case 302: return sys_prlimit(t, (long)b, c, d);
     case 318: return sys_getrandom(t, a, b);
     case 319: return sys_memfd(t, a, (long)b);

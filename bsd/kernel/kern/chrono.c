@@ -16,6 +16,8 @@
 #include "chrono.h"
 #include "chrono_themes.h"
 #include "apps.h"
+#include "wayland.h"
+#include "uproc.h"
 #include "vfs.h"
 
 _Static_assert(CHRONO_THEMES == CHRONO_THEME_COUNT, "update CHRONO_THEMES in chrono.h");
@@ -37,6 +39,7 @@ struct win {
     int used, app, x, y, w, h;          /* x,y: outer top-left; w,h: client size */
     int minimized, maximized, sx, sy;   /* sx,sy: position before maximizing */
     int scroll, sel, sw, sh;            /* sw,sh: size before maximizing */
+    int wl;                             /* APP_WAYLAND: the server's xdg surface */
     const char *title;
 };
 static struct win wins[MAXWIN];
@@ -272,10 +275,12 @@ static int inset(void)
 }
 static int border(void) { return T->border_width; }
 static int top_h(void) { return inset() ? border() + T->title_height + (T->decor == DECOR_BEVEL ? 1 : 0) : T->title_height; }
-static int outer_w(const struct win *w) { return w->w + 2 * border(); }
-static int outer_h(const struct win *w) { return w->h + top_h() + border(); }
-static int client_x(const struct win *w) { return w->x + border(); }
-static int client_y(const struct win *w) { return w->y + top_h(); }
+/* Wayland windows bring their own decorations (GTK draws them): no Chrono frame */
+#define APP_WAYLAND 100
+static int outer_w(const struct win *w) { return w->app == APP_WAYLAND ? w->w : w->w + 2 * border(); }
+static int outer_h(const struct win *w) { return w->app == APP_WAYLAND ? w->h : w->h + top_h() + border(); }
+static int client_x(const struct win *w) { return w->app == APP_WAYLAND ? w->x : w->x + border(); }
+static int client_y(const struct win *w) { return w->app == APP_WAYLAND ? w->y : w->y + top_h(); }
 
 struct btn { int kind, x, y, w, h; };
 
@@ -563,6 +568,7 @@ static void app_about(struct canvas *c, struct win *wn)
 static void paint_window(struct canvas *c, int idx)
 {
     struct win *wn = &wins[idx];
+    if (wn->app == APP_WAYLAND) { wl_paint_window(c, wn->wl, wn->x, wn->y); wn->title = wl_title(wn->wl); return; }
     paint_frame(c, wn, idx == focus);
     gfx_clip(c, client_x(wn), client_y(wn), wn->w, wn->h);
     if (wn->app == APP_TERMINAL) app_terminal(c, wn);
@@ -755,11 +761,13 @@ static void compose(void)
         int i = zorder[k];
         if (wins[i].used && !wins[i].minimized) paint_window(&scr, i);
     }
+    wl_paint_popups(&scr);
     paint_panel(&scr);
     if (menu_open) paint_menu(&scr);
     fb_present(scr.px, scr.stride, 0, 0, W, H);
     cur_drawn_x = -1;
     cursor_show();
+    wl_frame_done();
 }
 
 static void make_colors(void)
@@ -819,8 +827,24 @@ static void close_win(int i)
     refocus();
 }
 
+static int run_detached(const char *path, char *const argv[])
+{
+    char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LANG=C.UTF-8", "TERM=linux",
+                     "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
+                     "GDK_DEBUG=gl-disable,vulkan-disable", "GTK_A11Y=none", "NO_AT_BRIDGE=1", "DBUS_SESSION_BUS_ADDRESS=disabled:",
+                     "XDG_DATA_DIRS=/usr/share", "TMPDIR=/tmp", 0 };
+    return uproc_spawn_detached(path, argv, envp, "/home/root");
+}
+
 static void open_app(int app)
 {
+    if (app == APP_AETHER && vfs_exists("/usr/share/aether/bin/aether")) {
+        /* the real Aether (github.com/rxvy-dev/aether): Python + GTK 4, through our Wayland server */
+        for (int i = 0; i < MAXWIN; i++) if (wins[i].used && wins[i].app == APP_WAYLAND && !strncmp(wins[i].title ? wins[i].title : "", "Aether", 6)) { raise(i); return; }
+        char *argv[] = { "aether", 0 };
+        run_detached("/usr/share/aether/bin/aether", argv);
+        return;
+    }
     for (int i = 0; i < MAXWIN; i++)
         if (wins[i].used && wins[i].app == app) { raise(i); return; }
     for (int i = 0; i < MAXWIN; i++) {
@@ -845,6 +869,16 @@ static void open_app(int app)
     }
 }
 
+static void sync_wl_focus(void)
+{
+    wl_focus(focus >= 0 && wins[focus].used && !wins[focus].minimized && wins[focus].app == APP_WAYLAND ? wins[focus].wl : -1);
+}
+
+/* Wayland pointer routing: popups first, then the window under the pointer (or the one holding
+ * the button). Returns the xdg surface the pointer is over (or -1) and its buffer coordinates. */
+static int wl_grab = -1, wl_grab_win = -1, wl_resize_edges;
+static int wl_target(int *bx, int *by, int *winidx);
+
 static int win_at(int x, int y)
 {
     for (int k = nz - 1; k >= 0; k--) {
@@ -854,6 +888,76 @@ static int win_at(int x, int y)
     }
     return -1;
 }
+
+static int wl_target(int *bx, int *by, int *winidx)
+{
+    *winidx = -1;
+    int p = wl_popup_at(mx, my, bx, by);
+    if (p >= 0) return p;
+    int i = wl_grab_win >= 0 ? wl_grab_win : win_at(mx, my);
+    if (i < 0 || wins[i].app != APP_WAYLAND) return -1;
+    int gx, gy, gw, gh;
+    wl_geometry(wins[i].wl, &gx, &gy, &gw, &gh);
+    *bx = mx - wins[i].x + gx; *by = my - wins[i].y + gy;
+    *winidx = i;
+    return wins[i].wl;
+}
+
+/* ── the Wayland server's hooks ─────────────────────────────────────── */
+int chrono_wl_new(int x, int w, int h, const char *title)
+{
+    for (int i = 0; i < MAXWIN; i++) {
+        if (wins[i].used) continue;
+        struct win *wn = &wins[i];
+        *wn = (struct win){ 0 };
+        wn->used = 1; wn->app = APP_WAYLAND; wn->wl = x; wn->w = w; wn->h = h; wn->title = title;
+        struct prect p = panel_rect();
+        wn->x = (W - w) / 2 + 24 * (i % 4);
+        wn->y = (H - p.h - h) / 2 + (T->panel_top ? p.h : 0) + 18 * (i % 4);
+        if (wn->x < 0) wn->x = 0;
+        if (wn->y < 0) wn->y = 0;
+        raise(i);
+        sync_wl_focus();
+        return i;
+    }
+    return -1;
+}
+
+void chrono_wl_resized(int i, int w, int h)
+{
+    if (i < 0 || !wins[i].used) return;
+    /* resizing from the left/top keeps the opposite edge still */
+    if (wl_resize_edges & 4) wins[i].x += wins[i].w - w;
+    if (wl_resize_edges & 1) wins[i].y += wins[i].h - h;
+    wins[i].w = w; wins[i].h = h;
+}
+void chrono_wl_title(int i, const char *t) { if (i >= 0 && wins[i].used) wins[i].title = t; }
+void chrono_wl_close(int i)
+{
+    if (i < 0 || !wins[i].used || wins[i].app != APP_WAYLAND) return;
+    if (wl_grab_win == i) wl_grab_win = wl_grab = -1;
+    if (drag == i || resize == i) drag = resize = -1;
+    close_win(i);
+    sync_wl_focus();
+}
+void chrono_wl_move(int i) { if (i >= 0 && (buttons & 1)) { drag = i; drag_dx = mx - wins[i].x; drag_dy = my - wins[i].y; wl_grab_win = wl_grab = -1; } }
+void chrono_wl_resize(int i, int edges)
+{
+    if (i < 0 || !(buttons & 1)) return;
+    resize = i; wl_resize_edges = edges;
+    drag_dx = mx; drag_dy = my;
+    wins[i].sw = wins[i].w; wins[i].sh = wins[i].h;
+    wl_grab_win = wl_grab = -1;
+}
+void chrono_wl_maximize(int i, int on)
+{
+    struct prect p = panel_rect();
+    if (on) { wins[i].sx = wins[i].x; wins[i].sy = wins[i].y; wins[i].x = 0; wins[i].y = T->panel_top ? p.y + p.h : 0; wins[i].maximized = 1; }
+    else if (wins[i].maximized) { wins[i].x = wins[i].sx; wins[i].y = wins[i].sy; wins[i].maximized = 0; }
+}
+void chrono_wl_minimize(int i) { minimize(i); sync_wl_focus(); }
+void chrono_wl_win_pos(int i, int *x, int *y) { if (i >= 0 && wins[i].used) { *x = wins[i].x; *y = wins[i].y; } }
+void chrono_wl_max_size(int *w, int *h) { struct prect p = panel_rect(); *w = W; *h = H - p.h - (p.y > 0 && !T->panel_top ? H - p.y - p.h : 0); }
 
 static void maximize(int i)
 {
@@ -1000,11 +1104,13 @@ void chrono_main(uintptr_t arg)
     running = 1;
     input_set_gui(1);
     open_app(APP_TERMINAL);
+    wl_server_init(W, H);
     compose();
 
     struct mouse_event ev;
     for (;;) {
         int dirty = 0, moved = 0;
+        dirty |= wl_server_poll();
         if (req_theme >= 0) { set_theme(req_theme); req_theme = -1; dirty = 1; }
         if (req_open >= 0) { open_app(req_open); req_open = -1; dirty = 1; }
         if (req_redraw) { req_redraw = 0; dirty = 1; }
@@ -1019,11 +1125,39 @@ void chrono_main(uintptr_t arg)
             if (my >= H) my = H - 1;
             moved = 1;
             buttons = ev.buttons;
-            if (ev.wheel) dirty |= on_wheel(ev.wheel);
-            if ((buttons & 1) && !(old & 1)) dirty |= on_click(mx, my);
-            if (!(buttons & 1)) drag = resize = -1;
+            /* Wayland clients get the pointer when it's over them (or they hold the button) */
+            int bx = 0, by = 0, wi = -1, target = drag < 0 && resize < 0 ? wl_target(&bx, &by, &wi) : -1;
+            if (wl_grab >= 0) { target = wl_grab; }
+            wl_pointer_at(target, bx, by);
+            int wl_took = 0;
+            static const int BTN[3] = { 0x110, 0x111, 0x112 };
+            for (int b = 0; b < 3; b++) {
+                int was = (old >> b) & 1, now = (buttons >> b) & 1;
+                if (was == now) continue;
+                if (now && target < 0 && wl_any_popup()) { wl_dismiss_popups(); wl_took = 1; continue; }   /* click outside a menu */
+                if (target >= 0) {
+                    if (now && b == 0) {
+                        if (menu_open) { menu_open = 0; dirty = 1; }
+                        if (wi >= 0 && focus != wi) { raise(wi); sync_wl_focus(); dirty = 1; }
+                        wl_grab = target; wl_grab_win = wi;
+                    }
+                    wl_button(BTN[b], now);
+                    wl_took = 1;
+                }
+                if (!now && b == 0) wl_grab = wl_grab_win = -1;
+            }
+            if (ev.wheel) { if (target >= 0) wl_axis(ev.wheel); else dirty |= on_wheel(ev.wheel); }
+            if ((buttons & 1) && !(old & 1) && !wl_took) { dirty |= on_click(mx, my); sync_wl_focus(); }
+            if (!(buttons & 1)) { drag = resize = -1; wl_resize_edges = 0; }
             if (drag >= 0) { wins[drag].x = mx - drag_dx; wins[drag].y = my - drag_dy; wins[drag].maximized = 0; dirty = 1; }
-            if (resize >= 0) {
+            if (resize >= 0 && wins[resize].app == APP_WAYLAND) {
+                struct win *rw = &wins[resize];
+                int dw = mx - drag_dx, dh = my - drag_dy;
+                int nw = rw->sw + ((wl_resize_edges & 8) ? dw : (wl_resize_edges & 4) ? -dw : 0);
+                int nh = rw->sh + ((wl_resize_edges & 2) ? dh : (wl_resize_edges & 1) ? -dh : 0);
+                static uint64_t last;
+                if (kernel_ticks() != last) { last = kernel_ticks(); wl_configure_size(rw->wl, nw < 200 ? 200 : nw, nh < 120 ? 120 : nh); }
+            } else if (resize >= 0) {
                 struct win *rw = &wins[resize];
                 int nw = mx + drag_dx - rw->x - 2 * border(), nh = my + drag_dy - rw->y - top_h() - border();
                 rw->w = nw < 320 ? 320 : nw; rw->h = nh < 200 ? 200 : nh;
@@ -1038,7 +1172,19 @@ void chrono_main(uintptr_t arg)
             if (menu_open) { int h = menu_item_at(mx, my); if (h != hover_item) { hover_item = h; dirty = 1; } }
         }
         int k;
-        while ((k = input_gui_key()) >= 0) dirty |= on_key(k);
+        if (focus >= 0 && wins[focus].used && wins[focus].app == APP_WAYLAND && !menu_open) {
+            /* a Wayland window has the keyboard: raw keycodes, presses and releases */
+            while ((k = input_raw_key()) >= 0) {
+                int code = k & 0x7FFF, up = (k & 0x8000) != 0;
+                if (code == 125 || code == 126) { if (!up) { menu_open = 1; hover_item = -1; dirty = 1; } continue; }
+                wl_key(code, !up);
+            }
+            while (input_gui_key() >= 0) { }
+        } else {
+            while (input_raw_key() >= 0) { }
+            while ((k = input_gui_key()) >= 0) dirty |= on_key(k);
+            sync_wl_focus();
+        }
         for (int i = 0; i < MAXWIN; i++) {
             if (!wins[i].used) continue;
             if (wins[i].app == APP_BROWSER) dirty |= browser_tick();

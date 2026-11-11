@@ -522,7 +522,10 @@ static void run(char *line)
     char pwd[VFS_PATH + 8];
     ksnprintf(pwd, sizeof pwd, "PWD=%s", cwd);
     char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LOGNAME=root", "SHELL=/bin/sh",
-                     "TERM=linux", "LANG=C.UTF-8", "TMPDIR=/tmp", pwd, 0 };
+                     "TERM=linux", "LANG=C.UTF-8", "TMPDIR=/tmp", pwd,
+                     "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
+                     "GDK_DEBUG=gl-disable,vulkan-disable", "GTK_A11Y=none", "NO_AT_BRIDGE=1", "DBUS_SESSION_BUS_ADDRESS=disabled:",
+                     "XDG_DATA_DIRS=/usr/share", 0 };
     argv[argc] = 0;
     int pid = uproc_spawn(path, argv, envp, cwd);
     if (pid < 0) { kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid); return; }
