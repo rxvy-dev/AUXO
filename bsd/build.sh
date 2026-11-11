@@ -135,7 +135,11 @@ cp "$ROOT/boot/loader.efi" "$WORK/esp/EFI/BOOT/BOOTX64.EFI"
 makefs -t msdos -o fat_type=12 -o sectors_per_cluster=1 -o volume_label=EFISYS -s 4m \
     "$WORK/efiboot.img" "$WORK/esp"
 rm -f "$ISO"
-makefs -t cd9660 -o rockridge -o label="$LABEL" -o publisher="Auxo https://auxolinux.com/bsd" \
+# isolevel=2 + long names: KDE's icon themes have thousands of files per directory, and with
+# 8.3 names (level 1) their mangled names collide far more than makefs handles. Rock Ridge still
+# carries the real names, so FreeBSD sees the normal file names either way.
+makefs -t cd9660 -o rockridge -o isolevel=2 -o allow-deep-trees -o allow-max-name \
+    -o label="$LABEL" -o publisher="Auxo https://auxolinux.com/bsd" \
     -o bootimage="i386;$ROOT/boot/cdboot" -o no-emul-boot \
     -o bootimage="i386;$WORK/efiboot.img" -o no-emul-boot -o platformid=efi \
     "$ISO" "$ROOT"
