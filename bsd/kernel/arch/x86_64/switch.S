@@ -42,6 +42,10 @@ ctx_switch:
 /* First code a new kernel thread runs. r12 = entry, r13 = argument. */
         .global thread_trampoline
 thread_trampoline:
+        fninit                                   /* fresh x87/SSE state for the new thread */
+        pushq $0x1F80
+        ldmxcsr (%rsp)
+        addq $8, %rsp
         sti
         movq %r13, %rdi
         call *%r12

@@ -10,7 +10,7 @@ on:
 jobs:
   kernel:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: bsd/kernel
@@ -25,6 +25,9 @@ jobs:
 
       - name: Accents match the Auxo Linux palette
         run: make accents-check
+
+      - name: Root filesystem (GCC, binutils, make, BusyBox from Ubuntu packages)
+        run: make rootfs
 
       - name: Build
         run: |

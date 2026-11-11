@@ -11,7 +11,7 @@ struct idt_entry {
 extern const uint64_t isr_table[48];
 extern const uint64_t isr128_addr;
 
-static struct idt_entry idt[256];
+static struct idt_entry idt[256] __attribute__((section(".entry.data"), aligned(16)));
 
 static void set_gate(int n, uint64_t h, uint8_t attr)
 {

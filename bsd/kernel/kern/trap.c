@@ -2,6 +2,7 @@
 #include "kern.h"
 #include "arch.h"
 #include "rs.h"
+#include "uproc.h"
 
 static volatile uint64_t ticks;
 uint64_t kernel_ticks(void) { return ticks; }
@@ -33,9 +34,14 @@ static void exception(struct trapframe *tf)
     panic("unhandled exception in kernel mode");
 }
 
+void uproc_irq_return(struct trapframe *tf);
+
 void trap_dispatch(struct trapframe *tf)
 {
+    int user = (tf->cs & 3) != 0;
+    if (tf->vector == 0x100) { syscall_dispatch(tf); return; }      /* `syscall` from a user program */
     if (tf->vector < 32) {
+        if (user) { user_exception(tf); return; }
         exception(tf);
     } else if (tf->vector < 48) {
         int irq = (int)tf->vector - 32;
@@ -44,6 +50,7 @@ void trap_dispatch(struct trapframe *tf)
         else if (irq == 12) mouse_irq();
         pic_eoi(irq);                 /* EOI first: the scheduler may not return here */
         if (irq == 0) { ticks++; rs_tick(); }
+        if (user) uproc_irq_return(tf);
     } else if (tf->vector == 0x80) {
         /* BSD-style: number in rax, args in rdi/rsi/rdx, result in rax (<0 = -errno) */
         tf->rax = (uint64_t)rs_syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx);

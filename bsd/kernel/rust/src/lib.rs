@@ -10,6 +10,7 @@ pub mod ffi {
         pub fn console_write(buf: *const u8, len: usize);
         pub fn ctx_switch(old_rsp: *mut u64, new_rsp: u64);
         pub fn thread_trampoline();
+        pub fn arch_switch_to(ucr3: u64, kstack_top: u64);
     }
 }
 
@@ -79,6 +80,20 @@ pub unsafe extern "C" fn rs_heap_stats(total: *mut usize, used: *mut usize) {
     *total = t;
     *used = u;
 }
+
+/// Sleep for `n` timer ticks (10 ms each); 0 = until the next tick.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sleep(n: u64) { proc::sleep(n) }
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_pid() -> i32 { proc::current_pid() }
+
+/// Set the user page tables of the calling thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_ucr3(cr3: u64) { proc::set_ucr3(cr3) }
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_kstack_top() -> u64 { proc::kstack_top() }
 
 /// Give the CPU to the next runnable thread (cooperative wait loops).
 #[no_mangle]

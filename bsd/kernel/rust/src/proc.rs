@@ -3,7 +3,7 @@
 use crate::{ffi, heap, irq, rprintln};
 use core::ptr::addr_of_mut;
 
-pub const MAXPROC: usize = 64;
+pub const MAXPROC: usize = 128;
 pub const KSTACK: usize = 64 * 1024;   // Chrono's painting is stack-hungry
 const QUANTUM_TICKS: u64 = 10; // 100 ms at 100 Hz
 
@@ -12,8 +12,14 @@ pub enum State {
     Unused,
     Runnable,
     Running,
+    Sleeping, // until `sleep_until` ticks
     Zombie,
 }
+
+/// FXSAVE area: x87/SSE state of a thread (user programs and the desktop use SSE).
+#[repr(C, align(16))]
+#[derive(Clone, Copy)]
+pub struct Fpu(pub [u8; 512]);
 
 pub struct Proc {
     pid: i32,
@@ -23,6 +29,10 @@ pub struct Proc {
     exit_code: i32,
     ticks: u64,
     name: [u8; 16],
+    ucr3: u64,        // page tables of the user program this thread runs (0 = kernel only)
+    fs_base: u64,     // user TLS pointer (FS base MSR)
+    sleep_until: u64,
+    fpu: Fpu,
 }
 
 const EMPTY: Proc = Proc {
@@ -33,6 +43,10 @@ const EMPTY: Proc = Proc {
     exit_code: 0,
     ticks: 0,
     name: [0; 16],
+    ucr3: 0,
+    fs_base: 0,
+    sleep_until: 0,
+    fpu: Fpu([0; 512]),
 };
 
 static mut PROCS: [Proc; MAXPROC] = [EMPTY; MAXPROC];
@@ -105,6 +119,9 @@ pub unsafe fn spawn(name: *const u8, entry: extern "C" fn(usize), arg: usize) ->
     (*p).stack = stack;
     (*p).exit_code = 0;
     (*p).ticks = 0;
+    (*p).ucr3 = 0;
+    (*p).fs_base = 0;
+    (*p).sleep_until = 0;
     set_name(p, name);
     let pid = (*p).pid;
     irq::restore(flags);
@@ -123,7 +140,11 @@ pub unsafe fn yield_cpu() {
     let mut next = 0;
     for k in 0..(MAXPROC - 1) {
         let i = 1 + (cur + k) % (MAXPROC - 1);
-        if (*slot(i)).state == State::Runnable {
+        let p = slot(i);
+        if (*p).state == State::Sleeping && TICKS >= (*p).sleep_until {
+            (*p).state = State::Runnable;
+        }
+        if (*p).state == State::Runnable {
             next = i;
             break;
         }
@@ -131,16 +152,65 @@ pub unsafe fn yield_cpu() {
 
     (*slot(next)).state = State::Running;
     if next != cur {
+        let c = slot(cur);
+        let n = slot(next);
+        // FPU/SSE registers and the TLS base belong to the thread; page tables and the kernel
+        // stack used on entry from user mode are handed to the entry code.
+        core::arch::asm!("fxsave64 [{}]", in(reg) (*c).fpu.0.as_mut_ptr());
+        (*c).fs_base = rdmsr(0xC000_0100);
+        wrmsr(0xC000_0100, (*n).fs_base);
+        let ktop = if (*n).stack.is_null() { 0 } else { ((*n).stack as usize + KSTACK) & !15 };
+        ffi::arch_switch_to((*n).ucr3, ktop as u64);
         CURRENT = next;
-        ffi::ctx_switch(&mut (*slot(cur)).rsp, (*slot(next)).rsp);
+        ffi::ctx_switch(&mut (*c).rsp, (*n).rsp);
+        // back on this thread
+        core::arch::asm!("fxrstor64 [{}]", in(reg) (*slot(CURRENT)).fpu.0.as_ptr());
     }
     irq::restore(flags);
+}
+
+#[inline]
+unsafe fn rdmsr(msr: u32) -> u64 {
+    let (lo, hi): (u32, u32);
+    core::arch::asm!("rdmsr", in("ecx") msr, out("eax") lo, out("edx") hi);
+    ((hi as u64) << 32) | lo as u64
+}
+
+#[inline]
+unsafe fn wrmsr(msr: u32, v: u64) {
+    core::arch::asm!("wrmsr", in("ecx") msr, in("eax") v as u32, in("edx") (v >> 32) as u32);
+}
+
+/// Sleep the current thread for `n` timer ticks (at least until the next tick).
+pub unsafe fn sleep(n: u64) {
+    let flags = irq::save();
+    let p = slot(CURRENT);
+    (*p).sleep_until = TICKS + if n == 0 { 1 } else { n };
+    (*p).state = State::Sleeping;
+    yield_cpu();
+    irq::restore(flags);
+}
+
+/// The user page tables of the current thread (exec and clone set them).
+pub unsafe fn set_ucr3(cr3: u64) {
+    let flags = irq::save();
+    (*slot(CURRENT)).ucr3 = cr3;
+    let p = slot(CURRENT);
+    let ktop = if (*p).stack.is_null() { 0 } else { ((*p).stack as usize + KSTACK) & !15 };
+    ffi::arch_switch_to(cr3, ktop as u64);
+    irq::restore(flags);
+}
+
+pub unsafe fn kstack_top() -> u64 {
+    let p = slot(CURRENT);
+    if (*p).stack.is_null() { 0 } else { (((*p).stack as usize + KSTACK) & !15) as u64 }
 }
 
 pub unsafe fn tick() {
     TICKS += 1;
     (*slot(CURRENT)).ticks += 1;
-    if TICKS % QUANTUM_TICKS == 0 {
+    // the idle thread gives way every tick, so sleepers wake on time
+    if TICKS % QUANTUM_TICKS == 0 || CURRENT == 0 {
         yield_cpu();
     }
 }
@@ -177,7 +247,7 @@ pub unsafe fn count() -> usize {
     let mut n = 0;
     for i in 0..MAXPROC {
         let st = (*slot(i)).state;
-        if st == State::Runnable || st == State::Running {
+        if st == State::Runnable || st == State::Running || st == State::Sleeping {
             n += 1;
         }
     }
@@ -192,6 +262,7 @@ pub unsafe fn ps() {
             State::Unused => continue,
             State::Runnable => "runnable",
             State::Running => "running ",
+            State::Sleeping => "sleeping",
             State::Zombie => "zombie  ",
         };
         let len = (*p).name.iter().position(|&c| c == 0).unwrap_or(16);

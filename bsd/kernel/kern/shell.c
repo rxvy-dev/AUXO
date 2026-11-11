@@ -9,10 +9,12 @@
 #include "pci.h"
 #include "net.h"
 #include "vfs.h"
+#include "fs.h"
+#include "uproc.h"
 
-#define LINE_MAX 160
+#define LINE_MAX 1024
 #define HIST     16
-#define MAXARGS  16
+#define MAXARGS  96
 
 struct cmd {
     const char *name;
@@ -489,7 +491,29 @@ static void run(char *line)
     if (!argc) return;
     for (const struct cmd *c = cmds; c->name; c++)
         if (!strcmp(c->name, argv[0])) { c->fn(argc, argv); return; }
-    kprintf("auxsh: %s: command not found (try help)\n", argv[0]);
+    /* a program from the root filesystem: real Linux binaries (gcc, make, busybox …) */
+    char path[VFS_PATH];
+    struct node *n = 0;
+    if (strchr(argv[0], '/')) { abspath(argv[0], path, sizeof path); fs_lookup(0, path, 1, &n); }
+    else {
+        static const char *const dirs[] = { "/usr/local/bin", "/usr/bin", "/usr/sbin", 0 };
+        for (int i = 0; dirs[i] && !n; i++) {
+            ksnprintf(path, sizeof path, "%s/%s", dirs[i], argv[0]);
+            if (fs_lookup(0, path, 1, &n) < 0 || n->type != N_REG) n = 0;
+        }
+    }
+    if (!n || n->type != N_REG) { kprintf("auxsh: %s: command not found (try help)\n", argv[0]); return; }
+    char pwd[VFS_PATH + 8];
+    ksnprintf(pwd, sizeof pwd, "PWD=%s", cwd);
+    char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LOGNAME=root", "SHELL=/bin/sh",
+                     "TERM=linux", "LANG=C.UTF-8", "TMPDIR=/tmp", pwd, 0 };
+    argv[argc] = 0;
+    int pid = uproc_spawn(path, argv, envp, cwd);
+    if (pid < 0) { kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid); return; }
+    int st = 0;
+    uproc_wait(pid, &st);
+    if (st & 0x7F) kprintf("auxsh: %s: killed by signal %d\n", argv[0], st & 0x7F);
+    else if (st == (127 << 8)) kprintf("auxsh: %s: couldn't run (not a Linux x86_64 program?)\n", argv[0]);
 }
 
 void shell_main(uintptr_t arg)

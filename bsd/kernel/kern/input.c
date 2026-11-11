@@ -41,6 +41,8 @@ int input_gui_key(void)
     return c;
 }
 
+int input_peek(void) { return qtail == qhead ? -1 : q[qtail]; }
+
 int input_poll(void)
 {
     if (qtail == qhead) return -1;

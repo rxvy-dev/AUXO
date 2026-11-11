@@ -59,11 +59,13 @@ const struct fbinfo *boot_framebuffer(void);     /* NULL in text mode */
 void        bootinfo_init(uint32_t mbi_addr);
 const char *boot_cmdline(void);       /* "" when none */
 const char *boot_loader(void);        /* e.g. "GRUB 2.12", "" when unknown */
+int         boot_module(const char *name, const uint8_t **data, size_t *len);   /* 0 if GRUB loaded it */
 
 /* input.c: COM1 + PS/2 keyboard, interrupt driven, one shared queue */
 void input_init(void);
 int  input_getc(void);                /* blocks (hlt) until a byte arrives */
 int  input_poll(void);                /* -1 when nothing is queued */
+int  input_peek(void);
 void input_serial_irq(void);
 void input_kbd_irq(void);
 

@@ -47,7 +47,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test rootfs accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -104,12 +104,18 @@ check: build/auxobsd.elf
 
 iso: build/auxobsd.iso
 
-build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg
+build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg $(wildcard build/rootfs.tar)
 >cp $< iso/boot/auxobsd.elf
+>if [ -f build/rootfs.tar ]; then cp build/rootfs.tar iso/boot/rootfs.tar; else rm -f iso/boot/rootfs.tar; fi
 >grub-mkrescue -o $@ iso
 
+# the root filesystem: real Linux programs (GCC 13, binutils, make, BusyBox) from Ubuntu packages.
+# ROOTFS_SET=full adds Python 3, GTK 4 and Aether.
+rootfs:
+>sh tools/mkrootfs.sh build
+
 run: iso
->$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 256M -vga std
+>$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 1G -vga std
 
 run-text: iso
 >$(QEMU) -cdrom build/auxobsd.iso -serial stdio -m 256M -display curses

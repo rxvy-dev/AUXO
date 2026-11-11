@@ -34,7 +34,7 @@ class Shell:
         for f in (self.qlog, self.olog):
             if os.path.exists(f):
                 os.remove(f)
-        args = [qemu, "-cdrom", iso, "-display", "none", "-m", "256M", "-no-reboot",
+        args = [qemu, "-cdrom", iso, "-display", "none", "-m", "1G", "-no-reboot",
                 "-chardev", f"socket,id=ser0,path={sock},server=on,wait=on", "-serial", "chardev:ser0",
                 "-monitor", "none", "-d", "cpu_reset,guest_errors", "-D", self.qlog]
         # Software CPU by default: that's what the suite is verified with. AUXO_KVM=1 opts into KVM.
@@ -255,6 +255,23 @@ def main():
         check("unknown command", "nosuchcmd: command not found" in out, out)
         out = sh.run("help")
         check("help lists the Auxo tools", "auxo-fetch" in out and "auxo-tweak" in out and "auxo-motd" in out, out)
+
+        if "files from the root filesystem image" in log:
+            print("▲ Linux programs (root filesystem)")
+            out = sh.run("busybox echo hello from busybox", timeout=30)
+            check("BusyBox runs (static Linux binary)", "hello from busybox" in out, out)
+            out = sh.run("sh -c 'echo piped | busybox tr a-z A-Z'", timeout=30)
+            check("busybox sh with a pipe", "PIPED" in out, out)
+            out = sh.run("gcc --version", timeout=60)
+            check("gcc --version", "gcc" in out and "13." in out, out)
+            out = sh.run("gcc hello.c -o hello", timeout=180)
+            check("gcc compiles and links hello.c", "error" not in out.lower() and "segfault" not in out, out)
+            out = sh.run("./hello", timeout=30)
+            check("…and the program runs", "Hello, world!" in out, out)
+            out = sh.run("ls hello", timeout=10)
+            check("the binary is in the filesystem", "hello" in out, out)
+        else:
+            print("▲ Linux programs: skipped (no build/rootfs.tar; run make rootfs)")
 
         print("▲ power")
         sh.s.sendall(b"poweroff\r")

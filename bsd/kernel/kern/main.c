@@ -6,8 +6,9 @@
 #include "pci.h"
 #include "net.h"
 #include "vfs.h"
+#include "fs.h"
 
-#define HEAP_PAGES 1024   /* 4 MiB kernel heap, managed by Rust */
+#define HEAP_PAGES 4096   /* 16 MiB kernel heap, managed by Rust (thread stacks, fs nodes) */
 
 /* Let the Chrono thread use SSE: CR0.EM off, CR0.MP on, CR4.OSFXSR + OSXMMEXCPT. The rest of the
  * kernel is built with -mgeneral-regs-only, so the XMM registers only ever hold Chrono's state. */
@@ -70,6 +71,12 @@ void kmain(uint32_t mbi)
         if (chrono_start() < 0) panic("cannot start the Chrono desktop");
         ok("gui"); kprintf("Chrono desktop, %d themes (github.com/rxvy-dev/chrono)\n", CHRONO_THEMES);
     }
+    fs_init();
+    const uint8_t *img; size_t imglen;
+    if (boot_module("rootfs", &img, &imglen) == 0) {
+        int n = fs_mount_tar(img, imglen);
+        ok("root"); kprintf("%d files from the root filesystem image (%lu MiB): Linux programs run\n", n, (unsigned long)(imglen >> 20));
+    } else { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
     vfs_init();
     pci_init();
     const struct pci_dev *gpu = pci_gpu();

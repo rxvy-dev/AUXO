@@ -3,116 +3,134 @@
 #include "arch.h"
 #include "rs.h"
 #include "vfs.h"
+#include "fs.h"
 #include "aether_data.h"
 
-struct file { char path[VFS_PATH]; uint8_t *data; size_t len, cap; };
-static struct file files[VFS_MAX];
-static int nfiles;
-static volatile int lock;
-static volatile uint32_t dirty;
+/* the apps' view: every regular file under /home/root, sorted, rebuilt when the tree changes */
+static char (*paths)[VFS_PATH];
+static size_t *sizes;
+static int npaths, pcap;
+static uint32_t built_gen = 0xFFFFFFFF;
 
-static void vlock(void) { while (__atomic_exchange_n(&lock, 1, __ATOMIC_ACQUIRE)) rs_yield(); }
-static void vunlock(void) { __atomic_store_n(&lock, 0, __ATOMIC_RELEASE); }
-
-static int find(const char *p)
+static void collect(struct node *d, char *prefix)
 {
-    for (int i = 0; i < nfiles; i++) if (!strcmp(files[i].path, p)) return i;
-    return -1;
+    size_t pl = strlen(prefix);
+    for (struct node *c = d->child; c; c = c->next) {
+        if (pl + strlen(c->name) + 2 >= VFS_PATH) continue;
+        ksnprintf(prefix + pl, VFS_PATH - pl, "/%s", c->name);
+        if (c->type == N_DIR) collect(c, prefix);
+        else if (c->type == N_REG && npaths < pcap) {
+            /* insertion sort: the tree keeps newest first */
+            int i = npaths++;
+            while (i > 0 && strcmp(paths[i - 1], prefix) > 0) { memcpy(paths[i], paths[i - 1], VFS_PATH); sizes[i] = sizes[i - 1]; i--; }
+            strlcpy(paths[i], prefix, VFS_PATH);
+            sizes[i] = (size_t)c->size;
+        }
+        prefix[pl] = 0;
+    }
 }
 
-static void release(struct file *f)
+static void rebuild(void)
 {
-    for (size_t o = 0; o < f->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)f->data + o);
-    f->data = 0; f->cap = 0;
+    if (built_gen == fs_generation()) return;
+    if (!paths) {
+        pcap = VFS_MAX;
+        paths = rs_kmalloc((size_t)pcap * VFS_PATH);
+        sizes = rs_kmalloc((size_t)pcap * sizeof *sizes);
+        if (!paths || !sizes) { pcap = 0; return; }
+    }
+    fs_lock();
+    npaths = 0;
+    struct node *home;
+    if (fs_lookup(0, "/home/root", 1, &home) == 0) { char pre[VFS_PATH] = "/home/root"; collect(home, pre); }
+    built_gen = fs_generation();
+    fs_unlock();
 }
 
 int vfs_read(const char *path, const char **data, size_t *len)
 {
-    vlock();
-    int i = find(path);
-    if (i >= 0) { *data = (const char *)files[i].data; *len = files[i].len; }
-    vunlock();
-    return i < 0 ? -1 : 0;
+    struct node *n;
+    if (fs_lookup(0, path, 1, &n) < 0 || n->type != N_REG) return -1;
+    *data = (const char *)n->data;
+    *len = (size_t)n->size;
+    if (!n->data) *data = "";
+    return 0;
 }
 
-int vfs_exists(const char *path) { vlock(); int i = find(path); vunlock(); return i >= 0; }
+int vfs_exists(const char *path) { struct node *n; return fs_lookup(0, path, 1, &n) == 0; }
+
+static int mkparents(const char *path)
+{
+    char dir[VFS_PATH];
+    strlcpy(dir, path, sizeof dir);
+    for (char *p = dir + 1; *p; p++) {
+        if (*p != '/') continue;
+        *p = 0;
+        struct node *d, *parent; char name[VFS_PATH];
+        if (fs_lookup(0, dir, 1, &d) < 0) {
+            if (fs_lookup_parent(0, dir, &parent, name, sizeof name) < 0) return -1;
+            if (!fs_create(parent, name, N_DIR, 0755)) return -1;
+        }
+        *p = '/';
+    }
+    return 0;
+}
 
 int vfs_write(const char *path, const void *data, size_t len)
 {
     if (path[0] != '/' || strlen(path) >= VFS_PATH) return -1;
-    vlock();
-    int i = find(path);
-    if (i < 0) {
-        if (nfiles >= VFS_MAX) { vunlock(); return -1; }
-        /* keep the table sorted by path */
-        i = nfiles;
-        while (i > 0 && strcmp(files[i - 1].path, path) > 0) { files[i] = files[i - 1]; i--; }
-        memset(&files[i], 0, sizeof files[i]);
-        strlcpy(files[i].path, path, VFS_PATH);
-        nfiles++;
-    }
-    struct file *f = &files[i];
-    size_t need = (len + 1 + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    if (need > f->cap) {
-        uint64_t pg = pmm_alloc_contig(need / PAGE_SIZE);
-        if (!pg) { vunlock(); return -1; }
-        release(f);
-        f->data = (uint8_t *)(uintptr_t)pg;
-        f->cap = need;
-    }
-    memmove(f->data, data, len);
-    f->data[len] = 0;                       /* text files can be used as C strings */
-    f->len = len;
-    dirty++;
-    vunlock();
+    if (mkparents(path) < 0) return -1;
+    struct node *dir, *n;
+    char name[VFS_PATH];
+    if (fs_lookup_parent(0, path, &dir, name, sizeof name) < 0) return -1;
+    n = fs_create(dir, name, N_REG, 0644);
+    if (!n || n->type != N_REG) return -1;
+    fs_truncate(n, 0);
+    if (len && fs_write(n, 0, data, len) < 0) return -1;
+    if (!len) fs_reserve(n, 1);
     return 0;
 }
 
 int vfs_remove(const char *path)
 {
-    vlock();
-    int i = find(path);
-    if (i >= 0) {
-        release(&files[i]);
-        for (int k = i; k + 1 < nfiles; k++) files[k] = files[k + 1];
-        nfiles--;
-        dirty++;
-    }
-    vunlock();
-    return i < 0 ? -1 : 0;
+    struct node *dir; char name[VFS_PATH];
+    if (fs_lookup_parent(0, path, &dir, name, sizeof name) < 0) return -1;
+    return fs_unlink(dir, name, 0) < 0 ? -1 : 0;
 }
 
-int vfs_count(void) { return nfiles; }
-const char *vfs_path(int i) { return i >= 0 && i < nfiles ? files[i].path : 0; }
-size_t vfs_size(int i) { return i >= 0 && i < nfiles ? files[i].len : 0; }
-uint32_t vfs_dirty(void) { return dirty; }
+int vfs_count(void) { rebuild(); return npaths; }
+const char *vfs_path(int i) { rebuild(); return i >= 0 && i < npaths ? paths[i] : 0; }
+size_t vfs_size(int i) { rebuild(); return i >= 0 && i < npaths ? sizes[i] : 0; }
+uint32_t vfs_dirty(void) { return fs_generation(); }
 
-/* image: "AUXOFS1\0", u32 count, then per file: u16 path length, path, u32 length, data */
+/* image of /home/root for the installed system's disk: "AUXOFS1\0", u32 count, then per
+ * file: u16 path length, path, u32 length, data */
 size_t vfs_image_size(void)
 {
+    rebuild();
     size_t n = 12;
-    for (int i = 0; i < nfiles; i++) n += 2 + strlen(files[i].path) + 4 + files[i].len;
+    for (int i = 0; i < npaths; i++) n += 2 + strlen(paths[i]) + 4 + sizes[i];
     return n;
 }
 
 size_t vfs_save_image(uint8_t *out, size_t cap)
 {
-    vlock();
-    size_t need = vfs_image_size();
-    if (need > cap) { vunlock(); return 0; }
+    rebuild();
+    if (vfs_image_size() > cap) return 0;
     memcpy(out, "AUXOFS1", 8);
-    uint32_t c = (uint32_t)nfiles;
+    uint32_t c = (uint32_t)npaths;
     memcpy(out + 8, &c, 4);
     size_t o = 12;
-    for (int i = 0; i < nfiles; i++) {
-        uint16_t pl = (uint16_t)strlen(files[i].path);
-        uint32_t dl = (uint32_t)files[i].len;
+    for (int i = 0; i < npaths; i++) {
+        const char *d; size_t dl;
+        if (vfs_read(paths[i], &d, &dl) < 0) { d = ""; dl = 0; }
+        uint16_t pl = (uint16_t)strlen(paths[i]);
+        uint32_t l32 = (uint32_t)dl;
         memcpy(out + o, &pl, 2); o += 2;
-        memcpy(out + o, files[i].path, pl); o += pl;
-        memcpy(out + o, &dl, 4); o += 4;
-        memcpy(out + o, files[i].data, dl); o += dl;
+        memcpy(out + o, paths[i], pl); o += pl;
+        memcpy(out + o, &l32, 4); o += 4;
+        memcpy(out + o, d, dl); o += dl;
     }
-    vunlock();
     return o;
 }
 
@@ -160,5 +178,4 @@ void vfs_init(void)
             vfs_write("/home/root/hello.c", aether_langs[i].main, strlen(aether_langs[i].main));
             break;
         }
-    dirty = 0;
 }

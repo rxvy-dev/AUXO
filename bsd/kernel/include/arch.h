@@ -55,7 +55,8 @@ void *vm_map_mmio(uint64_t phys, uint64_t len, int uncached);   /* NULL if it ca
 
 /* rust: give up the CPU to the next runnable thread */
 void rs_yield(void);
-static inline void wait_tick(void) { __asm__ volatile("sti; hlt"); rs_yield(); }
+void rs_sleep(uint64_t ticks);
+static inline void wait_tick(void) { rs_sleep(0); }      /* sleep until the next timer tick */
 
 /* assembly */
 void gdt_flush(const void *gdtr);

@@ -6,6 +6,13 @@ SECTIONS
     __kernel_start = .;
 
     .multiboot : { KEEP(*(.multiboot)) }
+    /* the only part of the kernel user programs' page tables map (see arch/x86_64/entry.S) */
+    .entry : ALIGN(4096) {
+        __entry_start = .;
+        *(.entry.text) *(.entry.rodata) *(.entry.data)
+        . = ALIGN(4096);
+        __entry_end = .;
+    }
     .text : ALIGN(4096) { *(.boot) *(.text .text.*) }
     .rodata : ALIGN(4096) { *(.rodata .rodata.*) }
     .data : ALIGN(4096) { *(.data .data.*) }
