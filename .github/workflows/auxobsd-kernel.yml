@@ -27,13 +27,20 @@ jobs:
         run: make accents-check
 
       - name: Build
-        run: make && make check && make iso
+        run: |
+          rustc --version; gcc --version | head -1; qemu-system-x86_64 --version | head -1
+          make && make check && make iso
 
       - name: Boot in QEMU and drive auxsh
         run: make test
 
-      - name: Upload ISO
+      - name: Upload ISO and QEMU logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: auxobsd-kernel-iso
-          path: bsd/kernel/build/auxobsd.iso
+          path: |
+            bsd/kernel/build/auxobsd.iso
+            bsd/kernel/build/auxobsd.elf
+            bsd/kernel/build/qemu-*.log
+          if-no-files-found: ignore
