@@ -8,7 +8,7 @@ QEMU     ?= qemu-system-x86_64
 USE_RUST ?= 1
 VERSION  := $(shell cat VERSION)
 
-CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -m64 -Iinclude -ffreestanding -fno-pic -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -fno-tree-loop-distribute-patterns -DAUXO_VERSION='"$(VERSION)"'
+CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -m64 -march=x86-64 -mtune=generic -Iinclude -ffreestanding -fno-pic -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -fno-tree-loop-distribute-patterns -DAUXO_VERSION='"$(VERSION)"'
 LDFLAGS := -n -nostdlib --no-warn-rwx-segments -z max-page-size=0x1000 -T linker.ld
 
 SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c)
