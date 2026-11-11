@@ -9,8 +9,10 @@ import os
 import re
 import select
 import shutil
+import socket
 import subprocess
 import sys
+import tempfile
 import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
@@ -18,26 +20,50 @@ PROMPT = "❯ ".encode()     # matched after colour codes are stripped
 
 
 class Shell:
+    """QEMU with the guest's COM1 on a Unix socket (QEMU waits for us to connect, so no output
+    is lost). Talking over a socket instead of QEMU's stdio keeps the test independent of how a
+    given QEMU build treats pipes; QEMU's own messages go to qemu-out.log."""
+
     def __init__(self, iso):
         qemu = os.environ.get("QEMU", "qemu-system-x86_64")
-        self.qlog = os.path.join(os.path.dirname(os.path.abspath(iso)), "qemu-debug.log")
-        args = [qemu, "-cdrom", iso, "-serial", "stdio", "-display", "none", "-m", "256M", "-no-reboot",
-                "-d", "cpu_reset,guest_errors", "-D", self.qlog]
+        out = os.path.dirname(os.path.abspath(iso))
+        self.qlog = os.path.join(out, "qemu-debug.log")
+        self.olog = os.path.join(out, "qemu-out.log")
+        self.sockdir = tempfile.mkdtemp(prefix="auxobsd-serial-")
+        sock = os.path.join(self.sockdir, "ttyS0")
+        for f in (self.qlog, self.olog):
+            if os.path.exists(f):
+                os.remove(f)
+        args = [qemu, "-cdrom", iso, "-display", "none", "-m", "256M", "-no-reboot",
+                "-chardev", f"socket,id=ser0,path={sock},server=on,wait=on", "-serial", "chardev:ser0",
+                "-monitor", "none", "-d", "cpu_reset,guest_errors", "-D", self.qlog]
         # Software CPU by default: that's what the suite is verified with. AUXO_KVM=1 opts into KVM.
         if os.environ.get("AUXO_KVM") == "1" and os.access("/dev/kvm", os.W_OK):
             args += ["-enable-kvm", "-cpu", "host"]
         self.args = args
-        if os.path.exists(self.qlog):
-            os.remove(self.qlog)
-        self.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        self.p = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=open(self.olog, "wb"),
+                                  stderr=subprocess.STDOUT)
         self.raw = b""
+        self.s = None
+        for _ in range(200):                      # QEMU creates the socket, then waits for us
+            if self.p.poll() is not None:
+                break
+            try:
+                c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                c.connect(sock)
+                self.s = c
+                break
+            except OSError:
+                time.sleep(0.05)
 
     def _read_until(self, start, token, timeout):
+        if not self.s:
+            return False
         end = time.time() + timeout
         while time.time() < end:
-            r, _, _ = select.select([self.p.stdout], [], [], 0.1)
+            r, _, _ = select.select([self.s], [], [], 0.1)
             if r:
-                d = os.read(self.p.stdout.fileno(), 65536)
+                d = self.s.recv(65536)
                 if not d:
                     return False
                 self.raw += d
@@ -51,8 +77,8 @@ class Shell:
 
     def send(self, keys, until=PROMPT, timeout=10):
         start = len(self.raw)
-        self.p.stdin.write(keys.encode())
-        self.p.stdin.flush()
+        if self.s:
+            self.s.sendall(keys.encode())
         self._read_until(start, until, timeout)
         return self.raw[start:]
 
@@ -63,20 +89,25 @@ class Shell:
         return clean(self.raw[start:])
 
     def diagnose(self):
-        """Why QEMU stopped: exit code, the command line and the tail of its reset/error log."""
+        """Why the boot failed: QEMU's state, its messages and the tail of its reset/error log."""
         rc = self.p.poll()
-        out = [f"qemu {'exited with ' + str(rc) if rc is not None else 'still running'}: {' '.join(self.args)}"]
-        try:
-            tail = open(self.qlog, errors="replace").read().splitlines()[-25:]
-            out += ["qemu-debug.log:"] + tail if tail else ["qemu-debug.log is empty"]
-        except OSError:
-            out.append("no qemu-debug.log")
+        out = [f"qemu {'exited with ' + str(rc) if rc is not None else 'still running'}"
+               + ("" if self.s else ", serial socket never connected") + f": {' '.join(self.args)}"]
+        for name, path, n in (("qemu-out.log", self.olog, 15), ("qemu-debug.log", self.qlog, 25)):
+            try:
+                tail = open(path, errors="replace").read().splitlines()[-n:]
+                out += [f"{name}:"] + tail if tail else [f"{name} is empty"]
+            except OSError:
+                out.append(f"no {name}")
         return "\n".join(out)
 
     def close(self):
+        if self.s:
+            self.s.close()
         if self.p.poll() is None:
             self.p.kill()
         self.p.wait()
+        shutil.rmtree(self.sockdir, ignore_errors=True)
 
 
 def clean(b):
@@ -226,8 +257,7 @@ def main():
         check("help lists the Auxo tools", "auxo-fetch" in out and "auxo-tweak" in out and "auxo-motd" in out, out)
 
         print("▲ power")
-        sh.p.stdin.write(b"poweroff\r")
-        sh.p.stdin.flush()
+        sh.s.sendall(b"poweroff\r")
         try:
             sh.p.wait(timeout=10)
             check("poweroff stops the machine", True)
