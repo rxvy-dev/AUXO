@@ -137,13 +137,12 @@ def serve(directory):
     return srv.server_address[1]
 
 
-FETCH = ("python3 -c \"import urllib.request,hashlib;print('sha', hashlib.sha256(urllib.request.urlopen("
-         "'http://10.0.2.2:{port}/big.bin', timeout=60).read()).hexdigest())\"")
-
-
 def download(m, port, want, nic):
-    out = m.run(FETCH.format(port=port), timeout=180)
-    check(f"sha {want}" in out, f"a 3 MB download over {nic} arrives intact", out)
+    """BusyBox wget and sha256sum: in the small root image CI builds as well as the full one"""
+    out = m.run(f"wget -q -O /tmp/big.bin http://10.0.2.2:{port}/big.bin", timeout=180)
+    out += m.run("sha256sum /tmp/big.bin", timeout=60)
+    m.run("rm /tmp/big.bin")
+    check(f"{want}  /tmp/big.bin" in out, f"a 3 MB download over {nic} arrives intact", out)
 
 
 def nic_pc(tmp, iso, port, want):
