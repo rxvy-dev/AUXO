@@ -17,7 +17,7 @@ ROOT=$OUT/rootfs
 rm -rf "$ROOT" "$WORK/debs"            # start clean: nothing left over from another set
 mkdir -p "$WORK/debs" "$ROOT"
 
-PKGS="gcc cpp binutils libc6-dev make busybox-static bubblewrap"
+PKGS="gcc cpp binutils libc6-dev make busybox-static bubblewrap alsa-utils"
 if [ "$SET" = full ]; then
     PKGS="$PKGS python3 python3-gi python3-gi-cairo python3-cairo libc-bin gir1.2-gtk-4.0 gir1.2-gtksource-5 libgtk-4-1 libgtksourceview-5-0
           fonts-dejavu-core fonts-dejavu-mono fonts-dejavu-extra adwaita-icon-theme gsettings-desktop-schemas shared-mime-info
@@ -117,8 +117,56 @@ ID=auxobsd
 PRETTY_NAME="AuxoBSD $(cat VERSION 2>/dev/null || echo 0.1.0)"
 HOME_URL="https://auxolinux.com/bsd"
 EOF
-echo "root:x:0:0:root:/home/root:/bin/sh" > "$ROOT/etc/passwd"
-echo "root:x:0:" > "$ROOT/etc/group"
+# the system's accounts (as Debian's base-passwd has them); the kernel adds the user's own
+# account ("auxo" on a live system) at boot, and the installer renames it and sets its password
+cat > "$ROOT/etc/passwd" <<'EOF'
+root:x:0:0:root:/root:/bin/sh
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+messagebus:x:100:102::/nonexistent:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+EOF
+cat > "$ROOT/etc/group" <<'EOF'
+root:x:0:
+daemon:x:1:
+bin:x:2:
+sys:x:3:
+adm:x:4:
+tty:x:5:
+disk:x:6:
+lp:x:7:
+mail:x:8:
+kmem:x:15:
+dialout:x:20:
+cdrom:x:24:
+sudo:x:27:
+audio:x:29:
+dip:x:30:
+www-data:x:33:
+shadow:x:42:
+utmp:x:43:
+video:x:44:
+plugdev:x:46:
+staff:x:50:
+users:x:100:
+messagebus:x:102:
+render:x:105:
+input:x:106:
+netdev:x:107:
+nogroup:x:65534:
+EOF
+awk -F: '{ print $1 ":*:19000:0:99999:7:::" }' "$ROOT/etc/passwd" > "$ROOT/etc/shadow"
+chmod 640 "$ROOT/etc/shadow"
+chmod 1777 "$ROOT/tmp" "$ROOT/var/tmp"
+chmod 700 "$ROOT/root"
+# bubblewrap set-user-ID root: without user namespaces that's how an ordinary user's sandbox
+# (WebKit's web pages, Flatpak) gets its namespaces; bwrap drops root before running anything
+if [ -f "$ROOT/usr/bin/bwrap" ]; then chmod 4755 "$ROOT/usr/bin/bwrap"; fi
+rmdir "$ROOT/home/root" 2>/dev/null || true
 echo "auxobsd" > "$ROOT/etc/hostname"
 printf 'nameserver 10.0.2.3\n' > "$ROOT/etc/resolv.conf"
 printf '/usr/lib/x86_64-linux-gnu\n/lib/x86_64-linux-gnu\n' > "$ROOT/etc/ld.so.conf"

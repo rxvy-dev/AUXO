@@ -14,6 +14,8 @@
 #include "uproc.h"
 #include "disk.h"
 #include "install.h"
+#include "cred.h"
+#include "session.h"
 
 #define LINE_MAX 1024
 #define HIST     16
@@ -25,8 +27,31 @@ struct cmd {
     const char *help;
 };
 
-const char *session_bus_env(void);   /* session.c */
 static const struct cmd cmds[];
+static int cmd_sudo(int argc, char **argv), cmd_su(int argc, char **argv), cmd_exit(int argc, char **argv);
+static int cmd_passwd(int argc, char **argv), cmd_whoami(int argc, char **argv);
+
+/* who auxsh is: the session's user, or root after `su` (until `exit`) */
+static int su_mode, run_root;                 /* run_root: the command now running is under `sudo` */
+static uint64_t sudo_until;                   /* `sudo` doesn't ask again for 5 minutes */
+static int as_root(void) { return su_mode || run_root || session_uid() == 0; }
+static const char *my_home(void) { return su_mode && session_uid() != 0 ? "/root" : session_home(); }
+
+/* may auxsh's own commands (cat, cp, rm …) do this? The same rules as a program */
+static int shell_may(const char *path, int mask, int parent)
+{
+    if (as_root()) return 1;
+    struct node *n;
+    if (parent) {
+        char name[256];
+        if (fs_lookup_parent(0, path, &n, name, sizeof name) < 0) return 1;     /* (not found: say so later) */
+    } else if (fs_lookup(0, path, 1, &n) < 0) return 1;
+    /* every directory on the way needs search permission */
+    for (struct node *d = n->parent; d && d != d->parent; d = d->parent)
+        if (cred_perm_as(session_cred(), 0, d, 1) < 0) return 0;
+    return cred_perm_as(session_cred(), 0, n, mask) == 0;
+}
+#define DENIED(cmd, what) do { kprintf("%s: %s: permission denied%s\n", cmd, what, su_mode ? "" : " (sudo?)"); return 1; } while (0)
 void uproc_where(int pid);
 static int cmd_ustack(int argc, char **argv)
 {
@@ -45,8 +70,8 @@ static void show_prompt(const char *prompt)
 {
     if (prompt) { kprintf("%s", prompt); return; }
     c_rgb(auxo_c1()); kprintf("▲"); c_reset();
-    kprintf(" \033[1mroot@%s\033[0m ", auxo.hostname);
-    c_rgb(auxo_c1()); kprintf("❯"); c_reset();
+    kprintf(" \033[1m%s@%s\033[0m ", su_mode ? "root" : session_user(), auxo.hostname);
+    c_rgb(auxo_c1()); kprintf(su_mode ? "#" : "❯"); c_reset();
     kprintf(" ");
 }
 
@@ -252,6 +277,7 @@ static int cmd_lsblk(int argc, char **argv)
 static int cmd_disktest(int argc, char **argv)
 {
     if (argc < 2) { kprintf("usage: disktest DISK   (overwrites 64 sectors near its end)\n"); return 1; }
+    if (!as_root()) { kprintf("disktest: writes to the disk itself, so it needs root: sudo disktest %s\n", argv[1]); return 1; }
     struct disk *d = 0;
     for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1]) && !disk_get(i)->gone) d = disk_get(i);
     if (!d) { kprintf("disktest: no disk %s\n", argv[1]); return 1; }
@@ -271,16 +297,26 @@ static int cmd_sync(int argc, char **argv)
     (void)argc; (void)argv;
     if (!store_where()) { kprintf("sync: this is a live system: files are only in memory (install AuxoBSD to keep them)\n"); return 1; }
     int r = store_save();
-    kprintf(r == 0 ? "saved /home/root to %s\n" : "sync: couldn't write to %s\n", store_where());
+    kprintf(r == 0 ? "saved your files and the system's changes to %s\n" : "sync: couldn't write to %s\n", store_where());
     return r != 0;
 }
 
 /* install DISK [HOSTNAME]: the installer, from the shell */
 static int cmd_install(int argc, char **argv)
 {
-    if (argc < 2) { kprintf("usage: install DISK [HOSTNAME] [--yes]   (see lsblk; the disk is erased)\n"); return 1; }
-    int yes = !strcmp(argv[argc - 1], "--yes");
-    if (yes) argc--;
+    if (!as_root()) { kprintf("install: it rewrites a whole disk, so it needs root: sudo install ...\n"); return 1; }
+    if (argc < 2) { kprintf("usage: install DISK [HOSTNAME] [--user NAME] [--password PW] [--yes]   (see lsblk; the disk is erased)\n"); return 1; }
+    struct install_req r;
+    memset(&r, 0, sizeof r);
+    int yes = 0, k = 0;
+    for (int i = 0; i < argc; i++) {                           /* options out, the rest stays in order */
+        if (!strcmp(argv[i], "--yes")) { yes = 1; continue; }
+        if (!strcmp(argv[i], "--user") && i + 1 < argc) { strlcpy(r.user, argv[++i], sizeof r.user); continue; }
+        if (!strcmp(argv[i], "--password") && i + 1 < argc) { strlcpy(r.password, argv[++i], sizeof r.password); continue; }
+        argv[k++] = argv[i];
+    }
+    argc = k;
+    if (argc < 2) { kprintf("install: which disk? (see lsblk)\n"); return 1; }
     int idx = -1;
     for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1]) && !disk_get(i)->gone) idx = i;
     if (idx < 0) { kprintf("install: no disk %s (see lsblk)\n", argv[1]); return 1; }
@@ -291,7 +327,7 @@ static int cmd_install(int argc, char **argv)
         shell_readline(q, ans, sizeof ans);
         if (strcmp(ans, "yes")) { kprintf("not installing\n"); return 1; }
     }
-    struct install_req r = { idx, "auxobsd", auxo.accent };
+    r.disk = idx; r.accent = auxo.accent;
     strlcpy(r.hostname, argc > 2 ? argv[2] : auxo.hostname, sizeof r.hostname);
     if (install_start(&r) < 0) { kprintf("install: already running\n"); return 1; }
     int last = -1;
@@ -384,13 +420,13 @@ static int cmd_get(int argc, char **argv)
 }
 
 /* files: the in-memory filesystem (saved to disk on an installed system) */
-static char cwd[VFS_PATH] = "/home/root";
+static char cwd[VFS_PATH] = "/";
 
 static void abspath(const char *p, char *out, size_t n)
 {
     if (p[0] == '/') strlcpy(out, p, n);
-    else if (!strcmp(p, "~")) strlcpy(out, "/home/root", n);
-    else if (p[0] == '~' && p[1] == '/') ksnprintf(out, n, "/home/root/%s", p + 2);
+    else if (!strcmp(p, "~")) strlcpy(out, my_home(), n);
+    else if (p[0] == '~' && p[1] == '/') ksnprintf(out, n, "%s/%s", my_home(), p + 2);
     else ksnprintf(out, n, "%s/%s", cwd, p);
 }
 
@@ -426,6 +462,7 @@ static int cmd_cat(int argc, char **argv)
     if (argc < 2) { kprintf("usage: cat FILE\n"); return 1; }
     char p[VFS_PATH]; const char *d; size_t n;
     abspath(argv[1], p, sizeof p);
+    if (!shell_may(p, 4, 0)) DENIED("cat", argv[1]);
     if (vfs_read(p, &d, &n) < 0) { kprintf("cat: %s: no such file\n", argv[1]); return 1; }
     console_write(d, n);
     if (n && d[n - 1] != '\n') kprintf("\n");
@@ -437,6 +474,7 @@ static int cmd_rm(int argc, char **argv)
     if (argc < 2) { kprintf("usage: rm FILE\n"); return 1; }
     char p[VFS_PATH];
     abspath(argv[1], p, sizeof p);
+    if (!shell_may(p, 3, 1)) DENIED("rm", argv[1]);
     if (vfs_remove(p) < 0) { kprintf("rm: %s: no such file\n", argv[1]); return 1; }
     return 0;
 }
@@ -446,14 +484,17 @@ static int cmd_cp(int argc, char **argv)
     if (argc < 3) { kprintf("usage: cp FROM TO\n"); return 1; }
     char a[VFS_PATH], b[VFS_PATH]; const char *d; size_t n;
     abspath(argv[1], a, sizeof a); abspath(argv[2], b, sizeof b);
+    if (!shell_may(a, 4, 0)) DENIED("cp", argv[1]);
+    if (!(vfs_exists(b) ? shell_may(b, 2, 0) : shell_may(b, 3, 1))) DENIED("cp", argv[2]);
     if (vfs_read(a, &d, &n) < 0) { kprintf("cp: %s: no such file\n", argv[1]); return 1; }
     return vfs_write(b, d, n) < 0;
 }
 
 static int cmd_mv(int argc, char **argv)
 {
+    char a[VFS_PATH]; if (argc > 1) abspath(argv[1], a, sizeof a);
+    if (argc > 1 && !shell_may(a, 3, 1)) DENIED("mv", argv[1]);
     if (cmd_cp(argc, argv)) return 1;
-    char a[VFS_PATH]; abspath(argv[1], a, sizeof a);
     vfs_remove(a);
     return 0;
 }
@@ -462,6 +503,7 @@ static int cmd_touch(int argc, char **argv)
 {
     if (argc < 2) { kprintf("usage: touch FILE\n"); return 1; }
     char p[VFS_PATH]; abspath(argv[1], p, sizeof p);
+    if (!vfs_exists(p) && !shell_may(p, 3, 1)) DENIED("touch", argv[1]);
     if (!vfs_exists(p)) vfs_write(p, "", 0);
     return 0;
 }
@@ -473,6 +515,10 @@ static int cmd_cd(int argc, char **argv)
     abspath(argc > 1 ? argv[1] : "~", p, sizeof p);
     size_t l = strlen(p);
     while (l > 1 && p[l - 1] == '/') p[--l] = 0;
+    struct node *n;
+    if (fs_lookup(0, p, 1, &n) < 0) { kprintf("cd: %s: no such directory\n", argc > 1 ? argv[1] : p); return 1; }
+    if (n->type != N_DIR) { kprintf("cd: %s: not a directory\n", argc > 1 ? argv[1] : p); return 1; }
+    if (!shell_may(p, 1, 0)) DENIED("cd", argc > 1 ? argv[1] : p);
     strlcpy(cwd, p, sizeof cwd);
     return 0;
 }
@@ -482,6 +528,7 @@ static int cmd_aether(int argc, char **argv)
     if (!chrono_running()) { kprintf("aether: needs the Chrono desktop (it's a graphical editor)\n"); return 1; }
     if (argc < 2) { chrono_request_open(APP_AETHER); return 0; }
     char p[VFS_PATH]; abspath(argv[1], p, sizeof p);
+    if (!shell_may(p, 4, 0)) DENIED("edit", argv[1]);
     chrono_request_edit(p);
     return 0;
 }
@@ -550,6 +597,11 @@ static const struct cmd cmds[] = {
     { "auxo-motd",   cmd_auxo_motd,   "the Auxo greeting (--tip, --give, --off, --on)" },
     { "fetch",       cmd_auxo_fetch,  0 },
     { "help",        cmd_help,        "this list" },
+    { "sudo",        cmd_sudo,        "run a command as root (asks for your password)" },
+    { "su",          cmd_su,          "become root in this shell (exit to go back)" },
+    { "exit",        cmd_exit,        "leave the root shell" },
+    { "passwd",      cmd_passwd,      "change your password" },
+    { "whoami",      cmd_whoami,      "who the shell is running as" },
     { "clear",       cmd_clear,       "clear the screen" },
     { "echo",        cmd_echo,        "print its arguments" },
     { "uname",       cmd_uname,       "system name (-a -s -r -m)" },
@@ -589,6 +641,116 @@ static const struct cmd cmds[] = {
 
 extern int sys_trace;
 static void run(char *line);
+/* ── users: su, sudo, passwd ────────────────────────────────────────── */
+static int read_secret(const char *prompt, char *buf, size_t n)
+{
+    kprintf("%s", prompt);
+    size_t len = 0;
+    int last_cr = 0;
+    for (;;) {
+        int c = input_getc();
+        if (c == '\n' && last_cr) { last_cr = 0; continue; }
+        last_cr = c == '\r';
+        if (c == '\r' || c == '\n') break;
+        if (c == 3) { kprintf("^C\n"); buf[0] = 0; return -1; }
+        if (c == '\b' || c == 0x7f) { if (len) len--; continue; }
+        if (c == 0x15) { len = 0; continue; }
+        if (c >= 0x20 && len + 1 < n) buf[len++] = (char)c;
+    }
+    kprintf("\n");
+    buf[len] = 0;
+    return (int)len;
+}
+
+/* the session's user proving it's them (for sudo and su); no password set: nothing to ask */
+static int authenticate(const char *why)
+{
+    if (session_uid() == 0 || su_mode) return 1;
+    if (!account_in_group(session_user(), "sudo") && !account_in_group(session_user(), "admin")) {
+        kprintf("%s: %s isn't an administrator (not in the sudo group)\n", why, session_user());
+        return 0;
+    }
+    if (!account_password_set(session_user()) || kernel_ticks() < sudo_until) { sudo_until = kernel_ticks() + 300 * AUXO_HZ; return 1; }
+    char pw[128], prompt[96];
+    ksnprintf(prompt, sizeof prompt, "[%s] password for %s: ", why, session_user());
+    for (int tries = 0; tries < 3; tries++) {
+        if (read_secret(prompt, pw, sizeof pw) < 0) return 0;
+        int ok = account_check_password(session_user(), pw);
+        memset(pw, 0, sizeof pw);
+        if (ok) { sudo_until = kernel_ticks() + 300 * AUXO_HZ; return 1; }
+        kprintf("Sorry, try again.\n");
+    }
+    kprintf("%s: 3 incorrect password attempts\n", why);
+    return 0;
+}
+
+static int cmd_su(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    if (su_mode) { kprintf("su: already root (exit goes back to %s)\n", session_user()); return 0; }
+    if (!authenticate("su")) return 1;
+    su_mode = 1;
+    strlcpy(cwd, "/root", sizeof cwd);
+    kprintf("root shell: commands run as root until you type exit\n");
+    return 0;
+}
+
+static int cmd_exit(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    if (!su_mode) { kprintf("exit: this is the system's shell (close the window, or poweroff)\n"); return 1; }
+    su_mode = 0;
+    strlcpy(cwd, session_home(), sizeof cwd);
+    return 0;
+}
+
+static int cmd_sudo(int argc, char **argv)
+{
+    int a = 1;
+    while (a < argc && argv[a][0] == '-') {
+        if (!strcmp(argv[a], "-k")) { sudo_until = 0; return 0; }
+        if (!strcmp(argv[a], "-s") || !strcmp(argv[a], "-i")) return cmd_su(1, argv);
+        a++;
+    }
+    if (a >= argc) { kprintf("usage: sudo COMMAND [ARGS]   (run one command as root; sudo -s: a root shell)\n"); return 1; }
+    if (!authenticate("sudo")) return 1;
+    char buf[LINE_MAX] = "";
+    size_t o = 0;
+    for (int i = a; i < argc && o < sizeof buf - 2; i++) {          /* put the quotes back for run() to split again */
+        const char *q = strchr(argv[i], ' ') || strchr(argv[i], '\t') || !argv[i][0] ? (strchr(argv[i], '"') ? "'" : "\"") : "";
+        o += (size_t)ksnprintf(buf + o, sizeof buf - o, "%s%s%s%s", i > a ? " " : "", q, argv[i], q);
+    }
+    int was = run_root;
+    run_root = 1;
+    run(buf);
+    run_root = was;
+    return 0;
+}
+
+static int cmd_passwd(int argc, char **argv)
+{
+    const char *who = argc > 1 ? argv[1] : (su_mode ? "root" : session_user());
+    if (strcmp(who, session_user()) && !as_root()) { kprintf("passwd: only root can change %s's password\n", who); return 1; }
+    struct account acct;
+    if (account_by_name(who, &acct) < 0) { kprintf("passwd: no user %s\n", who); return 1; }
+    char cur[128], a[128], b[128];
+    if (!as_root() && account_password_set(who)) {
+        if (read_secret("Current password: ", cur, sizeof cur) < 0) return 1;
+        int ok = account_check_password(who, cur);
+        memset(cur, 0, sizeof cur);
+        if (!ok) { kprintf("passwd: that isn't the password\n"); return 1; }
+    }
+    if (read_secret("New password: ", a, sizeof a) < 0 || read_secret("Retype new password: ", b, sizeof b) < 0) return 1;
+    int same = !strcmp(a, b);
+    if (same) account_set_password(who, a);
+    memset(a, 0, sizeof a); memset(b, 0, sizeof b);
+    if (!same) { kprintf("passwd: the passwords don't match\n"); return 1; }
+    kprintf("passwd: password for %s changed\n", who);
+    return 0;
+}
+
+static int cmd_whoami(int argc, char **argv) { (void)argc; (void)argv; kprintf("%s\n", su_mode ? "root" : session_user()); return 0; }
+
 static int cmd_strace(int argc, char **argv)
 {
     extern char sys_trace_name[16];
@@ -642,13 +804,9 @@ static void run(char *line)
         }
     }
     if (!n || n->type != N_REG) { kprintf("auxsh: %s: command not found (try help)\n", argv[0]); return; }
-    char pwd[VFS_PATH + 8];
-    ksnprintf(pwd, sizeof pwd, "PWD=%s", cwd);
-    char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LOGNAME=root", "SHELL=/bin/sh",
-                     "TERM=linux", "LANG=C.UTF-8", "TMPDIR=/tmp", pwd,
-                     "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
-                     "GDK_DEBUG=gl-disable,vulkan-disable", "LIBGL_ALWAYS_SOFTWARE=1", "GTK_A11Y=none", "NO_AT_BRIDGE=1", (char *)session_bus_env(),
-                     "XDG_DATA_DIRS=/usr/share", 0 };
+    static char envbuf[2048];
+    char *envp[40];
+    session_env(envbuf, sizeof envbuf, envp, 40, as_root(), cwd);
     char *env[64];
     int ne = 0;
     for (int i = 0; envp[i]; i++) {                              /* defaults, minus the ones given */
@@ -661,12 +819,12 @@ static void run(char *line)
     env[ne] = 0;
     argv[argc] = 0;
     if (background) {
-        int pid = uproc_spawn_detached(path, argv, env, cwd);
+        int pid = uproc_spawn_as(path, argv, env, cwd, 1, as_root());
         if (pid < 0) kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid);
         else kprintf("[%d] %s\n", pid, argv[0]);
         return;
     }
-    int pid = uproc_spawn(path, argv, env, cwd);
+    int pid = uproc_spawn_as(path, argv, env, cwd, 0, as_root());
     if (pid < 0) { kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid); return; }
     int st = 0;
     uproc_wait(pid, &st);
@@ -678,7 +836,9 @@ void shell_main(uintptr_t arg)
 {
     (void)arg;
     static char line[LINE_MAX];
-    usb_wait_settled(3000);           /* USB keyboards ready (and announced) before the prompt */
+    usb_wait_settled(3000);
+    while (!session_ready) rs_sleep(1);                      /* who we are: after the root filesystem and disks */
+    strlcpy(cwd, session_home(), sizeof cwd);           /* USB keyboards ready (and announced) before the prompt */
     if (auxo.motd) { char *a[] = { "auxo-motd", 0 }; cmd_auxo_motd(1, a); }
     else kprintf("\n");
     for (;;) {

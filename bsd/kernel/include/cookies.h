@@ -1,6 +1,6 @@
 #ifndef AUXO_COOKIES_H
 #define AUXO_COOKIES_H
-/* the browser's cookie jar (net/cookies.c), kept in /home/root/.config/browser/cookies */
+/* the browser's cookie jar (net/cookies.c), kept in ~/.config/browser/cookies */
 #include <stddef.h>
 #include <stdint.h>
 size_t   cookies_header(const char *host, const char *path, int secure, char *out, size_t cap);   /* "a=1; b=2" */

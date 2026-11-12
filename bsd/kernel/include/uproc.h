@@ -97,9 +97,16 @@ struct task {
     uint64_t start_tick;
     struct trapframe *tf;          /* the trap frame of the current syscall */
     struct task_ns ns;             /* mounts, namespaces, capabilities, seccomp (ns.h) */
+    int8_t   si_code[64];          /* per pending signal: who sent it (SI_TIMER …), for sigwaitinfo */
+    uint64_t si_value[64];
+    int      si_timer[64];
+    int      nice, sched_policy, sched_prio;
+    uint64_t saved_sigmask; int mask_saved;   /* rt_sigsuspend: the mask to put back once a signal is handled */
 };
 
 struct task *task_current(void);   /* NULL on kernel threads */
+/* programs the kernel starts (uproc_spawn…) run as the session's user; this one can ask for root */
+int uproc_spawn_as(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached, int as_root);
 struct task *task_by_pid(int pid);
 struct task *task_slot(int i);     /* 0 .. MAXTASK-1 */
 #define MAXTASK 512                /* = rust/src/proc.rs MAXPROC */

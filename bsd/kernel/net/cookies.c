@@ -1,16 +1,17 @@
 /* The browser's cookie jar: what keeps you signed in to sites. Every request http.c makes gets
  * the matching cookies, every reply's Set-Cookie (redirects included, which is where sign-in
  * flows set them) is stored. Domain, Path, Expires, Max-Age and Secure are honoured. The jar
- * lives in /home/root/.config/browser/cookies, so an installed system keeps it on its disk;
+ * lives in ~/.config/browser/cookies, so an installed system keeps it on its disk;
  * session cookies are kept too, like a browser that reopens where you left off. */
 #include "kern.h"
 #include "arch.h"
 #include "rs.h"
 #include "vfs.h"
+#include "cred.h"
 #include "cookies.h"
 
 #define MAXC 300
-#define JAR "/home/root/.config/browser/cookies"
+#define JAR HOME_FILE(".config/browser/cookies")
 
 struct cookie {
     char domain[96], path[96], name[64];

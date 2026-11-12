@@ -173,7 +173,7 @@ def nic_pc(tmp, iso, port, want):
         check(rows(out, "storage") and rows(out, "pointer"), "lsusb: the USB stick and the tablet", out)
         out = m.run("lsblk")
         check(re.search(r"^usb0\s+USB\s+64 MB", out, re.M), "the stick is a disk, usb0", out)
-        out = m.run("disktest usb0", timeout=60)
+        out = m.run("sudo disktest usb0", timeout=60)
         check("usb0: write ok, read ok, data matches" in out, "writing to the stick and reading it back", out)
     finally:
         m.close()

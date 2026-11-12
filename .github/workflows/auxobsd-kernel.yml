@@ -20,7 +20,7 @@ jobs:
       - name: Install the toolchain
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools ovmf zlib1g-dev liblzma-dev libzstd1 curl
+          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools ovmf zlib1g-dev liblzma-dev libzstd1 libcrypt-dev curl
           rustup target add x86_64-unknown-none
 
       - name: Accents match the Auxo Linux palette
@@ -49,8 +49,11 @@ jobs:
       - name: Browser tabs, sign-in, cookies and saved passwords
         run: make test-browser
 
-      - name: Sandbox (namespaces, seccomp) holds against escape attempts
+      - name: Sandbox holds against escape attempts; inotify, timers, pidfd and other Linux calls
         run: make test-sandbox
+
+      - name: Sound (Intel HD Audio, ALSA) plays through aplay
+        run: make test-sound
 
       - name: pkg installs Ubuntu packages, kept on an installed disk
         run: make test-pkg

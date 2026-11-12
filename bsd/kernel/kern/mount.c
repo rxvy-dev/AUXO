@@ -108,6 +108,7 @@ static int walk(struct task *t, struct path base, const char *path, int follow, 
         int trailing = last && *e == '/';
         if (cur.n->type != N_DIR) return -ENOTDIR;
         if (l > 255) return -ENAMETOOLONG;
+        if (t && cred_perm(t, cur.n, 1) < 0) return -13;       /* EACCES: no search permission */
         struct path nx = cur;
         if (l == 1 && p[0] == '.') {
         } else if (l == 2 && p[0] == '.' && p[1] == '.') {

@@ -3,6 +3,7 @@
 #include "kern.h"
 #include "rs.h"
 #include "auxo.h"
+#include "cred.h"
 
 static const char *const LOGO[] = {
     "         ●",
@@ -95,7 +96,7 @@ int cmd_auxo_fetch(int argc, char **argv)
     }
 
     char user[48], os[48], kern[64], up[32], procs[32], boot[80];
-    ksnprintf(user, sizeof user, "root@%s", auxo.hostname);
+    ksnprintf(user, sizeof user, "%s@%s", session_user(), auxo.hostname);
     ksnprintf(os, sizeof os, "%s %s x86_64", AUXO_NAME, AUXO_VERSION);
     ksnprintf(kern, sizeof kern, "auxobsd %s (C + Rust + asm)", AUXO_VERSION);
     fmt_uptime(up, sizeof up);

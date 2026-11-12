@@ -48,6 +48,7 @@ void pic_eoi(int irq);
 void pit_init(uint32_t hz);
 void trap_dispatch(struct trapframe *tf);
 uint64_t kernel_ticks(void);
+uint64_t mono_ns(void);                 /* nanoseconds since boot (PIT ticks + TSC in between) */
 void     kdelay_ms(uint32_t ms);          /* threads sleep; the boot path busy-waits on the TSC */
 void     tsc_calibrate(void);
 

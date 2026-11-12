@@ -1,8 +1,10 @@
-/* Installing AuxoBSD onto a disk, and keeping /home/root on it.
+/* Installing AuxoBSD onto a disk, and keeping what changes on it.
  *
  * Layout (MBR):  [boot template: GRUB for BIOS + EFI system partition (p1)]
  *                [p2: tar archive of /boot: grub.cfg, auxobsd.elf, rootfs.tar, overlay.tar]
- *                [p3: "AUXOHOME" + the files of /home/root]
+ *                [p3: first half: "AUXOHOME" (the home image of older versions, now empty);
+ *                     second half: "AUXOSYS2", every file, folder and link made or changed
+ *                     since the root image, homes included, with owners and modes]
  * The template, the kernel and the root filesystem come from GRUB modules of the live system
  * ("installer", "kernel", "rootfs"), so nothing is read back from the install medium. */
 #include "kern.h"
@@ -13,6 +15,7 @@
 #include "vfs.h"
 #include "fs.h"
 #include "install.h"
+#include "cred.h"
 
 static int sys_save(struct disk *d, uint32_t start, uint32_t size, uint32_t *sig_out);
 static char *sdup(const char *s) { size_t n = strlen(s); char *r = rs_kmalloc(n + 1); if (r) memcpy(r, s, n + 1); return r; }
@@ -106,22 +109,17 @@ static int write_mbr(uint8_t *sec0, uint32_t p2_start, uint32_t p2_size, uint32_
 static uint32_t home_start, home_size;     /* sectors, on the installed (or target) disk */
 static struct disk *home_disk;
 
+/* the first half of partition 3: once the files of /home/root (older versions); now an empty
+   "AUXOHOME" header that marks the partition. Homes live in the system image with their owners. */
+static int legacy_home;                    /* an old home image was loaded: blank it after the first save */
+
 static int write_home(struct disk *d, uint32_t start, uint32_t size)
 {
-    size_t need = vfs_image_size() + 512;
-    if (need > (uint64_t)size * 512) return -1;
-    size_t pages = (need + PAGE_SIZE - 1) / PAGE_SIZE;
-    uint64_t pg = pmm_alloc_contig(pages);
-    if (!pg) return -1;
-    uint8_t *b = (uint8_t *)(uintptr_t)pg;
-    memset(b, 0, 512);
-    size_t len = vfs_save_image(b + 512, pages * PAGE_SIZE - 512);
+    (void)size;
+    uint8_t b[512];
+    memset(b, 0, sizeof b);
     memcpy(b, "AUXOHOME", 8);
-    uint64_t l64 = len;
-    memcpy(b + 8, &l64, 8);
-    int r = d->write(d, start, (uint32_t)((512 + len + 511) / 512), b);
-    for (size_t i = 0; i < pages; i++) pmm_free_page(pg + i * PAGE_SIZE);
-    return r;
+    return d->write(d, start, 1, b);
 }
 
 static void install_thread(uintptr_t arg)
@@ -195,13 +193,19 @@ static void install_thread(uintptr_t arg)
     flush();
     if (failed) { msg("Writing to the disk failed."); install_state = 3; return; }
 
-    msg("Saving your files…");
+    msg("Saving your account and files…");
     install_pct = 96;
-    if (write_home(dk, p3_start, p3_size / 2) < 0) { msg("Couldn't save /home/root to the disk."); install_state = 3; return; }
+    if (req.user[0]) {                                     /* who'll use it: the live account, renamed */
+        if (strcmp(req.user, session_user()) && account_rename(session_user(), req.user, req.fullname) == 0) session_set_user(req.user);
+        else if (req.fullname[0]) account_rename(session_user(), session_user(), req.fullname);
+        account_set_password(session_user(), req.password);
+    }
+    memset(req.password, 0, sizeof req.password);
+    if (write_home(dk, p3_start, p3_size / 2) < 0) { msg("Couldn't write to the disk."); install_state = 3; return; }
     install_pct = 98;
-    {   /* what was installed or changed in this live session (pkg install …) comes along */
+    {   /* your files, and what was installed or changed in this live session (pkg install …) */
         uint32_t sig;
-        if (sys_save(dk, p3_start + p3_size / 2, p3_size - p3_size / 2, &sig) < 0) { msg("Couldn't copy the system's changes to the disk."); install_state = 3; return; }
+        if (sys_save(dk, p3_start + p3_size / 2, p3_size - p3_size / 2, &sig) < 0) { msg("Couldn't copy your files and the system's changes to the disk."); install_state = 3; return; }
     }
     for (size_t i = 0; i < IOSECT * 512 / PAGE_SIZE; i++) pmm_free_page(pg + i * PAGE_SIZE);
     install_pct = 100;
@@ -229,10 +233,14 @@ static uint32_t sys_start, sys_size, sys_sig_saved;
 
 static int sys_excluded(const char *p)
 {
-    static const char *const pre[] = { "/home", "/tmp", "/run", "/proc", "/dev", "/sys", "/var/tmp", "/var/cache/pkg", "/etc/resolv.conf" };
+    static const char *const pre[] = { "/tmp", "/run", "/proc", "/dev", "/sys", "/var/tmp", "/var/cache/pkg", "/etc/resolv.conf" };
     for (unsigned i = 0; i < sizeof pre / sizeof pre[0]; i++) {
         size_t n = strlen(pre[i]);
         if (!strncmp(p, pre[i], n) && (p[n] == 0 || p[n] == '/')) return 1;
+    }
+    if (!strncmp(p, "/home/", 6)) {                             /* a home's caches can go */
+        const char *u = strchr(p + 6, '/');
+        if (u && !strncmp(u, "/.cache", 7) && (u[7] == 0 || u[7] == '/')) return 1;
     }
     return 0;
 }
@@ -249,7 +257,7 @@ static void sys_walk(struct node *d, char *path, uint32_t *sig, int collect)
         ksnprintf(path + pl, 1024 - pl, "/%s", c->name);
         if (!sys_excluded(path)) {
             if (c->changed && (c->type == N_DIR || c->type == N_REG || c->type == N_LNK)) {
-                *sig = *sig * 31u + c->ino * 7u + c->wgen + c->mode + (uint32_t)c->size;
+                *sig = *sig * 31u + c->ino * 7u + c->wgen + c->mode + (uint32_t)c->size + c->uid * 131u + c->gid;
                 if (collect) {
                     if (nents == capents) {
                         int nc = capents ? capents * 2 : 1024;
@@ -303,7 +311,9 @@ static void sw_put(const void *p, size_t n)
     }
 }
 
-/* record: u8 type (1 dir, 2 file, 3 link), u16 mode, u16 path length, u64 data length, path, data */
+/* record: u8 type (1 dir, 2 file, 3 link), u16 mode, u16 path length, u64 data length,
+   u32 owner, u32 group (AUXOSYS2; AUXOSYS1 had no owners: they were root's), path, data */
+#define REC 21
 static int sys_save(struct disk *d, uint32_t start, uint32_t size, uint32_t *sig_out)
 {
     static char path[1024];
@@ -325,8 +335,9 @@ static int sys_save(struct disk *d, uint32_t start, uint32_t size, uint32_t *sig
         uint64_t dl = type == 1 || n->unlinked ? 0 : n->size;
         fs_unlock();
         if (n->unlinked) continue;
-        uint8_t h[13];
+        uint8_t h[REC];
         h[0] = type; memcpy(h + 1, &mode, 2); memcpy(h + 3, &pl, 2); memcpy(h + 5, &dl, 8);
+        memcpy(h + 13, &n->uid, 4); memcpy(h + 17, &n->gid, 4);
         sw_put(h, sizeof h);
         sw_put(ents[i].path, pl);
         for (uint64_t off = 0; off < dl && !sw.err; ) {
@@ -344,7 +355,7 @@ static int sys_save(struct disk *d, uint32_t start, uint32_t size, uint32_t *sig
     if (!sw.err) {
         uint8_t hdr[512];
         memset(hdr, 0, sizeof hdr);
-        memcpy(hdr, "AUXOSYS1", 8);
+        memcpy(hdr, "AUXOSYS2", 8);
         memcpy(hdr + 8, &sw.total, 8);
         memcpy(hdr + 16, &nents, 4);
         memcpy(sw.b, hdr, 512);
@@ -382,7 +393,8 @@ static struct node *sys_parents(const char *path, char *name, size_t nn)
 static int sys_load(struct disk *d, uint32_t start, uint32_t size)
 {
     uint8_t hdr[512];
-    if (d->read(d, start, 1, hdr) < 0 || memcmp(hdr, "AUXOSYS1", 8)) return -1;
+    if (d->read(d, start, 1, hdr) < 0 || (memcmp(hdr, "AUXOSYS1", 8) && memcmp(hdr, "AUXOSYS2", 8))) return -1;
+    size_t rec = hdr[7] == '2' ? REC : 13;
     uint64_t total; uint32_t count;
     memcpy(&total, hdr + 8, 8); memcpy(&count, hdr + 16, 4);
     if (total > (uint64_t)(size - 1) * 512) return -1;
@@ -400,11 +412,12 @@ static int sys_load(struct disk *d, uint32_t start, uint32_t size)
             if (d->read(d, lba, (uint32_t)(want / 512), b + have) < 0) { err = 1; break; } \
             lba += (uint32_t)(want / 512); have += (size_t)(want < left ? want : left); } } } while (0)
     for (uint32_t i = 0; i < count && !err; i++) {
-        NEED(13);
+        NEED(rec);
         if (err) break;
-        uint8_t type = b[pos]; uint16_t mode, pl; uint64_t dl;
+        uint8_t type = b[pos]; uint16_t mode, pl; uint64_t dl; uint32_t uid = 0, gid = 0;
         memcpy(&mode, b + pos + 1, 2); memcpy(&pl, b + pos + 3, 2); memcpy(&dl, b + pos + 5, 8);
-        pos += 13; consumed += 13;
+        if (rec == REC) { memcpy(&uid, b + pos + 13, 4); memcpy(&gid, b + pos + 17, 4); }
+        pos += rec; consumed += rec;
         if (pl >= 1024) { err = 1; break; }
         NEED(pl);
         if (err) break;
@@ -428,7 +441,7 @@ static int sys_load(struct disk *d, uint32_t start, uint32_t size)
             if (n && type != 1) fs_write(n, off, b + pos, k);
             pos += k; consumed += k; off += k;
         }
-        if (n) { n->mode = mode; fs_touch(n); }
+        if (n) { n->mode = mode; n->uid = uid; n->gid = gid; fs_touch(n); }
         files++;
     }
     #undef NEED
@@ -437,22 +450,23 @@ static int sys_load(struct disk *d, uint32_t start, uint32_t size)
     return err ? -1 : 0;
 }
 
-/* ── the installed system: /home/root lives in partition 3 ──────────── */
+/* ── the installed system: what changes lives in partition 3 ────────── */
 static uint32_t saved_gen;
 
 int store_save(void)
 {
     if (!home_disk) return -1;
     uint32_t gen = vfs_dirty();
-    int r = write_home(home_disk, home_start, home_size);
-    if (r == 0) saved_gen = gen;
+    int r = 0;
     uint32_t sig = sys_signature();
     if (sig != sys_sig_saved) {
         if (sys_save(home_disk, sys_start, sys_size, &sys_sig_saved) < 0) {
-            kprintf("store: couldn't save the system's changes to %s (out of room?)\n", home_disk->name);
+            kprintf("store: couldn't save your files and the system's changes to %s (out of room?)\n", home_disk->name);
             r = -1;
         }
     }
+    if (r == 0 && legacy_home && write_home(home_disk, home_start, home_size) == 0) legacy_home = 0;   /* now in the system image */
+    if (r == 0) saved_gen = gen;
     return r;
 }
 
@@ -486,7 +500,7 @@ int store_init(void)
             uint64_t pg = pmm_alloc_contig(pages);
             if (!pg) break;
             uint8_t *b = (uint8_t *)(uintptr_t)pg;
-            if (d->read(d, start, (uint32_t)((512 + len + 511) / 512), b) == 0) vfs_load_image(b + 512, (size_t)len);
+            if (len && d->read(d, start, (uint32_t)((512 + len + 511) / 512), b) == 0) { vfs_load_image(b + 512, (size_t)len); legacy_home = 1; }
             for (size_t k = 0; k < pages; k++) pmm_free_page(pg + k * PAGE_SIZE);
             home_disk = d; home_start = start; home_size = size / 2;
             sys_start = start + size / 2; sys_size = size - size / 2;      /* system changes: the second half */

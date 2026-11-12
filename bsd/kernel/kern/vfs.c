@@ -5,6 +5,7 @@
 #include "vfs.h"
 #include "fs.h"
 #include "aether_data.h"
+#include "cred.h"
 
 /* the apps' view: every regular file under /home/root, sorted, rebuilt when the tree changes */
 static char (*paths)[VFS_PATH];
@@ -42,7 +43,9 @@ static void rebuild(void)
     fs_lock();
     npaths = 0;
     struct node *home;
-    if (fs_lookup(0, "/home/root", 1, &home) == 0) { char pre[VFS_PATH] = "/home/root"; collect(home, pre); }
+    char pre[VFS_PATH];
+    strlcpy(pre, session_home(), sizeof pre);
+    if (fs_lookup(0, pre, 1, &home) == 0) collect(home, pre);
     built_gen = fs_generation();
     fs_unlock();
 }
@@ -157,9 +160,9 @@ int vfs_load_image(const uint8_t *in, size_t len)
 
 static const char README[] =
     "Welcome to AuxoBSD.\n\n"
-    "This is your home folder, /home/root. Open files here in Aether (the code editor),\n"
+    "This is your home folder. Open files here in Aether (the code editor),\n"
     "or in the Terminal with `cat`. Aether's Preview button opens HTML files in the Browser.\n\n"
-    "More software: `pkg update`, then `pkg search WORD` and `pkg install NAME` in the Terminal.\n"
+    "More software: `sudo pkg update`, then `pkg search WORD` and `sudo pkg install NAME` in the Terminal.\n"
     "pkg installs real Ubuntu 24.04 programs (AuxoBSD runs Linux programs as they are).\n\n"
     "Until AuxoBSD is installed (Install AuxoBSD in the app menu), files live in memory and are\n"
     "gone after a restart. On an installed system they are saved to the disk, and so are the\n"
@@ -172,13 +175,19 @@ static const char INDEX[] =
     "  <ul>\n    <li>No JavaScript here (yet)</li>\n    <li>Links work: <a href=\"https://auxolinux.com\">auxolinux.com</a></li>\n  </ul>\n"
     "</body>\n</html>\n";
 
+static void starter(const char *name, const char *data, size_t len)
+{
+    char p[VFS_PATH];
+    ksnprintf(p, sizeof p, "%s/%s", session_home(), name);
+    if (!vfs_exists(p)) vfs_write(p, data, len);            /* never over the user's own */
+}
+
 void vfs_init(void)
 {
-    vfs_write("/home/root/README.txt", README, sizeof README - 1);
-    vfs_write("/home/root/index.html", INDEX, sizeof INDEX - 1);
+    static int done;
+    if (done++) return;
+    starter("README.txt", README, sizeof README - 1);
+    starter("index.html", INDEX, sizeof INDEX - 1);
     for (int i = 0; i < AETHER_LANG_COUNT; i++)
-        if (!strcmp(aether_langs[i].id, "c")) {
-            vfs_write("/home/root/hello.c", aether_langs[i].main, strlen(aether_langs[i].main));
-            break;
-        }
+        if (!strcmp(aether_langs[i].id, "c")) { starter("hello.c", aether_langs[i].main, strlen(aether_langs[i].main)); break; }
 }

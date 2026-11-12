@@ -1,7 +1,7 @@
 /* Chrono's Wayland server: lets ordinary Wayland programs (GTK 4 apps such as Aether) open
  * windows on the AuxoBSD desktop.
  *
- * It listens on /run/user/0/wayland-0 (an AF_UNIX socket, kern/unix.c) and implements the core
+ * It listens on /run/user/UID/wayland-0 (an AF_UNIX socket, kern/unix.c) and implements the core
  * protocol the toolkits need: wl_compositor + wl_surface, wl_shm (client pixels in shared
  * memfd pages, read straight from those pages), wl_seat with pointer and keyboard (Linux
  * keycodes, an XKB keymap compiled by the client's libxkbcommon), wl_output, xdg_wm_base with
@@ -14,6 +14,9 @@
 #include "unix.h"
 #include "gfx.h"
 #include "wayland.h"
+#include "vfs.h"
+#include "cred.h"
+#include "session.h"
 
 #define MAXCLIENT 8
 #define MAXOBJ 2048
@@ -545,25 +548,30 @@ static void client_io(int c)
     }
 }
 
-int wl_server_init(int w, int h)
+/* the socket goes in the session's runtime directory (/run/user/UID), once we know who that is */
+static int wl_listen(void)
 {
-    screen_w = w; screen_h = h;
-    struct node *run, *dir;
-    if (fs_lookup(0, "/run", 1, &run) < 0) return -1;
-    dir = fs_child(run, "user") ? fs_child(run, "user") : fs_create(run, "user", N_DIR, 0755);
-    if (!dir) return -1;
-    struct node *u0 = fs_child(dir, "0") ? fs_child(dir, "0") : fs_create(dir, "0", N_DIR, 0700);
-    if (!u0) return -1;
+    char path[64];
+    ksnprintf(path, sizeof path, "%s/wayland-0", session_runtime_dir());
+    struct node *old;
+    if (fs_lookup(0, path, 0, &old) == 0) vfs_remove(path);
     listener = unix_new();
     if (!listener) return -1;
     listener->kernel = 1;
-    if (unix_bind(listener, "/run/user/0/wayland-0", 0) < 0) return -1;
+    if (unix_bind(listener, path, 0) < 0) { listener = 0; return -1; }
     unix_listen(listener);
+    return 0;
+}
+
+int wl_server_init(int w, int h)
+{
+    screen_w = w; screen_h = h;
     return 0;
 }
 
 int wl_server_poll(void)
 {
+    if (!listener && session_ready) { static int tried; if (!tried++) wl_listen(); }
     if (!listener) return 0;
     struct usock *n;
     while ((n = unix_accept(listener))) {

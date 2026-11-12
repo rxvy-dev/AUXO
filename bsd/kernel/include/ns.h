@@ -48,6 +48,8 @@ struct utsns  { int refs; uint32_t inum; char host[65], domain[65]; int init; };
 struct netns  { int refs; uint32_t inum; int isolated; int lo_up; };
 struct simplens { int refs; uint32_t inum; };   /* ipc, cgroup: nothing in them to separate yet */
 
+#include "cred.h"
+
 struct seccomp_filter { int refs; struct seccomp_filter *prev; uint32_t len; uint64_t insns[]; };
 
 /* the parts of a task this file deals with (embedded in struct task) */
@@ -63,6 +65,7 @@ struct task_ns {
     uint64_t       cap_eff, cap_perm, cap_inh, cap_bset, cap_amb;
     int            no_new_privs, dumpable, keepcaps, pdeathsig, subreaper, seccomp_mode;
     struct seccomp_filter *filter;
+    struct ucred   cred;            /* user and group ids */
 };
 
 #define CAP_ALL      ((1ULL << 41) - 1)    /* CAP_LAST_CAP = 40 (CAP_CHECKPOINT_RESTORE) */

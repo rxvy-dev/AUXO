@@ -51,6 +51,7 @@ static struct node *mk(struct node *dir, const char *name, int type, uint16_t mo
     n->mtime = fs_now();
     n->parent = dir ? dir : n;
     if (dir) dir->refs++;
+    if (pid > 0) { struct task *x = task_by_pid(pid); if (x) { n->uid = x->ns.cred.euid; n->gid = x->ns.cred.egid; } }
     p->kind = kind; p->pid = pid; p->fd = fd; p->node = n;
     p->ns = dir && pe(dir) ? pe(dir)->ns : 0;
     if (path) strlcpy(p->path, path, sizeof p->path);
@@ -177,9 +178,13 @@ static int text_pid(struct task *t, struct pidns *ns, struct task *x, const char
         int threads = 0;
         for (int i = 0; i < MAXTASK; i++) { struct task *o = task_slot(i); if (o->used && o->tgid == x->tgid) threads++; }
         n = ksnprintf(b, cap, "Name:\t%s\nUmask:\t0%c%c%c\nState:\t%s\nTgid:\t%d\nNgid:\t0\nPid:\t%d\nPPid:\t%d\nTracerPid:\t0\n"
-                      "Uid:\t0\t0\t0\t0\nGid:\t0\t0\t0\t0\nFDSize:\t%d\nGroups:\t\nNStgid:", x->name,
+                      "Uid:\t%u\t%u\t%u\t%u\nGid:\t%u\t%u\t%u\t%u\nFDSize:\t%d\nGroups:", x->name,
                       '0' + (int)((x->umask >> 6) & 7), '0' + (int)((x->umask >> 3) & 7), '0' + (int)(x->umask & 7),
-                      x->state == 2 ? "Z (zombie)" : "S (sleeping)", vp, vt, vpp, MAXFD);
+                      x->state == 2 ? "Z (zombie)" : "S (sleeping)", vp, vt, vpp,
+                      x->ns.cred.uid, x->ns.cred.euid, x->ns.cred.suid, x->ns.cred.fsuid,
+                      x->ns.cred.gid, x->ns.cred.egid, x->ns.cred.sgid, x->ns.cred.fsgid, MAXFD);
+        for (int g = 0; g < x->ns.cred.ngroups && g < 32; g++) n += ksnprintf(b + n, cap - (size_t)n, "%s%u", g ? " " : "\t", x->ns.cred.groups[g]);
+        n += ksnprintf(b + n, cap - (size_t)n, "\nNStgid:");
         for (int l = ns ? ns->level : 0; l <= (x->ns.pid ? x->ns.pid->level : 0); l++) n += ksnprintf(b + n, cap - (size_t)n, "\t%d", x->ns.ltgid[l]);
         n += ksnprintf(b + n, cap - (size_t)n, "\nNSpid:");
         for (int l = ns ? ns->level : 0; l <= (x->ns.pid ? x->ns.pid->level : 0); l++) n += ksnprintf(b + n, cap - (size_t)n, "\t%d", x->ns.lpid[l]);

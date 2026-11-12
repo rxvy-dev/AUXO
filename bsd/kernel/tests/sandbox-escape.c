@@ -53,8 +53,8 @@ static int inside(const char *outside_port, int filtered)
     uname(&u);
     expect(!strcmp(u.nodename, "sbx"), "its own hostname", u.nodename);
     /* the host's files that weren't bound in are not there, even through ".." */
-    expect_errno(open("/home/root/secret.txt", O_RDONLY), ENOENT, "a file that wasn't bound in can't be opened");
-    expect_errno(open("/../../../home/root/secret.txt", O_RDONLY), ENOENT, "nor through /../..");
+    expect_errno(open("/home/auxo/secret.txt", O_RDONLY), ENOENT, "a file that wasn't bound in can't be opened");
+    expect_errno(open("/../../../home/auxo/secret.txt", O_RDONLY), ENOENT, "nor through /../..");
     if (chdir("/")) {}
     if (chdir("..")) {}
     char cwd[256] = "";
@@ -79,6 +79,15 @@ static int inside(const char *outside_port, int filtered)
         expect_errno(chroot("/tmp"), EPERM, "chroot is refused");
         expect_errno(syscall(SYS_pivot_root, "/tmp", "/tmp"), EPERM, "pivot_root is refused");
         expect_errno(syscall(435, 0, 0), ENOSYS, "clone3 is refused (so clone's flags can be checked)");
+    } else if (geteuid() != 0) {
+        /* an ordinary user's sandbox (set-user-ID bwrap, the way WebKit runs as the user): no root inside */
+        char ids[64]; snprintf(ids, sizeof ids, "uid %d euid %d", getuid(), geteuid());
+        expect(getuid() == 1000 && geteuid() == 1000, "it runs as the user, not root", ids);
+        expect_errno(mount("tmpfs", "/mnt", "tmpfs", 0, 0), EPERM, "the user can't mount");
+        expect_errno(umount2("/usr", MNT_DETACH), EPERM, "nor unmount the read-only /usr");
+        expect_errno(chroot("/tmp"), EPERM, "nor chroot");
+        expect_errno(unshare(CLONE_NEWNS), EPERM, "nor make namespaces");
+        expect_errno(setuid(0), EPERM, "nor become root");
     } else {
         /* root in its own namespaces: what it rearranges stays inside them */
         expect(mount("tmpfs", "/mnt", "tmpfs", 0, 0) == 0, "root can mount a tmpfs, in its namespace", strerror(errno));
@@ -93,7 +102,7 @@ static int inside(const char *outside_port, int filtered)
             if (chroot("/tmp") != 0) _exit(2);
             for (int i = 0; i < 20; i++) if (chdir("..")) break;
             /* (as on Linux, chroot isn't a wall: this gets back to the sandbox's own root, and no further) */
-            _exit(open("home/root/secret.txt", O_RDONLY) >= 0 ? 1 : open("esc/escape", O_RDONLY) >= 0 ? 0 : 3);
+            _exit(open("home/auxo/secret.txt", O_RDONLY) >= 0 ? 1 : open("esc/escape", O_RDONLY) >= 0 ? 0 : 3);
         }
         int st = 0;
         waitpid(c, &st, 0);
@@ -118,7 +127,7 @@ static int inside(const char *outside_port, int filtered)
     inet_pton(AF_INET, "10.0.2.2", &a.sin_addr);
     expect_errno(connect(s, (struct sockaddr *)&a, sizeof a), ENETUNREACH, "the network outside is unreachable");
     close(s);
-    if (!filtered) {                                          /* last: everything after this needs /usr */
+    if (!filtered && geteuid() == 0) {                       /* last: everything after this needs /usr */
         expect(umount2("/usr", MNT_DETACH) == 0, "root can unmount its own /usr bind", strerror(errno));
         expect_errno(open("/usr/bin/busybox", O_RDONLY), ENOENT, "and under it is the sandbox's own empty directory, not the host's");
     }

@@ -4,12 +4,13 @@
  * Chrono desktop that keeps Aether's look and data: its colour schemes (Aether Crimson by
  * default), its starter templates for 34 languages, the explorer / tabs / editor / status bar
  * layout, auto-indent, bracket closing, and the HTML live preview (here: the Chrono Browser).
- * Files live in the AuxoBSD filesystem (vfs), under /home/root. */
+ * Files live in the AuxoBSD filesystem (vfs), in the home folder. */
 #include "kern.h"
 #include "gfx.h"
 #include "fonts.h"
 #include "apps.h"
 #include "vfs.h"
+#include "cred.h"
 #include "rs.h"
 #include "aether_data.h"
 
@@ -148,7 +149,7 @@ static struct buffer *open_buffer(const char *path, const char *text, size_t len
 void aether_open(const char *path)
 {
     const char *d; size_t n;
-    if (vfs_read(path, &d, &n) < 0) { d = ""; n = 0; }
+    if (!session_may(path, 4) || vfs_read(path, &d, &n) < 0) { d = ""; n = 0; }
     open_buffer(path, d, n);
 }
 
@@ -156,6 +157,7 @@ static void save(void)
 {
     if (cur < 0) return;
     struct buffer *b = &bufs[cur];
+    if (!session_may(b->path, 2)) { ksnprintf(message, sizeof message, "Can't save %s: permission denied", b->path); return; }
     if (vfs_write(b->path, b->text, (size_t)b->len) < 0) { ksnprintf(message, sizeof message, "Couldn't save %s", b->path); return; }
     b->dirty = 0;
     ksnprintf(message, sizeof message, "Saved %s (%d bytes)", b->path, b->len);
@@ -175,10 +177,10 @@ static void new_from_template(int lang)
     char path[VFS_PATH];
     const char *dot = strrchr(l->file, '.');
     size_t stem = dot ? (size_t)(dot - l->file) : strlen(l->file);
-    ksnprintf(path, sizeof path, "/home/root/%s", l->file);
+    ksnprintf(path, sizeof path, "%s/%s", session_home(), l->file);
     for (int n = 2; vfs_exists(path) && n < 100; n++) {
         char s[64]; memcpy(s, l->file, stem); s[stem] = 0;
-        ksnprintf(path, sizeof path, "/home/root/%s%d%s", s, n, dot ? dot : "");
+        ksnprintf(path, sizeof path, "%s/%s%d%s", session_home(), s, n, dot ? dot : "");
     }
     vfs_write(path, l->main, strlen(l->main));
     aether_open(path);
@@ -528,7 +530,7 @@ void aether_paint(const struct app_ctx *a)
     int sy = Y + HEADER, sh = H - HEADER - STATUS;
     gfx_fill(c, X, sy, SIDEBAR, sh, side);
     gfx_text(c, &font_bold, X + 14, sy + 10, "EXPLORER", t->gutter_fg);
-    gfx_text(c, &font_ui, X + 14, sy + 30, "/home/root", t->gutter_fg);
+    gfx_text(c, &font_ui, X + 14, sy + 30, session_home(), t->gutter_fg);
     gfx_clip(c, X, sy + 50, SIDEBAR, sh - 50);
     int row = 0;
     for (int i = 0; i < vfs_count(); i++) {
@@ -538,7 +540,8 @@ void aether_paint(const struct app_ctx *a)
         if (fy < sy + 40 || fy > sy + sh) continue;
         int open = cur >= 0 && !strcmp(bufs[cur].path, p);
         if (open) gfx_fill(c, X, fy - 2, SIDEBAR, 24, t->sel);
-        const char *shown = !strncmp(p, "/home/root/", 11) ? p + 11 : p;
+        size_t hl = strlen(session_home());
+        const char *shown = !strncmp(p, session_home(), hl) && p[hl] == '/' ? p + hl + 1 : p;
         int l = lang_for(p);
         gfx_circle(c, X + 20, fy + 9, 3.5f, l >= 0 ? tok_color(l % 2 ? T_KEYWORD : T_STRING) : t->gutter_fg);
         gfx_text_fit(c, &font_ui, X + 32, fy + 2, SIDEBAR - 42, shown, open ? t->fg : gfx_mix(t->fg, t->bg, 0.15f));
@@ -742,7 +745,7 @@ int aether_click(int x, int y, int w, int h)
         int ew = win_w - SIDEBAR, eh = win_h - HEADER - STATUS - TABS, by = HEADER + TABS + eh / 2 - 36, cx = SIDEBAR + ew / 2;
         if (y >= by && y < by + 26) {
             if (x >= cx - 160 && x < cx - 10) overlay = OV_NEW;
-            else if (x >= cx + 10 && x < cx + 160) aether_open("/home/root/hello.c");
+            else if (x >= cx + 10 && x < cx + 160) aether_open(HOME_FILE("hello.c"));
         }
         return 1;
     }

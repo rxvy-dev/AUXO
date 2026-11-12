@@ -27,7 +27,8 @@ _Static_assert(CHRONO_THEMES == CHRONO_THEME_COUNT, "update CHRONO_THEMES in chr
 #define TERM_ROWS 28
 
 /* ── state ──────────────────────────────────────────────────────────── */
-const char *session_bus_env(void);   /* session.c */
+#include "session.h"
+#include "cred.h"
 static struct canvas scr, wallc;
 static int W, H, running;
 static int cur = CHRONO_THEME_DEFAULT;
@@ -668,8 +669,55 @@ static void paint_panel(struct canvas *c)
     gfx_text(c, &font_ui, p.x + p.w - cw + 4, p.y + (p.h - 16) / 2, clk, fg);
 }
 
-enum { MI_TERMINAL, MI_BROWSER, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_REBOOT, MI_POWEROFF, MI_COUNT };
-static const char *const MENU[] = { "Terminal", "Browser", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Restart", "Power off" };
+enum { MI_TERMINAL, MI_BROWSER, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_LOCK, MI_REBOOT, MI_POWEROFF, MI_COUNT };
+static const char *const MENU[] = { "Terminal", "Browser", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Lock", "Restart", "Power off" };
+
+/* ── the lock screen: at start-up when the user has a password, and from Lock in the menu ── */
+static int locked = -1;                       /* -1: not decided yet (who the user is comes later) */
+static char lock_pw[128];
+static int lock_len, lock_wrong;
+
+static void paint_lock(struct canvas *c)
+{
+    gfx_fill(c, 0, 0, W, H, 0x80000000);
+    int cw = 360, ch = 250, x = (W - cw) / 2, y = (H - ch) / 2 - 30;
+    uint32_t bg = T->c[C_WINDOW_BG] | 0xff000000, fg = T->c[C_WINDOW_FG] | 0xff000000, ac = T->c[C_ACCENT] | 0xff000000;
+    gfx_shadow(c, x, y, cw, ch, 16, 24, 120);
+    gfx_round(c, x, y, cw, ch, 16, bg, 0);
+    gfx_circle(c, x + cw / 2, y + 52, 30, ac);
+    char ini[2] = { session_user()[0] >= 'a' && session_user()[0] <= 'z' ? (char)(session_user()[0] - 32) : session_user()[0], 0 };
+    gfx_text(c, &font_head, x + cw / 2 - gfx_text_width(&font_head, ini) / 2, y + 38, ini, T->c[C_ACCENT_FG] | 0xff000000);
+    struct account a;
+    const char *name = account_by_name(session_user(), &a) == 0 && a.gecos[0] && a.gecos[0] != ',' ? a.gecos : session_user();
+    char nm[64]; strlcpy(nm, name, sizeof nm);
+    for (char *p = nm; *p; p++) if (*p == ',') { *p = 0; break; }
+    gfx_text(c, &font_bold, x + cw / 2 - gfx_text_width(&font_bold, nm) / 2, y + 96, nm, fg);
+    int fx = x + 40, fy = y + 130, fw = cw - 80;
+    gfx_round(c, fx, fy, fw, 36, 8, gfx_shade(bg, 0.07f) | 0xff000000, 0);
+    gfx_round_frame(c, fx, fy, fw, 36, 8, lock_wrong ? 0xffe5484d : ac);
+    if (lock_len) {
+        for (int i = 0; i < lock_len && i < 24; i++) gfx_circle(c, fx + 18 + i * 13, fy + 18, 4, fg);
+    } else gfx_text(c, &font_ui, fx + 12, fy + 9, "Password", gfx_mix(fg, bg, 0.5f) | 0xff000000);
+    const char *msg = lock_wrong ? "That isn't the password. Try again." : "Type your password and press Enter";
+    gfx_text(c, &font_ui, x + cw / 2 - gfx_text_width(&font_ui, msg) / 2, y + 186, msg, lock_wrong ? 0xffe5484d : gfx_mix(fg, bg, 0.4f) | 0xff000000);
+    gfx_text(c, &font_ui, x + cw / 2 - gfx_text_width(&font_ui, auxo.hostname) / 2, y + 214, auxo.hostname, gfx_mix(fg, bg, 0.55f) | 0xff000000);
+}
+
+static int lock_key(int k)
+{
+    if (k == '\r' || k == '\n') {
+        lock_pw[lock_len] = 0;
+        if (account_check_password(session_user(), lock_pw)) { locked = 0; lock_wrong = 0; }
+        else lock_wrong = 1;
+        memset(lock_pw, 0, sizeof lock_pw);
+        lock_len = 0;
+        return 1;
+    }
+    if (k == '\b' || k == 0x7f) { if (lock_len) lock_len--; return 1; }
+    if (k == 27 || k == 0x15) { lock_len = 0; return 1; }
+    if (k >= 0x20 && k < 0x7f && lock_len + 1 < (int)sizeof lock_pw) { lock_pw[lock_len++] = (char)k; lock_wrong = 0; return 1; }
+    return 0;
+}
 
 static struct prect menu_rect(void)
 {
@@ -765,6 +813,7 @@ static void compose(void)
     wl_paint_popups(&scr);
     paint_panel(&scr);
     if (menu_open) paint_menu(&scr);
+    if (locked == 1) paint_lock(&scr);
     fb_present(scr.px, scr.stride, 0, 0, W, H);
     cur_drawn_x = -1;
     cursor_show();
@@ -830,11 +879,10 @@ static void close_win(int i)
 
 static int run_detached(const char *path, char *const argv[])
 {
-    char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LANG=C.UTF-8", "TERM=linux",
-                     "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
-                     "GDK_DEBUG=gl-disable,vulkan-disable", "LIBGL_ALWAYS_SOFTWARE=1", "GTK_A11Y=none", "NO_AT_BRIDGE=1", (char *)session_bus_env(),
-                     "XDG_DATA_DIRS=/usr/share", "TMPDIR=/tmp", 0 };
-    return uproc_spawn_detached(path, argv, envp, "/home/root");
+    static char envbuf[2048];
+    char *envp[40];
+    session_env(envbuf, sizeof envbuf, envp, 40, 0, session_home());
+    return uproc_spawn_detached(path, argv, envp, session_home());
 }
 
 static void open_app(int app)
@@ -985,6 +1033,7 @@ static void menu_action(int item)
     case MI_INSTALL:  open_app(APP_INSTALLER); break;
     case MI_SETTINGS: open_app(APP_SETTINGS); break;
     case MI_ABOUT:    open_app(APP_ABOUT); break;
+    case MI_LOCK:     locked = 1; lock_len = 0; lock_wrong = 0; menu_open = 0; break;
     case MI_REBOOT:   machine_reboot();
     case MI_POWEROFF: machine_poweroff();
     }
@@ -1110,13 +1159,31 @@ void chrono_main(uintptr_t arg)
 
     struct mouse_event ev;
     for (;;) {
-        int dirty = 0, moved = 0;
+        int dirty = 0, moved = 0, k0;
         dirty |= wl_server_poll();
         if (req_theme >= 0) { set_theme(req_theme); req_theme = -1; dirty = 1; }
         if (req_open >= 0) { open_app(req_open); req_open = -1; dirty = 1; }
         if (req_redraw) { req_redraw = 0; dirty = 1; }
         if (req_edit) { req_edit = 0; open_app(APP_AETHER); aether_open(req_path); dirty = 1; }
         if (req_url) { req_url = 0; chrono_open_url(req_link); dirty = 1; }
+        if (locked == -1 && session_ready) { locked = account_password_set(session_user()) ? 1 : 0; dirty = 1; }
+        if (locked == 1) {                                /* nothing but the password field */
+            while (mouse_poll(&ev)) {
+                if (ev.abs) { mx = (int)((int64_t)ev.ax * W / 32768); my = (int)((int64_t)ev.ay * H / 32768); }
+                else { mx += ev.dx; my += ev.dy; }
+                if (mx < 0) mx = 0;
+                if (my < 0) my = 0;
+                if (mx >= W) mx = W - 1;
+                if (my >= H) my = H - 1;
+                moved = 1;
+            }
+            while (input_raw_key() >= 0) { }
+            while ((k0 = input_gui_key()) >= 0) dirty |= lock_key(k0);
+            if (locked != 1) dirty = 1;
+            if (dirty) compose(); else if (moved) { cursor_hide(); cursor_show(); }
+            wait_tick();
+            continue;
+        }
         while (mouse_poll(&ev)) {
             int old = buttons;
             if (ev.abs) { mx = (int)((int64_t)ev.ax * W / 32768); my = (int)((int64_t)ev.ay * H / 32768); }

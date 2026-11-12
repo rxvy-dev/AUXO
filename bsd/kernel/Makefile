@@ -24,6 +24,7 @@ BEARSSL_CFLAGS := $(filter-out -Wall -Wextra,$(CFLAGS)) -Ithird_party/shim -Ithi
   -DBR_SSE2=0 -DBR_POWER8=0 -DBR_RDRAND=0 -DBR_64=1
 build/third_party/bearssl/%.o: CFLAGS := $(BEARSSL_CFLAGS)
 build/net/http.o: CFLAGS += -Ithird_party/bearssl -Ithird_party/shim
+build/kern/cred.o: CFLAGS += -Ithird_party/bearssl -Ithird_party/shim
 build/net/http.o: include/trust_anchors.h
 
 $(GUI_OBJS): include/gfx.h include/fonts.h include/chrono_themes.h include/chrono.h
@@ -54,7 +55,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test test-install test-hw test-browser test-sandbox test-pkg pkg rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test test-install test-hw test-browser test-sandbox test-sound test-pkg pkg rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -134,9 +135,15 @@ build/pkg/pkg: tools/pkg/pkg.c build/pkg/libbearssl.a include/trust_anchors.h
 
 pkg: build/pkg/pkg
 
-build/overlay.tar: build/pkg/pkg tools/pkg/sources
+# sudo (tools/sudo): set-user-ID root, for scripts and shells other than the Terminal's own
+build/sudo/sudo: tools/sudo/sudo.c
+>@mkdir -p $(dir $@)
+>$(HOSTCC) -O2 -Wall $< -lcrypt -o $@
+
+build/overlay.tar: build/pkg/pkg build/sudo/sudo tools/pkg/sources
 >rm -rf build/overlay && mkdir -p build/overlay/usr/bin build/overlay/etc/pkg build/overlay/var/cache/pkg
 >cp build/pkg/pkg build/overlay/usr/bin/pkg && cp tools/pkg/sources build/overlay/etc/pkg/sources
+>cp build/sudo/sudo build/overlay/usr/bin/sudo && chmod 4755 build/overlay/usr/bin/sudo
 >tar --owner=0 --group=0 --format=ustar -C build/overlay -cf $@ .
 
 # the root filesystem: real Linux programs (GCC 13, binutils, make, BusyBox) from Ubuntu packages.
@@ -173,6 +180,9 @@ test-browser: iso
 # pkg: real Ubuntu packages from a small local mirror, kept on an installed system's disk
 test-sandbox: iso
 >$(PYTHON) -I tests/test-sandbox.py build/auxobsd.iso
+
+test-sound: iso
+>$(PYTHON) -I tests/test-sound.py build/auxobsd.iso
 
 test-pkg: iso
 >$(PYTHON) -I tests/test-pkg.py build/auxobsd.iso

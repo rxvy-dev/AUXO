@@ -6,6 +6,15 @@
 #include "fs.h"
 #include "uproc.h"
 #include "unix.h"
+#include "ns.h"
+
+/* the credentials a socket carries: whoever is making, connecting or listening with it */
+static void stamp(struct usock *s)
+{
+    struct task *t = task_current();
+    if (!t) { s->cpid = 0; s->cuid = s->cgid = 0; return; }
+    s->cpid = t->tgid; s->cuid = t->ns.cred.euid; s->cgid = t->ns.cred.egid;
+}
 
 #define RXCAP (256 * 1024)
 static uint64_t irq_off(void);
@@ -25,6 +34,7 @@ struct usock *unix_new(void)
     s->rx = (uint8_t *)(uintptr_t)pg;
     s->cap = RXCAP;
     s->refs = 1;
+    stamp(s);
     return s;
 }
 
@@ -102,7 +112,7 @@ int unix_bind(struct usock *s, const char *path, struct node *cwd)
     return 0;
 }
 
-int unix_listen(struct usock *s) { s->listening = 1; return 0; }
+int unix_listen(struct usock *s) { s->listening = 1; stamp(s); return 0; }
 
 static struct usock *lookup(const char *path, struct node *cwd)
 {
@@ -128,6 +138,8 @@ static int connect_to(struct usock *s, struct usock *l)
     struct usock *srv = unix_new();
     if (!srv) return -12;
     srv->type = l->type;
+    srv->cpid = l->cpid; srv->cuid = l->cuid; srv->cgid = l->cgid;   /* the server's end speaks for the listener */
+    stamp(s);
     srv->peer = s; s->peer = srv;
     l->backlog[l->nback++] = srv;
     s->connected = srv->connected = 1;

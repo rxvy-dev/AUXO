@@ -2,6 +2,7 @@
  * Same logo, colours and Terry Fox Foundation note as packages/auxo-tools/files/bin/auxo-motd. */
 #include "kern.h"
 #include "auxo.h"
+#include "cred.h"
 
 static const char *const LOGO[] = { "   ●  ", "  /\\  ", " /  \\ ", "/_/\\_\\" };
 
@@ -66,7 +67,7 @@ int cmd_auxo_motd(int argc, char **argv)
         c_reset();
         kprintf("  ");
         switch (i) {
-        case 0: kprintf("\033[1mWelcome to %s, root.\033[0m", AUXO_NAME); break;
+        case 0: kprintf("\033[1mWelcome to %s, %s.\033[0m", AUXO_NAME, session_user()); break;
         case 1: c_dim(); kprintf("%s %s · up %s · mem %lu%% used", AUXO_NAME, AUXO_VERSION, up, pct); c_reset(); break;
         case 2:
             c_dim(); kprintf("type "); c_reset(); c_rgb(c1); kprintf("help"); c_reset();

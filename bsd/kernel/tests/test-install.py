@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Install AuxoBSD onto a blank disk and boot the result, the way a user would:
 
-  1. boot the ISO with an empty disk attached, leave a file in /home/root, run `install`;
+  1. boot the ISO with an empty disk attached, leave a file in the live user's home, run
+     `sudo install` with an account (user name and password) for the installed system;
   2. boot the disk alone with BIOS firmware (IDE): GRUB from the MBR, the hostname we chose,
-     the file from step 1, then write a second file and `sync`;
+     the account (the desktop starts locked; sudo wants the password), the file from step 1
+     (now the new user's), then write a second file and `sync`;
   3. boot the same disk with UEFI firmware (OVMF, the disk on AHCI/SATA), if OVMF is installed:
      the second file is there.
 
@@ -24,6 +26,7 @@ OVMF_CODE = "/usr/share/OVMF/OVMF_CODE_4M.fd"
 OVMF_VARS = "/usr/share/OVMF/OVMF_VARS_4M.fd"
 HOST = "ci-box"
 MARK = "made-before-install"
+USER, PASSWORD = "ada", "Tr0ub4dor&3"
 
 passed = failed = 0
 
@@ -91,6 +94,21 @@ class Machine:
         self.wait_prompt(timeout)
         return self.text(start)
 
+    def run_until(self, cmd, pattern, timeout=30):
+        """send cmd, wait for pattern (bytes) in the output: for prompts that aren't the shell's"""
+        start = len(self.buf)
+        self.s.sendall(cmd.encode() + b"\r")
+        end = time.time() + timeout
+        while time.time() < end and pattern not in ANSI.sub(b"", self.buf[start:]):
+            try:
+                d = self.s.recv(65536)
+                if not d:
+                    break
+                self.buf += d
+            except socket.timeout:
+                pass
+        return pattern in ANSI.sub(b"", self.buf[start:])
+
     def close(self):
         if self.s:
             self.s.close()
@@ -123,10 +141,12 @@ def main():
             return
         out = m.run("lsblk")
         check("sda" in out and "QEMU HARDDISK" in out, "lsblk lists the blank disk", out)
-        m.run(f"busybox sh -c 'echo {MARK} > /home/root/note.txt'")
-        m.run("busybox sh -c 'mkdir -p /home/root/.config/browser && printf \"active\\t0\\ntab\\thttps://example.org/\\tExample\\n\" > /home/root/.config/browser/session'")
-        out = m.run(f"install sda {HOST} --yes", 900)
-        check("is installed on sda" in out, f"install sda {HOST} --yes finishes", out)
+        m.run(f"busybox sh -c 'echo {MARK} > $HOME/note.txt'")
+        m.run("busybox sh -c 'mkdir -p $HOME/.config/browser && printf \"active\\t0\\ntab\\thttps://example.org/\\tExample\\n\" > $HOME/.config/browser/session'")
+        out = m.run(f"install sda {HOST} --yes")
+        check("needs root" in out and "installed" not in out, "install without sudo is refused", out)
+        out = m.run(f"sudo install sda {HOST} --user {USER} --password {PASSWORD} --yes", 900)
+        check("is installed on sda" in out, f"sudo install sda {HOST} --user {USER} ... finishes", out)
         m.close()
         with open(disk, "rb") as f:
             mbr = f.read(512)
@@ -138,15 +158,23 @@ def main():
         print("▲ boot the installed disk (BIOS, IDE)", flush=True)
         m, up = boot(tmp, ["-drive", f"file={disk},format=raw,if=ide,index=0"], "BIOS")
         if up:
-            check(f"hostname {HOST}" in m.text() and f"root@{HOST}" in m.text(), f"the hostname is {HOST}", m.text()[-600:])
-            check("/home/root is kept on sda" in m.text(), "/home/root is kept on the disk", m.text()[-600:])
+            check(f"hostname {HOST}" in m.text() and f"{USER}@{HOST}" in m.text(), f"the hostname is {HOST}, the user {USER}", m.text()[-600:])
+            check(f"user: {USER} (uid 1000), home /home/{USER}" in m.text() and "no password" not in m.text(), "the account has a password (the desktop starts locked)", m.text()[-900:])
+            check("kept on sda" in m.text(), "files and changes are kept on the disk", m.text()[-600:])
             out = m.run("cat note.txt")
             check(MARK in out, "a file made before installing is still there", out)
-            out = m.run("cat /home/root/.config/browser/session")
+            out = m.run("busybox stat -c '%U %G %a' note.txt .config/browser/session")
+            check(out.count(f"{USER} {USER}") == 2, f"and it's {USER}'s", out)
+            out = m.run("cat .config/browser/session")
             check("https://example.org/" in out, "the browser's saved tabs are still there (hidden folders kept)", out)
-            m.run("busybox sh -c 'echo second-boot > /home/root/two.txt'")
+            check(m.run_until("sudo busybox id -u", b"password for " + USER.encode()), "sudo asks for the password")
+            out = m.run(PASSWORD)
+            check(re.search(r"^0\s*$", out, re.M) is not None, "and with it, runs as root", out)
+            out = m.run("busybox sh -c 'id -un; cat /etc/shadow'")
+            check(USER in out and "Permission denied" in out, "the user can't read /etc/shadow", out)
+            m.run("busybox sh -c 'echo second-boot > $HOME/two.txt'")
             out = m.run("sync")
-            check("saved /home/root to sda" in out, "sync saves /home/root", out)
+            check("saved your files" in out, "sync saves them", out)
             out = m.run("gcc --version" if os.path.exists("build/rootfs.tar") else "uname -a")
             check("gcc" in out or "AuxoBSD" in out, "programs from the installed root run", out)
         m.close()

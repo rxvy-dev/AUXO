@@ -22,6 +22,7 @@ struct usock {
     /* SOCK_SEQPACKET / SOCK_DGRAM: what was sent arrives as the same messages (WebKit's IPC needs this) */
     uint32_t mlen[512]; int mhead, mcount;
     uint64_t msgs_in, msgs_out;                  /* message counters, to place passed fds */
+    int cpid; uint32_t cuid, cgid;               /* who made it (connect / listen): SO_PEERCRED for the other end */
 };
 #define UNIX_PACKETS(s) ((s)->type == 2 || (s)->type == 5)
 

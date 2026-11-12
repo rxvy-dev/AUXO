@@ -11,6 +11,9 @@
 #include "install.h"
 #include "net.h"
 #include "netlink.h"
+#include "fdobj.h"
+#include "cred.h"
+#include "snd.h"
 
 struct task *task_alloc(void);
 void task_free(struct task *t);
@@ -29,6 +32,7 @@ enum { EPERM = 1, ENOENT, ESRCH, EINTR, EIO, ENXIO, E2BIG, ENOEXEC, EBADF, ECHIL
        EOPNOTSUPP = 95, EXDEV_ = 18, ENETUNREACH = 101, ECONNREFUSED = 111 };
 
 #define AT_FDCWD -100
+#define ENXIO_SND 6
 #define EMSGSIZE_ 90
 #define ENOPROTOOPT_ 92
 
@@ -83,8 +87,12 @@ static int at_parent(struct task *t, long dirfd, const char *path, struct path *
     if ((r = vfs_walk_parent(t, dir, path, pd, name, n)) < 0) return r;
     if (vfs_readonly(pd->m)) return -EROFS;
     if (procfs_is(pd->n)) return -EACCES;
-    return 0;
+    return cred_perm(t, pd->n, 1);                         /* looking in it: search (write is checked once we know
+                                                              the name is free / there: EEXIST and ENOENT come first) */
 }
+
+/* making or removing a name in a directory: write + search on it */
+static int may_change(struct task *t, struct path *pd) { return cred_perm(t, pd->n, 3); }
 
 static int procfile(struct node *n) { return n && n->dev == 0x50524F43u && n->type != N_CHR; }
 
@@ -110,7 +118,8 @@ static void fill_stat(struct node *n, struct kstat *s)
 {
     memset(s, 0, sizeof *s);
     s->dev = 0x801; s->ino = n->ino; s->nlink = n->type == N_DIR ? 2 : n->nlink; s->mode = mode_of(n);
-    s->rdev = n->type == N_CHR ? (n->dev == DEV_TTY ? 0x500 : 0x100 + n->dev) : 0;
+    s->uid = n->uid; s->gid = n->gid;
+    s->rdev = n->type == N_CHR ? (n->dev == DEV_TTY ? 0x500 : n->dev == DEV_SND_CTL || n->dev == DEV_SND_PCM ? snd_rdev(n) : 0x100 + n->dev) : 0;
     s->size = (int64_t)n->size; s->blksize = 4096; s->blocks = (int64_t)((n->size + 511) / 512);
     s->atime = s->mtime = s->ctime = n->mtime ? n->mtime : 1700000000;
 }
@@ -130,7 +139,8 @@ static long do_statx(struct task *t, struct node *n, uint64_t ubuf)
     fill_stat(n, &s);
     uint32_t mask = 0x7FF, blk = 4096, nl = (uint32_t)s.nlink, z = 0;
     uint16_t mode = (uint16_t)s.mode;
-    memcpy(b + 0, &mask, 4); memcpy(b + 4, &blk, 4); memcpy(b + 16, &nl, 4); memcpy(b + 20, &z, 4); memcpy(b + 24, &z, 4);
+    (void)z;
+    memcpy(b + 0, &mask, 4); memcpy(b + 4, &blk, 4); memcpy(b + 16, &nl, 4); memcpy(b + 20, &s.uid, 4); memcpy(b + 24, &s.gid, 4);
     memcpy(b + 28, &mode, 2); memcpy(b + 32, &s.ino, 8); memcpy(b + 40, &s.size, 8); memcpy(b + 48, &s.blocks, 8);
     for (int k = 0; k < 4; k++) memcpy(b + 64 + k * 16, &s.mtime, 8);
     uint32_t maj = 8, min = 1;
@@ -150,11 +160,18 @@ static long sys_openat(struct task *t, long dirfd, uint64_t up, long flags, long
     if (r == -ENOENT && (flags & 0100)) {                  /* O_CREAT */
         struct path pd; char name[256];
         if ((r = at_parent(t, dirfd, path, &pd, name, sizeof name)) < 0) return r;
+        if ((r = may_change(t, &pd)) < 0) return r;
         struct node *n = fs_create(pd.n, name, N_REG, (uint16_t)(mode & ~t->umask & 07777));
         if (!n) return -ENOMEM;
         p.m = pd.m; p.n = n;
         r = 0;
     } else if (r == 0 && (flags & 0100) && (flags & 0200)) return -EEXIST;
+    else if (r == 0 && !(flags & 010000000)) {             /* an existing file: does its mode let us? (not O_PATH) */
+        if (wr && p.n->type != N_CHR && p.n->type != N_FIFO && p.n->type != N_SOCK && vfs_readonly(p.m)) return -EROFS;
+        int want = ((flags & 3) == 0 || (flags & 3) == 2 ? 4 : 0) | (wr ? 2 : 0);
+        if (p.n->type == N_DIR && (flags & 3) == 0) want = 4;
+        if (!procfile(p.n) || p.n->type == N_DIR) { long e = cred_perm(t, p.n, want); if (e < 0) return e; }
+    }
     if (r < 0) return r;
     struct node *n = p.n;
     if ((flags & 0200000) && n->type != N_DIR) return -ENOTDIR;
@@ -166,6 +183,7 @@ static long sys_openat(struct task *t, long dirfd, uint64_t up, long flags, long
     if ((flags & 01000) && n->type == N_REG && (flags & 3)) fs_truncate(n, 0);
     struct file *f = file_new(0, n, (int)flags);
     if (!f) return -ENOMEM;
+    if (n->type == N_CHR && n->dev == DEV_SND_PCM && (r = snd_open(f)) < 0) { file_put(f); return r; }
     f->mnt = p.m;
     vfs_pathname(t, p, f->path, sizeof f->path);
     int fd = alloc_fd(t, f, 0, (flags & 02000000) != 0);
@@ -372,7 +390,7 @@ static long sys_readlinkat(struct task *t, long dirfd, uint64_t up, uint64_t ubu
     return (long)l;
 }
 
-static long sys_faccessat(struct task *t, long dirfd, uint64_t up, long mode)
+static long sys_faccessat(struct task *t, long dirfd, uint64_t up, long mode, long flags)
 {
     char path[1024];
     long r;
@@ -380,6 +398,12 @@ static long sys_faccessat(struct task *t, long dirfd, uint64_t up, long mode)
     if ((r = upath(t, up, path, sizeof path)) < 0) return r;
     if ((r = at_walk(t, dirfd, path, 1, &p)) < 0) return r;
     struct node *n = p.n;
+    if (mode & 7) {                                        /* checked as the real user, as access() is */
+        struct ucred c = t->ns.cred;
+        uint64_t caps = t->ns.cap_eff;
+        if (!(flags & 0x200)) { c.fsuid = c.uid; c.fsgid = c.gid; if (c.uid != 0) caps = 0; else if (c.euid != 0) caps = t->ns.cap_perm; }
+        if ((r = cred_perm_as(&c, caps, n, (int)(mode & 7))) < 0) return r;
+    }
     if ((mode & 1) && n->type == N_REG && !(n->mode & 0111)) return -EACCES;
     if ((mode & 2) && vfs_readonly(p.m) && n->type != N_CHR && n->type != N_SOCK && n->type != N_FIFO) return -EROFS;
     if ((mode & 2) && procfile(n) && !(n->mode & 0200)) return -EACCES;
@@ -394,6 +418,7 @@ static long sys_mkdirat(struct task *t, long dirfd, uint64_t up, long mode)
     if ((r = upath(t, up, path, sizeof path)) < 0) return r;
     if ((r = at_parent(t, dirfd, path, &pd, name, sizeof name)) < 0) return r == -EBUSY ? -EEXIST : r;
     if (fs_child(pd.n, name)) return -EEXIST;
+    if ((r = may_change(t, &pd)) < 0) return r;
     return fs_create(pd.n, name, N_DIR, (uint16_t)(mode & ~t->umask & 07777)) ? 0 : -ENOMEM;
 }
 
@@ -404,6 +429,8 @@ static long sys_unlinkat(struct task *t, long dirfd, uint64_t up, long flags)
     struct path pd;
     if ((r = upath(t, up, path, sizeof path)) < 0) return r;
     if ((r = at_parent(t, dirfd, path, &pd, name, sizeof name)) < 0) return r;
+    if (!fs_child(pd.n, name)) return -ENOENT;
+    if ((r = may_change(t, &pd)) < 0 || (r = cred_sticky(t, pd.n, fs_child(pd.n, name))) < 0) return r;
     return fs_unlink(pd.n, name, (flags & 0x200) != 0);
 }
 
@@ -416,6 +443,11 @@ static long sys_renameat(struct task *t, long ofd, uint64_t uo, long nfd, uint64
     if ((r = at_parent(t, ofd, op, &opd, on, sizeof on)) < 0) return r;
     if ((r = at_parent(t, nfd, np, &npd, nn, sizeof nn)) < 0) return r;
     if (opd.m != npd.m) return -EXDEV_;                    /* different mounts, even of the same tree */
+    struct node *victim = fs_child(opd.n, on);
+    if (!victim) return -ENOENT;
+    if ((r = may_change(t, &opd)) < 0 || (r = may_change(t, &npd)) < 0) return r;
+    if ((r = cred_sticky(t, opd.n, victim)) < 0 || (r = cred_sticky(t, npd.n, fs_child(npd.n, nn))) < 0) return r;
+    if (victim && victim->type == N_DIR && opd.n != npd.n && (r = cred_perm(t, victim, 2)) < 0) return r;   /* its ".." changes */
     return fs_rename(opd.n, on, npd.n, nn);
 }
 
@@ -427,6 +459,7 @@ static long sys_symlinkat(struct task *t, uint64_t ut, long dirfd, uint64_t up)
     if ((r = upath(t, ut, target, sizeof target)) < 0 || (r = upath(t, up, path, sizeof path)) < 0) return r;
     if ((r = at_parent(t, dirfd, path, &pd, name, sizeof name)) < 0) return r == -EBUSY ? -EEXIST : r;
     if (fs_child(pd.n, name)) return -EEXIST;
+    if ((r = may_change(t, &pd)) < 0) return r;
     struct node *n = fs_create(pd.n, name, N_LNK, 0777);
     if (!n) return -ENOMEM;
     return fs_write(n, 0, target, strlen(target)) < 0 ? -ENOMEM : 0;
@@ -441,6 +474,11 @@ static long sys_linkat(struct task *t, long ofd, uint64_t uo, long nfd, uint64_t
     if ((r = at_walk(t, ofd, op, 0, &src)) < 0) return r;
     if ((r = at_parent(t, nfd, np, &npd, nn, sizeof nn)) < 0) return r;
     if (src.m != npd.m) return -EXDEV_;
+    if (fs_child(npd.n, nn)) return -EEXIST;
+    if ((r = may_change(t, &npd)) < 0) return r;
+    /* protected hard links (Ubuntu's default): only to a file you own, or can read and write
+       that isn't set-ID: no pinning root's set-user-ID programs in /tmp */
+    if (!cred_owner(t, src.n) && (src.n->type != N_REG || (src.n->mode & 06000) || cred_perm(t, src.n, 6) < 0)) return -EPERM;
     return fs_link(src.n, npd.n, nn);
 }
 
@@ -452,6 +490,7 @@ static long sys_chdir(struct task *t, uint64_t up)
     if ((r = upath(t, up, path, sizeof path)) < 0) return r;
     if ((r = vfs_walk(t, t->ns.cwd, path, 1, &p)) < 0) return r;
     if (p.n->type != N_DIR) return -ENOTDIR;
+    if ((r = cred_perm(t, p.n, 1)) < 0) return r;
     t->ns.cwd = p;
     t->cwd = p.n;
     return 0;
@@ -480,9 +519,13 @@ static long sys_mmap(struct task *t, uint64_t addr, uint64_t len, long prot, lon
     if (!(flags & 0x20)) {
         struct file *f = getf(t, fd);
         if (!f) return -EBADF;
+        if (f->node && f->node->type == N_CHR && f->node->dev == DEV_SND_PCM) {     /* the sound ring */
+            if ((flags & 3) != 1 || !(file = snd_mmap_node(f, off, len))) return -ENXIO_SND;
+        } else {
         if (!f->node || (f->node->type != N_REG && !(f->node->type == N_CHR && f->node->dev == DEV_ZERO))) return -ENODEV;
         if (f->node->type == N_REG) file = f->node;
         if ((flags & 3) == 1 && (prot & 2) && file && ((f->flags & 3) == 0 || vfs_readonly(f->mnt))) return -EACCES;
+        }
     }
     int shared = (flags & 3) == 1;
     uint64_t at;
@@ -642,6 +685,7 @@ void task_exit(struct task *t, int status)
         futex_wake_addr(t->mm, t->clear_child_tid, 1);
     }
     t->vfork_done = 1;
+    if (!t->is_thread) ptimer_exit(t->tgid);
     ns_task_exit(t);
     close_files(t);
     if (t->mm) { struct mm *m = t->mm; t->mm = 0; mm_put(m); }
@@ -701,11 +745,19 @@ static long sys_wait4(struct task *t, long pid, uint64_t ustatus, long options)
     }
 }
 
+static long sys_execve_k(struct task *t, const char *path, uint64_t uargv, uint64_t uenvp);
+
 static long sys_execve(struct task *t, uint64_t upath_, uint64_t uargv, uint64_t uenvp)
 {
     char path[1024];
     long r;
     if ((r = upath(t, upath_, path, sizeof path)) < 0) return r;
+    return sys_execve_k(t, path, uargv, uenvp);
+}
+
+static long sys_execve_k(struct task *t, const char *path, uint64_t uargv, uint64_t uenvp)
+{
+    long r;
     /* gather argv / envp into kernel memory */
     char *space = rs_kmalloc(256 * 1024);
     char **vec = rs_kmalloc(sizeof(char *) * 4100);
@@ -731,7 +783,7 @@ static long sys_execve(struct task *t, uint64_t upath_, uint64_t uargv, uint64_t
     }
     envp = vec + na + 1;
     (void)ne;
-    if (!na) { argv[0] = path; argv[1] = 0; }
+    if (!na) { argv[0] = (char *)path; argv[1] = 0; }
     r = exec_load(t, path, argv, envp, t->tf);
     if (r == 0) {
         for (int i = 0; i < MAXFD; i++)
@@ -814,6 +866,7 @@ static int fd_ready(struct task *t, int fd, int events)
     else if (f->kind == 6) { if (*(uint64_t *)f->priv) r |= 1; r |= 4; }
     else if (f->kind == 9) { if (t->pending & *(uint64_t *)f->priv) r |= 1; }
     else if (f->kind == 10) { if (nl_readable(f->priv)) r |= 1; r |= 4; }
+    else if (f->kind >= 11 && f->kind <= 13) { if (fdobj_ready(t, f)) r |= 1; }
     else if (f->kind == 7) {                                   /* an epoll set is readable when a member is */
         struct { int n; struct { int fd; uint32_t events; uint64_t data; } e[64]; } *ep = f->priv;
         for (int i = 0; i < ep->n; i++) {
@@ -824,6 +877,7 @@ static int fd_ready(struct task *t, int fd, int events)
     else if (f->kind == 1) { if (pipe_readable(f)) r |= 1; }
     else if (f->kind == 2) { if (pipe_writable(f)) r |= 4; }
     else if (f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY) { if (tty_readable()) r |= 1; r |= 4; }
+    else if (f->node && f->node->type == N_CHR && (f->node->dev == DEV_SND_PCM || f->node->dev == DEV_SND_CTL)) r |= snd_ready(f);
     else r |= 5;
     return r & (events | 0x18);
 }
@@ -878,15 +932,15 @@ static long sys_select(struct task *t, long n, uint64_t ur, uint64_t uw, uint64_
 
 /* ── time ───────────────────────────────────────────────────────────── */
 
+void clock_now(int clk, int64_t *s, int64_t *ns) { now_ts(clk, s, ns); }
+
 static void now_ts(int clk, int64_t *s, int64_t *ns)
 {
-    uint64_t tk = kernel_ticks();
-    if (!boot_epoch) boot_epoch = fs_now() - (uint32_t)(tk / AUXO_HZ);
-    /* ticks are 10 ms; mix in the TSC so successive calls differ */
-    uint64_t sub = (rdtsc() >> 10) % (1000000000 / AUXO_HZ);
-    if (clk == 0 || clk == 5 || clk == 8) *s = (int64_t)boot_epoch + (int64_t)(tk / AUXO_HZ);
-    else *s = (int64_t)(tk / AUXO_HZ);
-    *ns = (int64_t)((tk % AUXO_HZ) * (1000000000 / AUXO_HZ) + sub);
+    uint64_t t = mono_ns();
+    if (!boot_epoch) boot_epoch = fs_now() - (uint32_t)(t / 1000000000ULL);
+    *s = (int64_t)(t / 1000000000ULL);
+    *ns = (int64_t)(t % 1000000000ULL);
+    if (clk == 0 || clk == 5 || clk == 8 || clk == 11) *s += (int64_t)boot_epoch;   /* REALTIME (_COARSE, _ALARM), TAI */
 }
 
 static long sys_nanosleep(struct task *t, uint64_t ureq)
@@ -936,6 +990,284 @@ static void crash_report(struct task *t, struct trapframe *tf, int sig)
     }
 }
 
+
+/* ── the rest of the Linux calls desktop programs make ──────────────── */
+
+/* waitid: P_ALL, P_PID, P_PGID, P_PIDFD (GLib's child watch uses the last) */
+static long sys_waitid(struct task *t, long idtype, long id, uint64_t uinfo, long options)
+{
+    if (!(options & 4) && !(options & 2) && !(options & 8)) return -EINVAL;   /* WEXITED / WSTOPPED / WCONTINUED */
+    int want = 0, pg = 0;
+    if (idtype == 1) { want = pid_global(t, (int)id, 1); if (!want) return -ECHILD; }
+    else if (idtype == 2) { pg = id ? pid_global(t, (int)id, 1) : t->pgid; if (!pg) return -ECHILD; }
+    else if (idtype == 3) { struct file *f = getf(t, id); want = pidfd_pid(f); if (!want) return -EBADF; }
+    else if (idtype != 0) return -EINVAL;
+    for (;;) {
+        int have = 0;
+        for (int i = 0; i < MAXTASK; i++) {
+            struct task *c = task_slot(i);
+            if (!c->used || c->is_thread || c->ppid != t->tgid) continue;
+            if (want && c->pid != want) continue;
+            if (pg && c->pgid != pg) continue;
+            have = 1;
+            if (c->state != 2 || !(options & 4)) continue;
+            int st = c->exit_status;
+            uint8_t info[128];
+            memset(info, 0, sizeof info);
+            int signo = 17, code = (st & 0x7f) ? ((st & 0x80) ? 3 : 2) : 1, cpid = pid_vtgid(t, c), status = (st & 0x7f) ? (st & 0x7f) : (st >> 8) & 0xff;
+            memcpy(info, &signo, 4); memcpy(info + 8, &code, 4); memcpy(info + 16, &cpid, 4); memcpy(info + 24, &status, 4);
+            if (uinfo && copyout(t->mm, uinfo, info, sizeof info) < 0) return -EFAULT;
+            if (!(options & 0x01000000)) task_free(c);              /* WNOWAIT leaves it */
+            return 0;
+        }
+        if (!have) return -ECHILD;
+        if (options & 1) {                                          /* WNOHANG: si_pid 0 */
+            if (uinfo) { uint8_t z[128]; memset(z, 0, sizeof z); copyout(t->mm, uinfo, z, sizeof z); }
+            return 0;
+        }
+        if (t->pending & ~t->sigmask & ~(1ULL << 16)) return -EINTR;
+        wait_tick();
+    }
+}
+
+/* rt_sigtimedwait: take one of the signals in the set, with what sent it */
+static long sys_sigtimedwait(struct task *t, uint64_t uset, uint64_t uinfo, uint64_t uts)
+{
+    uint64_t set;
+    if (copyin(t->mm, &set, uset, 8) < 0) return -EFAULT;
+    set &= ~((1ULL << 8) | (1ULL << 18));
+    uint64_t until = ~0ULL;
+    if (uts) {
+        int64_t ts[2];
+        if (copyin(t->mm, ts, uts, 16) < 0) return -EFAULT;
+        until = mono_ns() + (uint64_t)ts[0] * 1000000000ULL + (uint64_t)ts[1];
+    }
+    for (;;) {
+        uint64_t m = t->pending & set;
+        if (m) {
+            int s = 0;
+            while (!(m & (1ULL << s))) s++;
+            t->pending &= ~(1ULL << s);
+            if (uinfo) {
+                uint8_t info[128];
+                memset(info, 0, sizeof info);
+                int signo = s + 1, code = t->si_code[s];
+                memcpy(info, &signo, 4); memcpy(info + 8, &code, 4);
+                if (code == -2) { memcpy(info + 16, &t->si_timer[s], 4); memcpy(info + 24, &t->si_value[s], 8); }
+                else if (code == -1) memcpy(info + 24, &t->si_value[s], 8);
+                if (copyout(t->mm, uinfo, info, sizeof info) < 0) return -EFAULT;
+            }
+            t->si_code[s] = 0;
+            return s + 1;
+        }
+        if (t->pending & ~t->sigmask & ~set) return -EINTR;
+        if (mono_ns() >= until) return -EAGAIN;
+        wait_tick();
+    }
+}
+
+/* rt_sigqueueinfo / rt_tgsigqueueinfo: a signal with a value */
+static long sys_sigqueue(struct task *t, long tgid, long tid, long sig, uint64_t uinfo)
+{
+    if (sig < 1 || sig > 64) return -EINVAL;
+    uint8_t info[128];
+    if (copyin(t->mm, info, uinfo, sizeof info) < 0) return -EFAULT;
+    int g = tid > 0 ? pid_global(t, (int)tid, 0) : pid_global(t, (int)tgid, 1);
+    struct task *o = g ? task_by_pid(g) : 0;
+    if (!o || o->state == 2) return -ESRCH;
+    if (!cred_kill(t, o, (int)sig)) return -EPERM;
+    int code; memcpy(&code, info + 8, 4);
+    o->si_code[sig - 1] = (int8_t)(code < 0 ? code : -1);
+    memcpy(&o->si_value[sig - 1], info + 24, 8);
+    o->pending |= 1ULL << (sig - 1);
+    return 0;
+}
+
+/* sendfile / copy_file_range: through a kernel buffer */
+static long copy_between(struct task *t, long in, uint64_t uinoff, long out, uint64_t uoutoff, uint64_t count)
+{
+    struct file *fi = getf(t, in), *fo = getf(t, out);
+    if (!fi || !fo) return -EBADF;
+    if ((fo->flags & 3) == 0) return -EBADF;
+    int64_t ioff = -1, ooff = -1;
+    if (uinoff && copyin(t->mm, &ioff, uinoff, 8) < 0) return -EFAULT;
+    if (uoutoff && copyin(t->mm, &ooff, uoutoff, 8) < 0) return -EFAULT;
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    long total = 0;
+    while ((uint64_t)total < count) {
+        size_t n = count - (uint64_t)total < KBUF ? (size_t)(count - (uint64_t)total) : KBUF;
+        long r;
+        if (ioff >= 0) { if (!fi->node || fi->node->type != N_REG) { r = -ESPIPE; } else r = fs_read(fi->node, (uint64_t)ioff, kb, n); }
+        else r = file_read(t, fi, kb, n);
+        if (r <= 0) { if (!total) total = r; break; }
+        long w;
+        if (ooff >= 0) { if (vfs_readonly(fo->mnt)) w = -EROFS; else w = fo->node && fo->node->type == N_REG ? fs_write(fo->node, (uint64_t)ooff, kb, (size_t)r) : -ESPIPE; }
+        else w = file_write(t, fo, kb, (size_t)r);
+        if (w <= 0) { if (!total) total = w; break; }
+        if (ioff >= 0) ioff += w;
+        if (ooff >= 0) ooff += w;
+        total += w;
+        if (w < r) break;
+    }
+    rs_kfree(kb);
+    if (uinoff && ioff >= 0) copyout(t->mm, uinoff, &ioff, 8);
+    if (uoutoff && ooff >= 0) copyout(t->mm, uoutoff, &ooff, 8);
+    return total;
+}
+
+/* mknod / mknodat: FIFOs and plain files (devices only come from the kernel) */
+static long sys_mknodat(struct task *t, long dirfd, uint64_t up, uint64_t mode)
+{
+    char path[1024], name[256];
+    struct path pd;
+    long r;
+    if ((r = upath(t, up, path, sizeof path)) < 0) return r;
+    uint32_t type = (uint32_t)mode & 0170000;
+    if (type == 0020000 || type == 0060000) return -EPERM;   /* character / block devices */
+    if ((r = at_parent(t, dirfd, path, &pd, name, sizeof name)) < 0) return r == -EBUSY ? -EEXIST : r;
+    if (fs_child(pd.n, name)) return -EEXIST;
+    if ((r = may_change(t, &pd)) < 0) return r;
+    int nt = type == 0010000 ? N_FIFO : type == 0140000 ? N_SOCK : N_REG;
+    return fs_create(pd.n, name, nt, (uint16_t)(mode & ~t->umask & 07777)) ? 0 : -ENOMEM;
+}
+
+/* utime / utimes / futimesat / utimensat: only the modification time is kept */
+static long set_mtime(struct task *t, long dirfd, uint64_t up, int follow, int64_t mtime /* -1 now, -2 leave */)
+{
+    struct node *un; struct mount *um;
+    if (!up) { struct file *fl = getf(t, dirfd); if (!fl || !fl->node) return -EBADF; un = fl->node; um = fl->mnt; }
+    else {
+        char p[1024]; struct path pp;
+        long r = upath(t, up, p, sizeof p);
+        if (r < 0) return r;
+        if (!p[0] && follow == 2) { struct file *fl = getf(t, dirfd); if (!fl || !fl->node) return -EBADF; pp.n = fl->node; pp.m = fl->mnt; }
+        else if ((r = at_walk(t, dirfd, p, follow != 0, &pp)) < 0) return r;
+        un = pp.n; um = pp.m;
+    }
+    if (vfs_readonly(um)) return -EROFS;
+    if (procfile(un)) return -EPERM;
+    if (!cred_owner(t, un) && (mtime != -1 || cred_perm(t, un, 2) < 0)) return mtime == -1 ? -EACCES : -EPERM;
+    if (mtime != -2) { un->mtime = mtime == -1 ? fs_now() : (uint32_t)mtime; fs_touch(un); }
+    return 0;
+}
+
+static long sys_utimes(struct task *t, long dirfd, uint64_t up, uint64_t utv, int sz /* 8: utimbuf, 16: timeval */)
+{
+    int64_t v[4];
+    if (!utv) return set_mtime(t, dirfd, up, 1, -1);
+    if (copyin(t->mm, v, utv, (size_t)sz * 2) < 0) return -EFAULT;
+    return set_mtime(t, dirfd, up, 1, sz == 8 ? v[1] : v[2]);
+}
+
+/* scheduling: policies and priorities are kept and reported (one CPU, one run queue) */
+static struct task *sched_target(struct task *t, long pid) { if (!pid) return t; int g = pid_global(t, (int)pid, 0); return g ? task_by_pid(g) : 0; }
+
+static long sys_sched(struct task *t, long nr, uint64_t a, uint64_t b, uint64_t c)
+{
+    switch (nr) {
+    case 140: case 141: {                                      /* getpriority, setpriority (PRIO_PROCESS/PGRP/USER) */
+        struct task *x = a == 0 ? sched_target(t, (long)b) : t;
+        if (!x) return -ESRCH;
+        if (nr == 140) return 20 - x->nice;
+        int v = (int)c; if (v < -20) v = -20; if (v > 19) v = 19;
+        x->nice = v;
+        return 0;
+    }
+    case 142: case 143: {                                      /* sched_setparam, sched_getparam */
+        struct task *x = sched_target(t, (long)a);
+        if (!x) return -ESRCH;
+        if (nr == 143) return copyout(t->mm, b, &x->sched_prio, 4);
+        int p; if (copyin(t->mm, &p, b, 4) < 0) return -EFAULT;
+        x->sched_prio = p; return 0;
+    }
+    case 144: {                                                /* sched_setscheduler */
+        struct task *x = sched_target(t, (long)a);
+        if (!x) return -ESRCH;
+        int pol = (int)b & ~0x40000000, p = 0;                  /* (SCHED_RESET_ON_FORK) */
+        if (c && copyin(t->mm, &p, c, 4) < 0) return -EFAULT;
+        if (pol < 0 || pol > 6 || pol == 4) return -EINVAL;
+        if ((pol == 1 || pol == 2) ? (p < 1 || p > 99) : p != 0) return -EINVAL;
+        x->sched_policy = pol; x->sched_prio = p;
+        return 0;
+    }
+    case 145: { struct task *x = sched_target(t, (long)a); return x ? x->sched_policy : -ESRCH; }
+    case 146: return a == 1 || a == 2 ? 99 : (a <= 6 && a != 4) ? 0 : -EINVAL;   /* get_priority_max */
+    case 147: return a == 1 || a == 2 ? 1 : (a <= 6 && a != 4) ? 0 : -EINVAL;    /* get_priority_min */
+    case 148: { int64_t ts[2] = { 0, 100000000 }; return copyout(t->mm, b, ts, 16); }
+    case 314: {                                                /* sched_setattr */
+        struct task *x = sched_target(t, (long)a);
+        if (!x) return -ESRCH;
+        uint32_t at[12] = { 0 };
+        if (copyin(t->mm, at, b, 48) < 0) return -EFAULT;
+        x->sched_policy = (int)at[1]; x->nice = (int)at[4]; x->sched_prio = (int)at[5];
+        return 0;
+    }
+    case 315: {                                                /* sched_getattr */
+        struct task *x = sched_target(t, (long)a);
+        if (!x) return -ESRCH;
+        uint32_t at[14] = { 0 };
+        at[0] = c < 56 ? (uint32_t)c : 56; at[1] = (uint32_t)x->sched_policy; at[4] = (uint32_t)x->nice; at[5] = (uint32_t)x->sched_prio;
+        return copyout(t->mm, b, at, at[0]);
+    }
+    }
+    return -ENOSYS;
+}
+
+/* openat2: the flags and mode; RESOLVE_* restrictions aren't there yet (callers fall back) */
+static long sys_openat2(struct task *t, long dirfd, uint64_t up, uint64_t uhow, uint64_t size)
+{
+    uint64_t how[3] = { 0, 0, 0 };
+    if (size < 24) return -EINVAL;
+    if (copyin(t->mm, how, uhow, 24) < 0) return -EFAULT;
+    if (how[2]) return -ENOSYS;
+    return sys_openat(t, dirfd, up, (long)how[0], (long)how[1]);
+}
+
+/* execveat: a file descriptor (fexecve, memfds) or a path relative to one */
+static long sys_execveat(struct task *t, long dirfd, uint64_t up, uint64_t uargv, uint64_t uenvp, long flags)
+{
+    char path[1024], full[1100];
+    long r = upath(t, up, path, sizeof path);
+    if (r < 0) return r;
+    if (!path[0]) { if (!(flags & 0x1000)) return -ENOENT; ksnprintf(full, sizeof full, "/proc/self/fd/%ld", dirfd); }
+    else if (path[0] == '/' || dirfd == AT_FDCWD) strlcpy(full, path, sizeof full);
+    else ksnprintf(full, sizeof full, "/proc/self/fd/%ld/%s", dirfd, path);
+    return sys_execve_k(t, full, uargv, uenvp);
+}
+
+static long sys_pidfd_signal(struct task *t, long fd, long sig, uint64_t uinfo, long flags)
+{
+    (void)uinfo;
+    if (flags) return -EINVAL;
+    int g = pidfd_pid(getf(t, fd));
+    if (!g) return -EBADF;
+    struct task *x = task_by_pid(g);
+    if (!x || x->state == 2) return -ESRCH;
+    if (sig < 0 || sig > 64) return -EINVAL;
+    if (!cred_kill(t, x, (int)sig)) return -EPERM;
+    if (sig) x->pending |= 1ULL << (sig - 1);
+    return 0;
+}
+
+/* chown: the owner only by CAP_CHOWN; the group by the owner, to one of their groups */
+static long do_chown(struct task *t, struct node *n, uint32_t uid, uint32_t gid)
+{
+    if (procfile(n)) return -EPERM;
+    int cap = ns_capable(t, CAP_CHOWN);
+    if (uid != ~0u && uid != n->uid && !cap) return -EPERM;
+    if (gid != ~0u && gid != n->gid && !cap && !(t->ns.cred.fsuid == n->uid && cred_ingroup(&t->ns.cred, gid))) return -EPERM;
+    if (uid == ~0u && gid == ~0u) return 0;
+    if (uid != ~0u) n->uid = uid;
+    if (gid != ~0u) n->gid = gid;
+    if (n->type != N_DIR) {                                    /* a changed owner doesn't keep set-id bits */
+        n->mode &= (uint16_t)~04000;
+        if (n->mode & 010) n->mode &= (uint16_t)~02000;
+    }
+    fs_touch(n);
+    return 0;
+}
+
 /* auxsh `ustack PID`: for each thread of a process, the system call it's in and its call chain */
 void uproc_where(int pid)
 {
@@ -962,6 +1294,8 @@ void uproc_signals(struct task *t, struct trapframe *tf)
 {
     uint64_t deliverable = t->pending & ~t->sigmask;
     if (t->pending & (1ULL << 8)) deliverable |= 1ULL << 8;   /* SIGKILL can't be blocked */
+    uint64_t frame_mask = t->mask_saved ? t->saved_sigmask : t->sigmask;
+    if (t->mask_saved) { t->sigmask = t->saved_sigmask; t->mask_saved = 0; }   /* (a handler's frame carries it back) */
     if (!deliverable) return;
     int sig = __builtin_ctzll(deliverable) + 1;
     t->pending &= ~(1ULL << (sig - 1));
@@ -985,11 +1319,15 @@ void uproc_signals(struct task *t, struct trapframe *tf)
     g[0] = tf->r8; g[1] = tf->r9; g[2] = tf->r10; g[3] = tf->r11; g[4] = tf->r12; g[5] = tf->r13; g[6] = tf->r14; g[7] = tf->r15;
     g[8] = tf->rdi; g[9] = tf->rsi; g[10] = tf->rbp; g[11] = tf->rbx; g[12] = tf->rdx; g[13] = tf->rax; g[14] = tf->rcx;
     g[15] = tf->rsp; g[16] = tf->rip; g[17] = tf->rflags; g[18] = 0x23 | (0x1bULL << 48);
-    memcpy(uc + 296, &t->sigmask, 8);                         /* uc_sigmask */
+    memcpy(uc + 296, &frame_mask, 8);                         /* uc_sigmask: what sigreturn restores */
     uint8_t info[128];
     memset(info, 0, sizeof info);
-    int s32 = sig;
+    int s32 = sig, code = t->si_code[sig - 1];
     memcpy(info, &s32, 4);
+    memcpy(info + 8, &code, 4);
+    if (code == -2) { memcpy(info + 16, &t->si_timer[sig - 1], 4); memcpy(info + 24, &t->si_value[sig - 1], 8); }   /* SI_TIMER */
+    else if (code == -1) memcpy(info + 24, &t->si_value[sig - 1], 8);     /* SI_QUEUE */
+    t->si_code[sig - 1] = 0;
     sp -= sizeof info;
     uint64_t uinfo = sp;
     sp -= sizeof uc;
@@ -1039,10 +1377,11 @@ static long sys_kill(struct task *t, long pid, long sig)
         if (!o->used || o->state == 2 || !pid_visible(t, o)) continue;
         int match = pid > 0 ? o->tgid == pid && !o->is_thread : pid == 0 ? o->pgid == t->pgid : pid == -1 ? o != t : o->pgid == -pid;
         if (!match) continue;
+        if (!cred_kill(t, o, (int)sig)) { if (!found) found = -1; continue; }
         found = 1;
         if (sig && !init_protected(t, o, sig)) o->pending |= 1ULL << (sig - 1);
     }
-    return found ? 0 : -ESRCH;
+    return found > 0 ? 0 : found < 0 ? -EPERM : -ESRCH;
 }
 
 /* tkill / tgkill: one thread */
@@ -1052,6 +1391,7 @@ static long sys_tkill(struct task *t, long tgid, long tid, long sig)
     int g = pid_global(t, (int)tid, 0);
     struct task *o = g ? task_by_pid(g) : 0;
     if (!o || o->state == 2 || (tgid > 0 && pid_vtgid(t, o) != tgid)) return -ESRCH;
+    if (!cred_kill(t, o, (int)sig)) return -EPERM;
     if (sig && !init_protected(t, o, sig)) o->pending |= 1ULL << (sig - 1);
     return 0;
 }
@@ -1075,6 +1415,7 @@ static long sys_ioctl(struct task *t, long fd, uint64_t req, uint64_t arg)
     struct file *f = getf(t, fd);
     if (!f) return -EBADF;
     int tty = f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY;
+    if (f->node && f->node->type == N_CHR && (f->node->dev == DEV_SND_CTL || f->node->dev == DEV_SND_PCM)) return snd_ioctl(t, f, req, arg);
     if (req == 0x5421) { if (arg) { int v; if (copyin(t->mm, &v, arg, 4) == 0) f->flags = v ? f->flags | 04000 : f->flags & ~04000; } return 0; }
     if ((f->kind == 5 || f->kind == 8 || f->kind == 10) && (req == 0x8933 || req == 0x8913)) {   /* SIOCGIFINDEX, SIOCGIFFLAGS */
         uint8_t ifr[40];
@@ -1478,6 +1819,8 @@ static long sys_bind(struct task *t, long fd, uint64_t ua, uint64_t len)
     if (!p[0]) return unix_bind_abstract(u, p + 1, t->ns.net->inum);
     struct path pd; char name[256];
     if ((r = at_parent(t, AT_FDCWD, p, &pd, name, sizeof name)) < 0) return r;
+    if (fs_child(pd.n, name)) return -98;                   /* EADDRINUSE */
+    if ((r = may_change(t, &pd)) < 0) return r;
     return unix_bind_at(u, pd.n, name);
 }
 
@@ -1492,7 +1835,8 @@ static long sys_connect(struct task *t, long fd, uint64_t ua, uint64_t len)
     if ((r = sun_path(t, ua, len, p)) < 0) return r;
     if (!p[0]) return unix_connect_abstract(u, p + 1, t->ns.net->inum);
     struct path sp;
-    if (vfs_walk(t, t->ns.cwd, p, 1, &sp) < 0) return -ECONNREFUSED;
+    if ((r = vfs_walk(t, t->ns.cwd, p, 1, &sp)) < 0) return r == -EACCES ? r : -ECONNREFUSED;
+    if (sp.n->type == N_SOCK && cred_perm(t, sp.n, 2) < 0) return -EACCES;
     return unix_connect_node(u, sp.n);
 }
 
@@ -1681,8 +2025,10 @@ static long sys_sockopt(struct task *t, long fd, long level, long opt, uint64_t 
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     if (level != 1) return -ENOPROTOOPT_;
     int v = 0;
-    if (opt == 17) {                                        /* SO_PEERCRED */
-        int cred[3] = { 1, 0, 0 };
+    if (opt == 17) {                                        /* SO_PEERCRED: who's at the other end */
+        struct usock *o = u->peer ? u->peer : u;
+        struct task *pt = o->cpid ? task_by_pid(o->cpid) : 0;
+        int cred[3] = { pt ? pid_vtgid(t, pt) : 0, (int)o->cuid, (int)o->cgid };
         uint32_t l = 12;
         copyout(t->mm, uval, cred, 12);
         return copyout(t->mm, ulen, &l, 4);
@@ -1861,7 +2207,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 18: return sys_pread(t, (long)a, b, c, (int64_t)d, 1);
     case 19: return sys_rwv(t, (long)a, b, (long)c, 0, -1);
     case 20: return sys_rwv(t, (long)a, b, (long)c, 1, -1);
-    case 21: return sys_faccessat(t, AT_FDCWD, a, (long)b);
+    case 21: return sys_faccessat(t, AT_FDCWD, a, (long)b, 0);
     case 22: return sys_pipe2(t, a, 0);
     case 23: { int64_t ms = -1; if (e) { int64_t tv[2]; if (copyin(t->mm, tv, e, 16) == 0) ms = tv[0] * 1000 + tv[1] / 1000; } return sys_select(t, (long)a, b, c, d, ms); }
     case 24: rs_yield(); return 0;
@@ -1910,6 +2256,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 76: { char p[1024]; struct path pp; long r = upath(t, a, p, sizeof p); if (r < 0) return r;
                if ((r = vfs_walk(t, t->ns.cwd, p, 1, &pp)) < 0) return r;
                if (vfs_readonly(pp.m)) return -EROFS;
+               if ((r = cred_perm(t, pp.n, 2)) < 0) return r;
                return sys_truncate(pp.n, (int64_t)b); }
     case 77: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF;
                if ((fl->flags & 3) == 0) return -EINVAL;
@@ -1918,6 +2265,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 79: return sys_getcwd(t, a, b);
     case 80: return sys_chdir(t, a);
     case 81: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF; if (fl->node->type != N_DIR) return -ENOTDIR;
+               if (cred_perm(t, fl->node, 1) < 0) return -EACCES;
                t->cwd = fl->node; t->ns.cwd.m = fl->mnt ? fl->mnt : mount_rootm(); t->ns.cwd.n = fl->node; return 0; }
     case 82: return sys_renameat(t, AT_FDCWD, a, AT_FDCWD, b);
     case 83: return sys_mkdirat(t, AT_FDCWD, a, (long)b);
@@ -1929,24 +2277,37 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 90: { char p[1024]; struct path pp; long r = upath(t, a, p, sizeof p); if (r < 0) return r;
                if ((r = vfs_walk(t, t->ns.cwd, p, 1, &pp)) < 0) return r;
                if (vfs_readonly(pp.m) || procfile(pp.n)) return vfs_readonly(pp.m) ? -EROFS : -EPERM;
-               pp.n->mode = (uint16_t)(b & 07777); fs_touch(pp.n); return 0; }
+               return cred_chmod(t, pp.n, (uint32_t)b); }
     case 91: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF;
                if (vfs_readonly(fl->mnt)) return -EROFS;
-               fl->node->mode = (uint16_t)(b & 07777); fs_touch(fl->node); return 0; }
+               return cred_chmod(t, fl->node, (uint32_t)b); }
     case 268: { char p[1024]; struct path pp; long r = upath(t, b, p, sizeof p); if (r < 0) return r;
                 if ((r = at_walk(t, (long)(int)a, p, 1, &pp)) < 0) return r;
                 if (vfs_readonly(pp.m) || procfile(pp.n)) return vfs_readonly(pp.m) ? -EROFS : -EPERM;
-                pp.n->mode = (uint16_t)(c & 07777); fs_touch(pp.n); return 0; }
-    case 92: case 93: case 94: case 260: return 0;             /* chown: everything is root's */
+                return cred_chmod(t, pp.n, (uint32_t)c); }
+    case 92: case 94: case 260: {                              /* chown, lchown, fchownat */
+        char p[1024]; struct path pp;
+        long dfd = nr == 260 ? (long)(int)a : AT_FDCWD;
+        uint64_t up = nr == 260 ? b : a;
+        uint32_t uid = (uint32_t)(nr == 260 ? c : b), gid = (uint32_t)(nr == 260 ? d : c);
+        int follow = nr == 92 || (nr == 260 && !(e & 0x100));
+        long r = upath(t, up, p, sizeof p); if (r < 0) return r;
+        if (nr == 260 && !p[0] && (e & 0x1000)) { struct file *fl = getf(t, dfd); if (!fl || !fl->node) return -EBADF; pp.n = fl->node; pp.m = fl->mnt; }
+        else if ((r = at_walk(t, dfd, p, follow, &pp)) < 0) return r;
+        if (vfs_readonly(pp.m)) return -EROFS;
+        return do_chown(t, pp.n, uid, gid); }
+    case 93: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF;
+               if (vfs_readonly(fl->mnt)) return -EROFS;
+               return do_chown(t, fl->node, (uint32_t)b, (uint32_t)c); }
     case 95: { long o = t->umask; t->umask = (uint32_t)(a & 0777); return o; }
     case 96: { int64_t s, ns; now_ts(0, &s, &ns); int64_t tv[2] = { s, ns / 1000 }; return a ? copyout(t->mm, a, tv, 16) : 0; }
     case 97: return sys_prlimit(t, (long)a, 0, b);
     case 98: { uint8_t ru[144]; memset(ru, 0, sizeof ru); return copyout(t->mm, b, ru, sizeof ru); }
     case 99: return sys_sysinfo(t, a);
     case 100: { uint64_t tm[4] = { 0 }; tm[0] = (kernel_ticks() - t->start_tick); if (a) copyout(t->mm, a, tm, 32); return (long)kernel_ticks(); }
-    case 102: case 104: case 107: case 108: return 0;          /* uid/gid: root */
-    case 105: case 106: case 113: case 114: case 116: case 117: case 119: return 0;
-    case 118: case 120: { uint32_t z = 0; if (a) copyout(t->mm, a, &z, 4); if (b) copyout(t->mm, b, &z, 4); if (c) copyout(t->mm, c, &z, 4); return 0; }
+    case 102: case 104: case 105: case 106: case 107: case 108: case 113: case 114: case 115: case 116:
+    case 117: case 118: case 119: case 120: case 122: case 123:
+        return cred_syscall(t, (long)nr, a, b, c);
     case 109: { struct task *o = a ? task_by_pid(pid_global(t, (int)a, 1)) : t; if (!o) return -ESRCH;
                 int pg = b ? pid_global(t, (int)b, 1) : o->tgid; if (!pg) return -EPERM;
                 o->pgid = pg; return 0; }
@@ -1955,14 +2316,14 @@ static long syscall_body(struct task *t, struct trapframe *tf)
                 return t->ns.pid && t->ns.pid->level ? 0 : 1; }
     case 111: { struct task *l = task_by_pid(t->pgid); return l ? pid_vtgid(t, l) : t->pgid; }
     case 112: t->pgid = t->tgid; return pid_vtgid(t, t);
-    case 115: return 0;                                        /* getgroups */
     case 121: { struct task *o = a ? task_by_pid(pid_global(t, (int)a, 1)) : t; if (!o) return -ESRCH;
                 struct task *l = task_by_pid(o->pgid); return l ? pid_vtgid(t, l) : o->pgid; }
     case 124: return pid_vtgid(t, t);
     case 127: { uint64_t z = t->pending; return copyout(t->mm, a, &z, 8); }
-    case 130: { uint64_t m; if (copyin(t->mm, &m, a, 8) < 0) return -EFAULT; uint64_t old = t->sigmask; t->sigmask = m;
+    case 130: { uint64_t m; if (copyin(t->mm, &m, a, 8) < 0) return -EFAULT; uint64_t old = t->sigmask;
+                t->sigmask = m & ~((1ULL << 8) | (1ULL << 18));
                 while (!(t->pending & ~t->sigmask)) wait_tick();
-                t->sigmask = old;
+                t->saved_sigmask = old; t->mask_saved = 1;   /* the signal is delivered under m; then old comes back */
                 return -EINTR; }
     case 131:
         if (b) { uint8_t ss[24]; memset(ss, 0, sizeof ss); int fl = 2; memcpy(ss + 8, &fl, 4); copyout(t->mm, b, ss, 24); }
@@ -2019,7 +2380,55 @@ static long syscall_body(struct task *t, struct trapframe *tf)
                 return 0; }
     case 231: exit_group(t, (int)(a & 0xFF) << 8);
     case 234: return sys_tkill(t, (long)(int)a, (long)(int)b, (long)c);
-    case 247: return -ECHILD;                                  /* waitid: rarely used; not yet */
+    case 247: return sys_waitid(t, (long)a, (long)(int)b, c, (long)d);
+    case 34: while (!(t->pending & ~t->sigmask)) wait_tick(); return -EINTR;      /* pause */
+    case 40: return copy_between(t, (long)b, c, (long)a, 0, d);                   /* sendfile */
+    case 326: return copy_between(t, (long)a, b, (long)c, d, e);                  /* copy_file_range */
+    case 295: return sys_rwv(t, (long)a, b, (long)c, 0, (int64_t)d);              /* preadv */
+    case 296: return sys_rwv(t, (long)a, b, (long)c, 1, (int64_t)d);              /* pwritev */
+    case 327: return sys_rwv(t, (long)a, b, (long)c, 0, (int64_t)d);              /* preadv2 (-1: current position) */
+    case 328: return sys_rwv(t, (long)a, b, (long)c, 1, (int64_t)d);
+    case 128: return sys_sigtimedwait(t, a, b, c);
+    case 129: return sys_sigqueue(t, (long)(int)a, 0, (long)b, c);
+    case 297: return sys_sigqueue(t, (long)(int)a, (long)(int)b, (long)c, d);
+    case 132: return sys_utimes(t, AT_FDCWD, a, b, 8);                            /* utime */
+    case 235: return sys_utimes(t, AT_FDCWD, a, b, 16);                           /* utimes */
+    case 261: return sys_utimes(t, (long)(int)a, b, c, 16);                       /* futimesat */
+    case 133: return sys_mknodat(t, AT_FDCWD, a, b);
+    case 259: return sys_mknodat(t, (long)(int)a, b, c);
+    case 135: return 0;                                                           /* personality: PER_LINUX */
+    case 140: case 141: case 142: case 143: case 144: case 145: case 146: case 147: case 148: case 314: case 315:
+        return sys_sched(t, (long)nr, a, b, c);
+    case 149: case 150: case 151: case 152: case 325: return 0;                   /* mlock: all memory stays put anyway */
+    case 187: case 277: return 0;                                                 /* readahead, sync_file_range */
+    case 251: return 0;                                                           /* ioprio_set */
+    case 252: return 0x4004;                                                      /* ioprio_get: best effort, 4 */
+    case 188: case 189: case 190: case 191: case 192: case 193: case 197: case 198: case 199:
+        return -EOPNOTSUPP;                                                       /* extended attributes: none here */
+    case 194: case 195: case 196: return 0;                                       /* listxattr: empty */
+    case 309: { int z = 0; if (a) copyout(t->mm, a, &z, 4); if (b) copyout(t->mm, b, &z, 4); return 0; }   /* getcpu */
+    case 164: case 227: return -EPERM;                                            /* setting the clock: not from here */
+    case 303: return -EOPNOTSUPP;                                                 /* name_to_handle_at */
+    case 322: return sys_execveat(t, (long)(int)a, b, c, d, (long)e);
+    case 437: return sys_openat2(t, (long)(int)a, b, c, d);
+    case 452: { char p[1024]; struct path pp; long r = upath(t, b, p, sizeof p); if (r < 0) return r;
+                if ((r = at_walk(t, (long)(int)a, p, !(d & 0x100), &pp)) < 0) return r;
+                if (vfs_readonly(pp.m) || procfile(pp.n)) return vfs_readonly(pp.m) ? -EROFS : -EPERM;
+                return cred_chmod(t, pp.n, (uint32_t)c); }                                /* fchmodat2 */
+    case 253: return sys_inotify_init(t, 0);
+    case 294: return sys_inotify_init(t, (long)a);
+    case 254: return sys_inotify_add(t, (long)a, b, (uint32_t)c);
+    case 255: return sys_inotify_rm(t, (long)a, (long)(int)b);
+    case 283: return sys_timerfd_create(t, (long)a, (long)b);
+    case 286: return sys_timerfd_settime(t, (long)a, (long)b, c, d);
+    case 287: return sys_timerfd_gettime(t, (long)a, b);
+    case 434: return sys_pidfd_open(t, (long)(int)a, (long)b);
+    case 424: return sys_pidfd_signal(t, (long)a, (long)b, c, (long)d);
+    case 222: return sys_timer_create(t, (long)a, b, c);
+    case 223: return sys_timer_settime(t, (long)(int)a, (long)b, c, d);
+    case 224: return sys_timer_gettime(t, (long)(int)a, b);
+    case 225: return sys_timer_getoverrun(t, (long)(int)a);
+    case 226: return sys_timer_delete(t, (long)(int)a);
     case 257: return sys_openat(t, (long)(int)a, b, (long)c, (long)d);
     case 258: return sys_mkdirat(t, (long)(int)a, b, (long)c);
     case 262: return sys_fstatat(t, (long)(int)a, b, c, (long)d, 0);
@@ -2028,7 +2437,8 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 265: return sys_linkat(t, (long)(int)a, b, (long)(int)c, d);
     case 266: return sys_symlinkat(t, a, (long)(int)b, c);
     case 267: return sys_readlinkat(t, (long)(int)a, b, c, d);
-    case 269: case 439: return sys_faccessat(t, (long)(int)a, b, (long)c);
+    case 269: return sys_faccessat(t, (long)(int)a, b, (long)c, 0);
+    case 439: return sys_faccessat(t, (long)(int)a, b, (long)c, (long)d);
     case 270: { int64_t ms = -1; if (e) { int64_t ts[2]; if (copyin(t->mm, ts, e, 16) == 0) ms = ts[0] * 1000 + ts[1] / 1000000; } return sys_select(t, (long)a, b, c, d, ms); }
     case 271: { int64_t ms = -1; if (c) { int64_t ts[2]; if (copyin(t->mm, ts, c, 16) == 0) ms = ts[0] * 1000 + ts[1] / 1000000; } return sys_poll(t, a, (long)b, ms); }
     case 273: case 274: return 0;                              /* robust lists */
@@ -2042,6 +2452,8 @@ static long syscall_body(struct task *t, struct trapframe *tf)
         if (vfs_readonly(um) || procfile(un)) return vfs_readonly(um) ? -EROFS : -EPERM;
         int64_t ts[4] = { 0, 0x3FFFFFFF, 0, 0x3FFFFFFF };       /* NULL: now */
         if (c && copyin(t->mm, ts, c, 32) < 0) return -EFAULT;
+        int now_only = (ts[1] == 0x3FFFFFFF || ts[1] == 0x3FFFFFFE) && (ts[3] == 0x3FFFFFFF || ts[3] == 0x3FFFFFFE);
+        if (!cred_owner(t, un) && (!now_only || cred_perm(t, un, 2) < 0)) return now_only ? -EACCES : -EPERM;
         if (ts[3] != 0x3FFFFFFE) { un->mtime = ts[3] == 0x3FFFFFFF ? fs_now() : (uint32_t)ts[2]; fs_touch(un); }
         return 0;
     }

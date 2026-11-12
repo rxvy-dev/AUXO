@@ -1543,6 +1543,12 @@ int main(int argc, char **argv)
     if (a >= argc) { usage(); return 1; }
     const char *cmd = argv[a++];
     for (int i = a; i < argc; i++) if (!strcmp(argv[i], "-y") || !strcmp(argv[i], "--yes")) { assume_yes = 1; memmove(argv + i, argv + i + 1, (size_t)(argc - i) * sizeof *argv); argc--; i--; }
+    /* changing the system is root's job (PKG_ROOT: building an image, any user) */
+    if (geteuid() != 0 && !getenv("PKG_ROOT") && (!strcmp(cmd, "update") || !strcmp(cmd, "install") || !strcmp(cmd, "add") || !strcmp(cmd, "remove") ||
+        !strcmp(cmd, "delete") || !strcmp(cmd, "uninstall") || !strcmp(cmd, "upgrade") || !strcmp(cmd, "clean"))) {
+        fprintf(stderr, "pkg: %s changes the system, so it needs root: sudo pkg %s%s%s\n", cmd, cmd, a < argc ? " " : "", a < argc ? argv[a] : "");
+        return 1;
+    }
     if (!strcmp(cmd, "update")) return cmd_update();
     if (!strcmp(cmd, "search")) { if (a >= argc) die("search for what?"); return cmd_search(argc - a, argv + a); }
     if (!strcmp(cmd, "info") || !strcmp(cmd, "show")) { if (a >= argc) die("info about what?"); return cmd_info(argv[a]); }

@@ -12,6 +12,8 @@
 #include "fs.h"
 #include "disk.h"
 #include "install.h"
+#include "cred.h"
+#include "snd.h"
 
 #define HEAP_PAGES 4096   /* at least 16 MiB of kernel heap, managed by Rust (thread stacks, fs nodes) */
 
@@ -102,7 +104,6 @@ void kmain(uint32_t mbi)
         ok("root"); kprintf("%d files from the root filesystem image (%lu MiB): Linux programs run\n", n, (unsigned long)(imglen >> 20));
         if (boot_module("overlay", &img, &imglen) == 0) fs_mount_tar(img, imglen);   /* pkg, on top */
     } else { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
-    vfs_init();
     mount_init();                     /* the first mount namespace: / and /proc */
     pci_init();
     const struct pci_dev *gpu = pci_gpu();
@@ -110,6 +111,7 @@ void kmain(uint32_t mbi)
     if (gpu) pci_describe(gpu, gname, sizeof gname);
     ok("pci"); kprintf("%d devices, display: %s%s\n", pci_count(), gname, gui ? " (firmware framebuffer)" : "");
     if (usb_init()) { ok("usb"); kprintf("%d xHCI controller%s: USB keyboards, mice and hubs\n", usb_controllers(), usb_controllers() > 1 ? "s" : ""); }
+    snd_init();                       /* Intel HD Audio → /dev/snd (ALSA) */
     disk_init();
     if (disk_count()) {
         ok("disk");
@@ -118,8 +120,11 @@ void kmain(uint32_t mbi)
             kprintf("%s%s %s %lu GB", i ? ", " : "", d->name, d->bus, (unsigned long)(d->sectors * 512 / 1000000000));
         }
         kprintf("\n");
-        if (store_init() == 0) { ok("home"); kprintf("/home/root is kept on %s (saved every 10 s)\n", store_where()); }
+        if (store_init() == 0) { ok("home"); kprintf("your files and the system's changes are kept on %s (saved every 10 s)\n", store_where()); }
     }
+    session_user_init();              /* who the desktop and the Terminal run as (/etc/passwd) */
+    vfs_init();                       /* the starter files in their home folder */
+    session_ready = 1;
     net_init();                       /* the net thread: Ethernet driver + DHCP, in the background */
     if (rs_spawn("auxsh", shell_main, 0) < 0) panic("cannot start the shell");
     sti();

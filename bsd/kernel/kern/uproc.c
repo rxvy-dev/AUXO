@@ -8,6 +8,9 @@
 #include "inet.h"
 #include "unix.h"
 #include "netlink.h"
+#include "fdobj.h"
+#include "cred.h"
+#include "snd.h"
 
 static struct task tasks[MAXTASK];
 static volatile int fg_pgid;
@@ -73,6 +76,13 @@ void file_put(struct file *f)
     if (f->kind == 8 && f->priv) inet_close(f->priv);
     if ((f->kind == 6 || f->kind == 7 || f->kind == 9) && f->priv) rs_kfree(f->priv);
     if (f->kind == 10) nl_close(f->priv);
+    if (f->kind == 11 || f->kind == 12) fdobj_close(f);
+    if (f->node && f->node->type == N_CHR && f->node->dev == DEV_SND_PCM) snd_close(f);
+    if (f->kind == 0 && f->node && f->node->type == N_REG && !f->node->unlinked && f->node->parent && f->node->parent != f->node) {
+        fs_lock();                                         /* closed after writing: editors and file managers watch for this */
+        inotify_event(f->node->parent, f->node, f->node->name, (f->flags & 3) ? IN_CLOSE_WRITE : IN_CLOSE_NOWRITE, 0);
+        fs_unlock();
+    }
     if (f->node) fs_put(f->node);
     rs_kfree(f);
 }
@@ -201,6 +211,8 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
         }
         return o ? (long)o : -22;
     }
+    if (f->kind == 11 || f->kind == 12) return fdobj_read(t, f, kbuf, n);
+    if (f->kind == 13) return -22;
     if (f->kind == 10) {                                   /* netlink */
         for (;;) {
             long r = nl_recv(f->priv, kbuf, n, 0);
@@ -330,11 +342,15 @@ static void user_start(uintptr_t arg)
     user_return(&tf);
 }
 
-static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached);
-int uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 0); }
-int uproc_spawn_detached(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 1); }
+static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached, int as_root);
+int uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 0, 0); }
+int uproc_spawn_detached(const char *path, char *const argv[], char *const envp[], const char *cwd) { return spawn(path, argv, envp, cwd, 1, 0); }
+int uproc_spawn_as(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached, int as_root)
+{
+    return spawn(path, argv, envp, cwd, detached, as_root);
+}
 
-static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached)
+static int spawn(const char *path, char *const argv[], char *const envp[], const char *cwd, int detached, int as_root)
 {
     struct task *t = task_alloc();
     if (!t) return -11;
@@ -353,9 +369,10 @@ static int spawn(const char *path, char *const argv[], char *const envp[], const
     if (!f) { task_free(t); return -12; }
     t->files->fd[0] = f; t->files->fd[1] = f; t->files->fd[2] = f;
     f->refs = 3;
-    if (fs_lookup(0, cwd && cwd[0] ? cwd : "/home/root", 1, &wd) < 0) fs_lookup(0, "/", 1, &wd);
+    if (fs_lookup(0, cwd && cwd[0] ? cwd : session_home(), 1, &wd) < 0) fs_lookup(0, "/", 1, &wd);
     t->cwd = wd;
     ns_task_init(t, 0);                                    /* the first namespaces, all capabilities */
+    cred_spawn(t, as_root);                          /* … then the session's user, unless asked for root */
     t->ns.cwd.n = wd;
     struct start *st = rs_kmalloc(sizeof *st);
     if (!st) { task_free(t); return -12; }
@@ -404,6 +421,7 @@ struct task *task_slot(int i) { return i >= 0 && i < MAXTASK ? &tasks[i] : 0; }
 /* from the timer interrupt: SIGALRM for tasks whose alarm() / setitimer() ran out */
 void uproc_tick(uint64_t now)
 {
+    ptimer_tick();
     for (int i = 0; i < MAXTASK; i++) {
         struct task *t = &tasks[i];
         if (!t->used || !t->alarm_at || now < t->alarm_at) continue;

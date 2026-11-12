@@ -69,6 +69,7 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
     if (n->type == N_DIR) return -13;
     if (n->type != N_REG) return -13;
     if (!(n->mode & 0111)) return -13;                   /* EACCES */
+    if (cred_perm(t, n, 1) < 0) return -13;
 
     /* #! scripts: run the interpreter with the script as its argument */
     if (n->size > 2 && n->data[0] == '#' && n->data[1] == '!') {
@@ -92,6 +93,8 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
 
     struct ehdr e;
     if ((r = check(n, &e)) < 0) return r;
+    struct cred_exec ce;                                 /* set-user-ID / set-group-ID programs */
+    cred_exec_prepare(t, n, at.m && (at.m->flags & MNT_NOSUID), &ce);
     struct mm *m = mm_new();
     if (!m) return -12;
     uint64_t bias = e.type == 3 ? PIE_BASE : 0, end = 0;
@@ -145,7 +148,7 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
     sp &= ~15ULL;
     uint64_t aux[] = {
         3, phdr_va, 4, sizeof(struct phdr), 5, e.phnum, 6, PAGE_SIZE, 7, interp_base, 8, 0,
-        9, bias + e.entry, 11, 0, 12, 0, 13, 0, 14, 0, 16, 0x078bfbff, 17, AUXO_HZ, 23, 0,
+        9, bias + e.entry, 11, t->ns.cred.uid, 12, ce.euid, 13, t->ns.cred.gid, 14, ce.egid, 16, 0x078bfbff, 17, AUXO_HZ, 23, (uint64_t)ce.secure,
         25, rnd_va, 31, execfn_va, 15, plat_va, 0, 0
     };
     size_t words = 1 + (size_t)argc + 1 + (size_t)envc + 1 + sizeof aux / 8;
@@ -171,6 +174,7 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
     vfs_pathname(t, at, t->exe, sizeof t->exe);
     t->ns.exe = at;
     ns_exec(t);
+    cred_exec_commit(t, &ce);
     memset(tf, 0, sizeof *tf);
     tf->rip = entry;
     tf->rsp = sp;

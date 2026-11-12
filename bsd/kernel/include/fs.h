@@ -7,12 +7,13 @@
 #include <stddef.h>
 
 enum { N_DIR = 1, N_REG, N_LNK, N_CHR, N_FIFO, N_SOCK };
-enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB, DEV_FULL };
+enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB, DEV_FULL, DEV_SND_CTL, DEV_SND_PCM };
 
 struct node {
     char    *name;
     uint8_t  type;
     uint16_t mode;                 /* permission bits */
+    uint32_t uid, gid;             /* owner and group */
     uint32_t ino, nlink, dev;
     struct node *parent, *child, *next;
     uint8_t *data;                 /* file contents / symlink target */

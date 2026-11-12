@@ -6,7 +6,7 @@ boots the ISO's desktop and drives the browser with QEMU's keyboard and mouse:
   - a saved session (two tabs) comes back when the browser opens;
   - signing in sends a POST form (hidden CSRF field, Origin), the cookie set on the redirect
     is stored and sent back;
-  - "Save password" writes the login; cookies, logins and tabs are in /home/root/.config/browser;
+  - "Save password" writes the login; cookies, logins and tabs are in /home/auxo/.config/browser;
   - a new tab (Ctrl+T) is still signed in;
   - the sign-in form is filled in from the saved login;
   - Ctrl+W closes a tab and the session file follows.
@@ -175,8 +175,8 @@ def main():
             return
         m.run("")
         print("▲ the session comes back", flush=True)
-        m.run(f"busybox sh -c \"mkdir -p /home/root/.config/browser && printf 'active\\t1\\ntab\\thttp://{site}/other\\tOther\\n"
-              f"tab\\thttp://{site}/login\\tSign in\\n' > /home/root/.config/browser/session\"")
+        m.run(f"busybox sh -c \"mkdir -p /home/auxo/.config/browser && printf 'active\\t1\\ntab\\thttp://{site}/other\\tOther\\n"
+              f"tab\\thttp://{site}/login\\tSign in\\n' > /home/auxo/.config/browser/session\"")
         m.run("chrono open browser")
         check(wait_for(lambda: any(r[0] == "GET" and r[1] == "/login" for r in log)), "the saved active tab (sign-in page) loads", log)
         time.sleep(2)
@@ -193,12 +193,12 @@ def main():
         m.click(717, 189)                                   # "Save" on the save-password bar
         time.sleep(2)
 
-        print("▲ what's kept in /home/root/.config/browser", flush=True)
-        out = m.run("cat /home/root/.config/browser/logins")
+        print("▲ what's kept in /home/auxo/.config/browser", flush=True)
+        out = m.run("cat /home/auxo/.config/browser/logins")
         check(re.search(rf"login\t{re.escape(site)}\talice\thunter2", out) is not None, "the saved login", out)
-        out = m.run("cat /home/root/.config/browser/cookies")
+        out = m.run("cat /home/auxo/.config/browser/cookies")
         check("sid\tabc123" in out and site.split(":")[0] in out, "the session cookie", out)
-        out = m.run("cat /home/root/.config/browser/session")
+        out = m.run("cat /home/auxo/.config/browser/session")
         check(out.count("tab\t") == 2 and f"http://{site}/" in out, "both tabs, the signed-in page among them", out)
 
         print("▲ a new tab, autofill, closing a tab", flush=True)
@@ -218,11 +218,11 @@ def main():
         check(wait_for(lambda: any(r[0] == "POST" and "pass=hunter2" in r[3] for r in log[n1:])),
               "the sign-in form is filled in from the saved login", log[n1:])
         time.sleep(3)
-        out = m.run("cat /home/root/.config/browser/session")
+        out = m.run("cat /home/auxo/.config/browser/session")
         tabs_before = out.count("tab\t")
         m.monitor("sendkey ctrl-w")
         time.sleep(2)
-        out = m.run("cat /home/root/.config/browser/session")
+        out = m.run("cat /home/auxo/.config/browser/session")
         check(tabs_before == 3 and out.count("tab\t") == 2, "Ctrl+W closes a tab, and the session follows", out)
     finally:
         m.close()

@@ -215,9 +215,55 @@ The version comes from `bsd/kernel/VERSION`.
 | Storage | AHCI (SATA), NVMe, IDE, USB mass storage |
 | Memory | up to 128 GiB |
 | Power | ACPI power off and reset |
+| Sound | Intel High Definition Audio (the sound chip of nearly every PC since 2004): the codec's speaker, headphone or line-out path is found and turned on; Linux programs play through ALSA (`/dev/snd`) |
 
-Not there yet: Wi-Fi (tether a phone over USB instead), GPU acceleration, sound, the
-Realtek RTL8125 (2.5 Gbit).
+Not there yet: Wi-Fi (tether a phone over USB instead), GPU acceleration, sound input
+(microphones), HDMI audio, USB sound cards, the Realtek RTL8125 (2.5 Gbit).
+
+## Users and permissions
+
+AuxoBSD runs as a person's account, not as root. A live system makes **`auxo`** (uid 1000, no
+password, in the `sudo`, `audio`, `video` … groups); the installer asks who will use the
+computer — name, user name, password — and the installed system is theirs: the desktop starts
+on a lock screen that wants the password (Lock in the menu locks it again), and the Terminal,
+the desktop's apps and every program run as that user.
+
+- Every process has Linux's user and group ids (real, effective, saved, filesystem,
+  supplementary groups), with `setuid`/`setresuid`/`setgroups`/`setfsuid` and the rest, and
+  capabilities that come and go with them as on Linux (dropping root drops them for good).
+- Every file has an owner, a group and a mode, checked on every open, exec, directory search,
+  create, delete and rename; `/tmp` is sticky; `chmod`, `chown` and `utimes` follow Linux's
+  rules; set-user-ID programs work (with `AT_SECURE`), `access()` answers for the real user,
+  signals only reach your own processes, hard links are protected. Owners and modes are kept
+  on the installed disk with the files (homes included, with their hidden folders).
+- **`sudo`**: the Terminal's own (`sudo CMD`, `sudo -s`, `su`/`exit` for a root shell, the
+  password remembered for 5 minutes) and a set-user-ID `/usr/bin/sudo` for scripts and other
+  shells; members of `sudo` only. `passwd` changes your password (SHA-512 crypt in
+  `/etc/shadow`, as Ubuntu keeps it). `pkg install` and `install` need `sudo`.
+- GNOME Web's web pages run as you, with no capabilities, in bubblewrap's namespaces under
+  WebKit's seccomp filter: `bwrap` is set-user-ID root (AuxoBSD has no user namespaces), which
+  is the setup bubblewrap was built for.
+
+## Sound
+
+`snd` finds an Intel HD Audio controller, resets it, walks the codec for the best output
+(speaker, then headphones, then line out) and a path to it from a DAC, powers it up, unmutes it
+and plays one stream from a ring buffer the controller reads by DMA. Programs see ALSA's kernel
+interface: `/dev/snd/controlC0` and `/dev/snd/pcmC0D0p` (group `audio`), 16-bit stereo at 44.1
+or 48 kHz, read/write or mmap access, with ALSA's parameter rules, so `alsa-lib` and everything
+on it (aplay, speaker-test, SDL, GStreamer, mpv) works; other formats and rates go through
+alsa-lib's plug converter. `amixer` sets the master volume. One program plays at a time (no
+mixing daemon yet). `make test-sound` plays tones through QEMU's HD Audio into a WAV file and
+checks the pitch on each side.
+
+## Linux system calls
+
+Beyond files, memory, processes, sockets and signals, the calls desktop programs lean on are
+there: `inotify` (file managers, editors watching their files), `timerfd` and POSIX timers,
+`pidfd_open` + `waitid(P_PIDFD)` (how GLib watches its children), `signalfd`, `eventfd`,
+`epoll`, `rt_sigtimedwait`/`sigqueue`, `sendfile`/`copy_file_range`, `preadv`/`pwritev`,
+`mknod` for FIFOs, `sched_*` and priorities, `execveat`, `openat2`. `tests/syscalls.c` checks
+them (in `make test-sandbox`).
 
 ## Sandboxing and the web browser
 
@@ -234,8 +280,8 @@ The kernel has what Linux sandboxes are built from, with Linux's system calls an
 - **/proc** as a real filesystem: `/proc/PID/{status,maps,mountinfo,fd,ns,…}` and
   `/proc/sys`, mountable again inside a namespace.
 
-User namespaces aren't there (everything runs as root, as on the AuxoBSD desktop generally);
-programs that ask get `EINVAL`, which is what they check for.
+User namespaces aren't there; programs that ask get `EINVAL`, which is what they check for,
+and bubblewrap is set-user-ID root instead (see Users and permissions).
 
 **bubblewrap** (`bwrap`) runs on this, and so does **GNOME Web** (the full root image) with
 WebKit's sandbox on: each web page's process runs in its own mount, PID and network
@@ -245,7 +291,8 @@ GitHub, …) are ordinary HTTPS pages to it: certificates are checked against th
 bundle, and cookies (kept in SQLite) keep you signed in. Saving passwords in GNOME Web needs
 a keyring (the Secret Service), which isn't there yet: it asks every time.
 
-`make test-sandbox` builds `tests/sandbox-escape.c` inside AuxoBSD and tries to get out:
+`make test-sandbox` builds `tests/sandbox-escape.c` inside AuxoBSD and tries to get out, as
+root under `sudo` and as the user:
 writing through read-only binds, reaching files that weren't bound in (also by climbing out
 of a chroot), signalling or seeing processes outside, reaching the network, and — with
 WebKit's filter — mounting, unsharing, `chroot` and `pivot_root`. Every attempt has to fail.
@@ -279,12 +326,12 @@ rust: heap + scheduler up (heap at 0x...)
 tty : VGA text 80x25 + ttyS0 115200, PS/2 keyboard
 auxo: accent violet, hostname auxobsd
 
-   ●    Welcome to AuxoBSD, root.
+   ●    Welcome to AuxoBSD, auxo.
   /\    AuxoBSD 0.1.0 · up 0m · mem 2% used
  /  \   type help for commands · auxo-fetch for a summary
 /_/\_\  tip: auxo-tweak accent rose — recolour the console, prompt, auxo-fetch and this greeting at once
 
-▲ root@auxobsd ❯
+▲ auxo@auxobsd ❯
 ```
 
 ## Verification Status

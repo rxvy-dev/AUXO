@@ -8,10 +8,33 @@ void uproc_tick(uint64_t now);
 static volatile uint64_t ticks;
 uint64_t kernel_ticks(void) { return ticks; }
 
+static volatile uint64_t tick_tsc;        /* the TSC when `ticks` last moved */
+static uint64_t tsc_per_ms;
+
+/* nanoseconds since boot: whole ticks from the PIT, the part since the last tick from the TSC
+   (capped at one tick, so it never runs ahead of the next one or backwards) */
+uint64_t mono_ns(void)
+{
+    static uint64_t last;
+    uint64_t f;
+    __asm__ volatile("pushfq; popq %0; cli" : "=r"(f) :: "memory");
+    uint64_t tk = ticks, ts = tick_tsc;
+    uint64_t ns = tk * (1000000000ULL / AUXO_HZ);
+    if (tsc_per_ms && ts) {
+        uint64_t c = rdtsc() - ts;
+        uint64_t d = c / tsc_per_ms * 1000000u + c % tsc_per_ms * 1000000u / tsc_per_ms;
+        if (d >= 1000000000ULL / AUXO_HZ) d = 1000000000ULL / AUXO_HZ - 1;
+        ns += d;
+    }
+    if (ns < last) ns = last;
+    last = ns;
+    if (f & 0x200) __asm__ volatile("sti");
+    return ns;
+}
+
 /* The TSC, calibrated against PIT channel 2 (no interrupts needed), for delays on the boot
  * path: kmain is the idle thread, which only runs when nothing else wants the CPU, so it can't
  * sleep on timer ticks once other threads (the desktop) are busy. */
-static uint64_t tsc_per_ms;
 
 void tsc_calibrate(void)
 {
@@ -86,7 +109,7 @@ void trap_dispatch(struct trapframe *tf)
         else if (irq == 4) input_serial_irq();
         else if (irq == 12) mouse_irq();
         pic_eoi(irq);                 /* EOI first: the scheduler may not return here */
-        if (irq == 0) { ticks++; uproc_tick(ticks); rs_tick(); }
+        if (irq == 0) { ticks++; tick_tsc = rdtsc(); uproc_tick(ticks); rs_tick(); }
         if (user) uproc_irq_return(tf);
     } else if (tf->vector == 0x80) {
         /* BSD-style: number in rax, args in rdi/rsi/rdx, result in rax (<0 = -errno) */

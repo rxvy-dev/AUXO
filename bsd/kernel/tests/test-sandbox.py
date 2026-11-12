@@ -2,11 +2,14 @@
 """The sandbox: mount, PID, network, UTS and IPC namespaces, seccomp and /proc, as bubblewrap
 (and through it WebKit's and Flatpak's sandboxes) uses them. Boots the ISO in QEMU, builds
 tests/sandbox-escape.c with the GCC inside AuxoBSD, and runs it:
-  - in bubblewrap with every namespace, as root: read-only binds stay read-only, files that
+  - in bubblewrap with every namespace, as root (under sudo): read-only binds stay read-only, files that
     weren't bound in can't be reached (not through "..", not by climbing out of a chroot), it
     has its own PIDs, hostname and network (no way out), and what it mounts stays inside;
   - the same with WebKit's seccomp filter: mount, unshare, chroot, pivot_root are refused;
+  - in bubblewrap as the session's user (bwrap is set-user-ID, as WebKit uses it): no root inside;
   - seccomp on its own: errno and kill answers, stacking, inheritance across fork and exec.
+Then builds tests/syscalls.c and runs it: inotify, timerfd, POSIX timers, pidfd + waitid,
+sigtimedwait/sigqueue, sendfile, copy_file_range, preadv/pwritev, mknod, utimes, sched_*.
 Then checks the host saw none of it (hostname, files) and that /proc tells the truth.
   python3 tests/test-sandbox.py build/auxobsd.iso
 """
@@ -28,10 +31,14 @@ wget -q -O /tmp/esc.c http://10.0.2.2:{port}/sandbox-escape.c || exit 1
 gcc -O1 -o /tmp/esc/escape /tmp/esc.c || exit 1
 /tmp/esc/escape mkfilter > /tmp/filter.bpf
 B="bwrap --ro-bind /usr /usr --symlink usr/lib /lib --symlink usr/lib64 /lib64 --symlink usr/bin /bin --proc /proc --dev /dev --tmpfs /tmp --dir /mnt --ro-bind /tmp/esc /esc --unshare-all --hostname sbx"
-echo "== plain"; $B /esc/escape inside {port}
-echo "== filtered"; $B --seccomp 9 /esc/escape inside {port} filtered 9< /tmp/filter.bpf
+echo "== plain (root, by sudo)"; sudo $B /esc/escape inside {port}
+echo "== filtered (root, by sudo)"; sudo $B --seccomp 9 /esc/escape inside {port} filtered 9< /tmp/filter.bpf
+echo "== the user's own (set-user-ID bwrap)"; $B /esc/escape inside {port}
 echo "== seccomp"; /tmp/esc/escape seccomp
 echo "== host hostname: $(hostname)"
+wget -q -O /tmp/sct.c http://10.0.2.2:{port}/syscalls.c || exit 1
+gcc -O1 -o /tmp/sct /tmp/sct.c || exit 1
+echo "== system calls"; /tmp/sct
 """
 
 
@@ -41,6 +48,7 @@ def main():
     www = os.path.join(tmp, "www")
     os.mkdir(www)
     shutil.copy(os.path.join(HERE, "sandbox-escape.c"), www)
+    shutil.copy(os.path.join(HERE, "syscalls.c"), www)
     port = hw.serve(www)
     with open(os.path.join(www, "run.sh"), "w") as f:
         f.write(RUN.format(port=port))
@@ -52,7 +60,7 @@ def main():
         if not up:
             return
         m.run("")
-        m.run("busybox sh -c 'echo topsecret > /home/root/secret.txt'")
+        m.run("busybox sh -c 'echo topsecret > /home/auxo/secret.txt'")
         m.run(f"busybox wget -q -O /tmp/run.sh http://10.0.2.2:{port}/run.sh")
         out = m.run("busybox sh /tmp/run.sh", timeout=900)
         section = "?"
@@ -64,11 +72,12 @@ def main():
                     hw.check(section.endswith("auxobsd"), "the host's hostname is untouched", section)
                 else:
                     print(f"▲ {section}", flush=True)
-            elif line.startswith("OK "):
+            elif line.startswith("OK ") or line.startswith("ok "):
                 hw.check(True, line[3:])
             elif line.startswith("FAIL "):
                 hw.check(False, line[5:])
-        hw.check(out.count("DONE all held") == 3, "all three runs finished", out[-2000:])
+        hw.check(out.count("DONE all held") == 4, "all four runs finished", out[-2000:])
+        hw.check(re.search(r"syscalls: \d+ passed, 0 failed", out), "the system-call program ran to the end", out[-2000:])
         out = m.run("busybox ls /tmp/mine")
         hw.check("No such file" in out, "a file the sandbox made in its /tmp isn't in the host's", out)
         out = m.run("busybox wc -l /proc/self/mountinfo")

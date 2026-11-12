@@ -3,6 +3,8 @@
 #include "arch.h"
 #include "rs.h"
 #include "fs.h"
+#include "fdobj.h"
+#include "cred.h"
 
 size_t strspn_slash(const char *s);
 static struct node *root;
@@ -32,7 +34,7 @@ void fs_unlock(void)
 
 uint32_t fs_generation(void) { return generation; }
 
-void fs_touch(struct node *n) { fs_lock(); generation++; n->changed = 1; n->wgen = generation; fs_unlock(); }
+void fs_touch(struct node *n) { fs_lock(); generation++; n->changed = 1; n->wgen = generation; if (n->parent && n->parent != n) inotify_event(n->parent, n, n->name, IN_ATTRIB, 0); fs_unlock(); }
 
 static void touch_tree(struct node *n)
 {
@@ -82,6 +84,7 @@ static struct node *new_node(struct node *dir, const char *name, size_t nlen, in
     generation++;
     n->changed = !mounting;
     n->wgen = generation;
+    if (!mounting) cred_new_node(dir, n);
     return n;
 }
 
@@ -116,7 +119,7 @@ struct node *fs_create(struct node *dir, const char *name, int type, uint16_t mo
 {
     fs_lock();
     struct node *n = fs_child(dir, name);
-    if (!n) { n = new_node(dir, name, strlen(name), type, mode); if (n) n->mtime = fs_now(); }
+    if (!n) { n = new_node(dir, name, strlen(name), type, mode); if (n) { n->mtime = fs_now(); inotify_event(dir, n, name, IN_CREATE, 0); } }
     fs_unlock();
     return n;
 }
@@ -231,6 +234,8 @@ int fs_unlink(struct node *dir, const char *name, int rmdir)
         n->unlinked = 1;
         if (n->nlink) n->nlink--;
         generation++;
+        inotify_event(dir, n, name, IN_DELETE, 0);
+        if (n->nlink == 0) inotify_event(0, n, 0, IN_DELETE_SELF, 0);
         if (n->refs <= 0 && n->nlink == 0) {
             if (n->cap) free_data(n);
             rs_kfree(n->name);
@@ -255,6 +260,8 @@ int fs_rename(struct node *odir, const char *oname, struct node *ndir, const cha
         if (old->nlink) old->nlink--;
         if (old->refs <= 0 && old->nlink == 0) { free_data(old); rs_kfree(old->name); rs_kfree(old); }
     }
+    uint32_t cookie = inotify_cookie();
+    inotify_event(odir, n, oname, IN_MOVED_FROM, cookie);
     detach(n);
     char *nm = kstrdup(nname, strlen(nname));
     if (nm) { rs_kfree(n->name); n->name = nm; }
@@ -262,6 +269,8 @@ int fs_rename(struct node *odir, const char *oname, struct node *ndir, const cha
     n->next = ndir->child;
     ndir->child = n;
     generation++;
+    inotify_event(ndir, n, nname, IN_MOVED_TO, cookie);
+    inotify_event(0, n, 0, IN_MOVE_SELF, 0);
     touch_tree(n);                         /* it lives somewhere new: keep it there */
     fs_unlock();
     return 0;
@@ -339,6 +348,7 @@ long fs_write(struct node *n, uint64_t off, const void *buf, size_t len)
     n->mtime = fs_now();
     generation++;
     n->changed = 1; n->wgen = generation;
+    if (n->parent != n) inotify_event(n->parent, n, n->name, IN_MODIFY, 0);
     fs_unlock();
     return (long)len;
 }
@@ -461,6 +471,7 @@ int fs_mount_tar(const uint8_t *img, size_t len)
         const char *base = nm + s;
         size_t bl = nl - s;
         uint16_t mode = (uint16_t)(octal(h + 100, 8) & 07777);
+        uint32_t uid = (uint32_t)octal(h + 108, 8), gid = (uint32_t)octal(h + 116, 8);
         struct node *n = child_n(dir, base, bl);
         if (type == '5') {
             if (!n) n = new_node(dir, base, bl, N_DIR, mode);
@@ -480,6 +491,7 @@ int fs_mount_tar(const uint8_t *img, size_t len)
             if (!n) n = new_node(dir, base, bl, N_REG, mode);
             if (n) { n->data = (uint8_t *)data; n->size = size; n->cap = 0; n->mode = mode; n->mtime = now; }
         }
+        if (n && type != 'L' && type != 'K') { n->uid = uid; n->gid = gid; }
         count++;
     }
     mounting = 0;

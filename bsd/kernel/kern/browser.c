@@ -6,7 +6,7 @@
  * CSS, no images (their alt text is shown). about:home, file:// (the in-memory filesystem, for
  * Aether's preview) and http(s):// URLs.
  *
- * Tabs, and what the browser remembers in /home/root/.config/browser (kept on the disk of an
+ * Tabs, and what the browser remembers in ~/.config/browser (kept on the disk of an
  * installed system): the open tabs (session), cookies (net/cookies.c: you stay signed in) and
  * saved logins (offered after you sign in, filled in when you come back). */
 #include "kern.h"
@@ -15,6 +15,7 @@
 #include "apps.h"
 #include "www.h"
 #include "vfs.h"
+#include "cred.h"
 #include "cookies.h"
 
 #define TABBAR 32
@@ -697,8 +698,8 @@ static const char HOME[] =
     "<li><a href=\"https://github.com/rxvy-dev/chrono\">github.com/rxvy-dev/chrono</a> - the Chrono desktop</li>"
     "<li><a href=\"https://github.com/rxvy-dev/aether\">github.com/rxvy-dev/aether</a> - Aether</li>"
     "</ul><h3>On this computer</h3><ul>"
-    "<li><a href=\"file:///home/root/index.html\">file:///home/root/index.html</a> - edit it in Aether</li>"
-    "<li><a href=\"file:///home/root/README.txt\">README.txt</a></li>"
+    "<li><a href=\"file://~/index.html\">index.html</a> in your home folder - edit it in Aether</li>"
+    "<li><a href=\"file://~/README.txt\">README.txt</a></li>"
     "</ul><p><small>Ctrl+L: address bar · Backspace: back · Space / PgDn: scroll</small></p></body></html>";
 
 static void set_page(const char *data, size_t len, int plain)
@@ -735,9 +736,9 @@ static int ensure_init(void)
     return 0;
 }
 
-/* ── what the browser keeps: /home/root/.config/browser ─────────────── */
-#define SESSION "/home/root/.config/browser/session"
-#define LOGINS  "/home/root/.config/browser/logins"
+/* ── what the browser keeps: ~/.config/browser ───────────────────────── */
+#define SESSION HOME_FILE(".config/browser/session")
+#define LOGINS  HOME_FILE(".config/browser/logins")
 
 static void pct_decode(const char *s, size_t n, char *out, size_t cap)
 {
@@ -924,7 +925,10 @@ static void load(const char *u, int push)
     }
     if (ci_starts(u, "file://")) {
         const char *d; size_t n;
-        if (vfs_read(u + 7, &d, &n) < 0) { error_page("File not found", "There's no such file on this computer."); loading = 0; return; }
+        char fp[VFS_PATH];
+        if (u[7] == '~' && (u[8] == '/' || !u[8])) home_file(fp, sizeof fp, u[8] ? u + 9 : ""); else strlcpy(fp, u + 7, sizeof fp);
+        if (!session_may(fp, 4)) { error_page("Permission denied", "Your account can't read that file."); loading = 0; return; }
+        if (vfs_read(fp, &d, &n) < 0) { error_page("File not found", "There's no such file on this computer."); loading = 0; return; }
         const char *dot = strrchr(u, '.');
         set_page(d, n, !(dot && (ci_eq(dot, ".html") || ci_eq(dot, ".htm"))));
         loading = 0;
