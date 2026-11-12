@@ -1,5 +1,6 @@
 #ifndef AUXO_UPROC_H
 #define AUXO_UPROC_H
+#include "ns.h"
 /* User programs: address spaces (mm.c), processes and the Linux system-call interface
  * (uproc.c, sys.c). AuxoBSD runs unmodified x86_64 Linux ELF binaries. */
 #include <stdint.h>
@@ -43,6 +44,7 @@ void       mm_put(struct mm *m);
 int        mm_map(struct mm *m, uint64_t start, uint64_t len, uint32_t prot, int shared,
                   struct node *file, uint64_t off, uint64_t flen);   /* replaces what was there */
 int        mm_unmap(struct mm *m, uint64_t start, uint64_t len);
+int        mm_discard(struct mm *m, uint64_t start, uint64_t len);   /* madvise(MADV_DONTNEED): pages go, read back as zero */
 int        mm_protect(struct mm *m, uint64_t start, uint64_t len, uint32_t prot);
 uint64_t   mm_find_free(struct mm *m, uint64_t len, uint64_t below);
 int        mm_fault(struct mm *m, uint64_t addr, int write);          /* 0 = handled */
@@ -64,6 +66,7 @@ struct file {
     uint64_t pos;
     void  *priv;
     char   path[128];              /* for /proc/self/fd and diagnostics */
+    struct mount *mnt;             /* the mount it was opened through */
 };
 
 struct files {
@@ -93,10 +96,13 @@ struct task {
     int    is_thread, detached;
     uint64_t start_tick;
     struct trapframe *tf;          /* the trap frame of the current syscall */
+    struct task_ns ns;             /* mounts, namespaces, capabilities, seccomp (ns.h) */
 };
 
 struct task *task_current(void);   /* NULL on kernel threads */
 struct task *task_by_pid(int pid);
+struct task *task_slot(int i);     /* 0 .. MAXTASK-1 */
+#define MAXTASK 512                /* = rust/src/proc.rs MAXPROC */
 int  uproc_spawn(const char *path, char *const argv[], char *const envp[], const char *cwd);   /* pid or -errno */
 int  uproc_spawn_detached(const char *path, char *const argv[], char *const envp[], const char *cwd);   /* reaped on exit */
 int  uproc_wait(int pid, int *status);                                     /* from kernel threads */

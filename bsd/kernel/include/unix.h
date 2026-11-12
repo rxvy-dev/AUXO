@@ -18,11 +18,20 @@ struct usock {
     struct usock *backlog[16]; int nback;
     struct node *node;
     int kernel;                                  /* the Wayland server's end */
+    int type;                                    /* SOCK_STREAM 1, SOCK_DGRAM 2, SOCK_SEQPACKET 5 */
+    /* SOCK_SEQPACKET / SOCK_DGRAM: what was sent arrives as the same messages (WebKit's IPC needs this) */
+    uint32_t mlen[512]; int mhead, mcount;
+    uint64_t msgs_in, msgs_out;                  /* message counters, to place passed fds */
 };
+#define UNIX_PACKETS(s) ((s)->type == 2 || (s)->type == 5)
 
 struct usock *unix_new(void);
 void  unix_close(struct usock *s);
 int   unix_bind(struct usock *s, const char *path, struct node *cwd);
+int   unix_bind_abstract(struct usock *s, const char *name, uint32_t ns);
+int   unix_bind_at(struct usock *s, struct node *dir, const char *name);
+int   unix_connect_abstract(struct usock *s, const char *name, uint32_t ns);
+int   unix_connect_node(struct usock *s, struct node *n);
 int   unix_listen(struct usock *s);
 int   unix_connect(struct usock *s, const char *path, struct node *cwd);
 struct usock *unix_accept(struct usock *l);

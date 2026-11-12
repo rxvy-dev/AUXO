@@ -13,6 +13,7 @@ static void irq_on(uint64_t f);
 
 static struct usock *abstract[16];
 static char abstract_name[16][108];
+static uint32_t abstract_ns[16];             /* abstract names are per network namespace */
 
 struct usock *unix_new(void)
 {
@@ -45,6 +46,40 @@ void unix_close(struct usock *s)
     irq_on(fl);
     for (uint64_t o = 0; o < s->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)s->rx + o);
     rs_kfree(s);
+}
+
+int unix_bind_abstract(struct usock *s, const char *name, uint32_t ns)
+{
+    for (int i = 0; i < 16; i++) if (abstract[i] && abstract_ns[i] == ns && !strcmp(abstract_name[i], name)) return -98;
+    for (int i = 0; i < 16; i++)
+        if (!abstract[i]) { abstract[i] = s; abstract_ns[i] = ns; strlcpy(abstract_name[i], name, sizeof abstract_name[i]); return 0; }
+    return -98;
+}
+
+int unix_bind_at(struct usock *s, struct node *dir, const char *name)
+{
+    if (fs_child(dir, name)) return -98;                 /* EADDRINUSE */
+    struct node *n = fs_create(dir, name, N_SOCK, 0777);
+    if (!n) return -12;
+    n->priv = s;
+    n->refs++;
+    s->node = n;
+    return 0;
+}
+
+static int connect_to(struct usock *s, struct usock *l);
+
+int unix_connect_abstract(struct usock *s, const char *name, uint32_t ns)
+{
+    for (int i = 0; i < 16; i++)
+        if (abstract[i] && abstract_ns[i] == ns && !strcmp(abstract_name[i], name)) return connect_to(s, abstract[i]);
+    return -111;
+}
+
+int unix_connect_node(struct usock *s, struct node *n)
+{
+    if (!n || n->type != N_SOCK || !n->priv) return -111;
+    return connect_to(s, n->priv);
 }
 
 int unix_bind(struct usock *s, const char *path, struct node *cwd)
@@ -84,9 +119,15 @@ int unix_connect(struct usock *s, const char *path, struct node *cwd)
 {
     struct usock *l = lookup(path, cwd);
     if (!l) return -111;                                 /* ECONNREFUSED */
+    return connect_to(s, l);
+}
+
+static int connect_to(struct usock *s, struct usock *l)
+{
     if (!l->listening || l->nback >= 16) return -111;
     struct usock *srv = unix_new();
     if (!srv) return -12;
+    srv->type = l->type;
     srv->peer = s; s->peer = srv;
     l->backlog[l->nback++] = srv;
     s->connected = srv->connected = 1;
@@ -106,6 +147,7 @@ int unix_pair(struct usock **a, struct usock **b)
 {
     *a = unix_new(); *b = unix_new();
     if (!*a || !*b) return -12;
+    (*a)->type = (*b)->type = 1;
     (*a)->peer = *b; (*b)->peer = *a;
     (*a)->connected = (*b)->connected = 1;
     return 0;
@@ -133,10 +175,51 @@ long unix_recv(struct usock *s, void *buf, size_t len, struct file **files, int 
     return r;
 }
 
+static long send_packet(struct usock *p, const void *data, size_t len, struct file **files, int nfiles)
+{
+    if (len > p->cap) return -90;                        /* EMSGSIZE */
+    if (len > p->cap - p->len || p->mcount >= 512) return -11;
+    for (int i = 0; i < nfiles && p->nfds < UNIX_MAXFDS; i++) {
+        files[i]->refs++;
+        p->fds[p->nfds].f = files[i];
+        p->fds[p->nfds].at = p->msgs_in;
+        p->nfds++;
+    }
+    for (size_t i = 0; i < len; i++) p->rx[(p->head + p->len + i) % p->cap] = ((const uint8_t *)data)[i];
+    p->len += (uint32_t)len;
+    p->mlen[(p->mhead + p->mcount) % 512] = (uint32_t)len;
+    p->mcount++;
+    p->msgs_in++;
+    return (long)len;
+}
+
+static long recv_packet(struct usock *s, void *buf, size_t len, struct file **files, int *nfiles, int maxfiles)
+{
+    if (!s->mcount) { if (nfiles) *nfiles = 0; return s->peer_closed || !s->peer ? 0 : -11; }
+    uint32_t m = s->mlen[s->mhead];
+    size_t n = len < m ? len : m;                        /* the rest of a longer message is dropped */
+    for (size_t i = 0; i < n; i++) ((uint8_t *)buf)[i] = s->rx[(s->head + i) % s->cap];
+    s->head = (s->head + m) % s->cap;
+    s->len -= m;
+    s->mhead = (s->mhead + 1) % 512;
+    s->mcount--;
+    int got = 0;
+    while (s->nfds && s->fds[0].at == s->msgs_out) {
+        if (files && got < maxfiles) files[got++] = s->fds[0].f;
+        else file_put(s->fds[0].f);
+        memmove(s->fds, s->fds + 1, sizeof s->fds[0] * (size_t)(s->nfds - 1));
+        s->nfds--;
+    }
+    s->msgs_out++;
+    if (nfiles) *nfiles = got;
+    return (long)n;
+}
+
 static long send_locked(struct usock *s, const void *data, size_t len, struct file **files, int nfiles)
 {
     struct usock *p = s->peer;
     if (!p || s->peer_closed) return -32;               /* EPIPE */
+    if (UNIX_PACKETS(p)) return send_packet(p, data, len, files, nfiles);
     size_t room = p->cap - p->len;
     if (!room) return -11;
     if (len > room) len = room;
@@ -154,6 +237,7 @@ static long send_locked(struct usock *s, const void *data, size_t len, struct fi
 
 static long recv_locked(struct usock *s, void *buf, size_t len, struct file **files, int *nfiles, int maxfiles)
 {
+    if (UNIX_PACKETS(s)) return recv_packet(s, buf, len, files, nfiles, maxfiles);
     if (!s->len) return s->peer_closed || !s->peer ? 0 : -11;
     /* don't read past the start of a later message's file descriptors in one go */
     size_t n = len < s->len ? len : s->len;
@@ -173,5 +257,5 @@ static long recv_locked(struct usock *s, void *buf, size_t len, struct file **fi
     return (long)n;
 }
 
-int unix_readable(struct usock *s) { return s->listening ? s->nback > 0 : (s->len > 0 || s->peer_closed || !s->peer); }
+int unix_readable(struct usock *s) { return s->listening ? s->nback > 0 : ((UNIX_PACKETS(s) ? s->mcount > 0 : s->len > 0) || s->peer_closed || !s->peer); }
 int unix_writable(struct usock *s) { return s->peer && s->peer->len < s->peer->cap; }

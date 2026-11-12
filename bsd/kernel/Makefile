@@ -54,7 +54,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test test-install test-hw test-browser test-pkg pkg rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test test-install test-hw test-browser test-sandbox test-pkg pkg rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -171,6 +171,9 @@ test-browser: iso
 >$(PYTHON) -I tests/test-browser.py build/auxobsd.iso
 
 # pkg: real Ubuntu packages from a small local mirror, kept on an installed system's disk
+test-sandbox: iso
+>$(PYTHON) -I tests/test-sandbox.py build/auxobsd.iso
+
 test-pkg: iso
 >$(PYTHON) -I tests/test-pkg.py build/auxobsd.iso
 

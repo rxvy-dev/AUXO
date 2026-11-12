@@ -4,6 +4,7 @@
 #include "arch.h"
 #include "rs.h"
 #include "auxo.h"
+#include "ns.h"
 #include "chrono.h"
 #include "pci.h"
 #include "net.h"
@@ -12,7 +13,7 @@
 #include "disk.h"
 #include "install.h"
 
-#define HEAP_PAGES 4096   /* 16 MiB kernel heap, managed by Rust (thread stacks, fs nodes) */
+#define HEAP_PAGES 4096   /* at least 16 MiB of kernel heap, managed by Rust (thread stacks, fs nodes) */
 
 /* Let the Chrono thread use SSE: CR0.EM off, CR0.MP on, CR4.OSFXSR + OSXMMEXCPT. The rest of the
  * kernel is built with -mgeneral-regs-only, so the XMM registers only ever hold Chrono's state. */
@@ -61,9 +62,15 @@ void kmain(uint32_t mbi)
     if (hi) kprintf(" (%lu MiB of it above 4 GiB)", (unsigned long)(hi >> 20));
     kprintf("\n");
 
-    uint64_t heap = pmm_alloc_contig(HEAP_PAGES);
+    /* a sixteenth of RAM, 16 to 64 MiB: thread stacks (64 KiB each; browsers run hundreds of
+       threads) and filesystem nodes live here */
+    size_t heap_pages = pmm_total_pages() / 16;
+    if (heap_pages < HEAP_PAGES) heap_pages = HEAP_PAGES;
+    if (heap_pages > HEAP_PAGES * 4) heap_pages = HEAP_PAGES * 4;
+    uint64_t heap = pmm_alloc_contig(heap_pages);
+    if (!heap) { heap_pages = HEAP_PAGES; heap = pmm_alloc_contig(heap_pages); }
     if (!heap) panic("cannot allocate kernel heap");
-    rs_init((uintptr_t)heap, HEAP_PAGES * PAGE_SIZE);
+    rs_init((uintptr_t)heap, heap_pages * PAGE_SIZE);
     ok("rust"); kprintf("heap + scheduler up (heap at %p)\n", (void *)heap);
     pit_init(AUXO_HZ);                /* now, not at the end: drivers' delays count PIT ticks, and a
                                          UEFI boot doesn't leave the PIT running the way a BIOS does */
@@ -96,6 +103,7 @@ void kmain(uint32_t mbi)
         if (boot_module("overlay", &img, &imglen) == 0) fs_mount_tar(img, imglen);   /* pkg, on top */
     } else { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
     vfs_init();
+    mount_init();                     /* the first mount namespace: / and /proc */
     pci_init();
     const struct pci_dev *gpu = pci_gpu();
     char gname[64] = "none";

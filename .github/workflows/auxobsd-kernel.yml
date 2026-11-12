@@ -49,6 +49,9 @@ jobs:
       - name: Browser tabs, sign-in, cookies and saved passwords
         run: make test-browser
 
+      - name: Sandbox (namespaces, seccomp) holds against escape attempts
+        run: make test-sandbox
+
       - name: pkg installs Ubuntu packages, kept on an installed disk
         run: make test-pkg
 

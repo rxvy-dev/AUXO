@@ -17,11 +17,11 @@ ROOT=$OUT/rootfs
 rm -rf "$ROOT" "$WORK/debs"            # start clean: nothing left over from another set
 mkdir -p "$WORK/debs" "$ROOT"
 
-PKGS="gcc cpp binutils libc6-dev make busybox-static"
+PKGS="gcc cpp binutils libc6-dev make busybox-static bubblewrap"
 if [ "$SET" = full ]; then
     PKGS="$PKGS python3 python3-gi python3-gi-cairo python3-cairo libc-bin gir1.2-gtk-4.0 gir1.2-gtksource-5 libgtk-4-1 libgtksourceview-5-0
           fonts-dejavu-core fonts-dejavu-mono fonts-dejavu-extra adwaita-icon-theme gsettings-desktop-schemas shared-mime-info
-          ca-certificates glib-networking"
+          ca-certificates glib-networking epiphany-browser dbus-daemon"
 fi
 
 echo "rootfs: resolving $SET packages"
@@ -37,6 +37,8 @@ grep -qx libmount1 "$WORK/pkgs.txt" && echo libmount1 libblkid1 >> "$WORK/want.t
 grep -qx libbz2-1.0 "$WORK/pkgs.txt" && echo libbz2-1.0 >> "$WORK/want.txt"
 grep -qx liblzma5 "$WORK/pkgs.txt" && echo liblzma5 >> "$WORK/want.txt"
 grep -qx libffi8 "$WORK/pkgs.txt" && echo libffi8 >> "$WORK/want.txt"
+# the D-Bus session bus itself (the rest of dbus-* only serves the system bus and package scripts)
+for p in dbus-daemon dbus-bin dbus-session-bus-common; do grep -qx $p "$WORK/pkgs.txt" && echo $p >> "$WORK/want.txt"; done
 tr ' ' '\n' < "$WORK/want.txt" | sort -u | grep . > "$WORK/want2.txt"
 echo "rootfs: $(wc -l < "$WORK/want2.txt") packages"
 ( cd "$WORK/debs" && xargs apt-get download -q < ../want2.txt >/dev/null 2>&1 || \
@@ -84,8 +86,10 @@ if [ "$SET" = full ]; then
     # fonts and icons: DejaVu and Adwaita are plenty
     find "$ROOT/usr/share/fonts" -mindepth 1 -maxdepth 2 -not -path '*dejavu*' -not -name truetype -exec rm -rf {} + 2>/dev/null || true
     for d in "$ROOT"/usr/share/icons/*; do case "$(basename "$d")" in Adwaita|hicolor) ;; *) rm -rf "$d" ;; esac; done
-    rm -rf "$ROOT/usr/share/texmf" "$ROOT/usr/share/X11/locale" "$ROOT/usr/lib/x86_64-linux-gnu/dri" \
-           "$ROOT/usr/lib/x86_64-linux-gnu/libLLVM"* "$ROOT/usr/lib/x86_64-linux-gnu/libgallium"* 2>/dev/null || true
+    rm -rf "$ROOT/usr/share/texmf" "$ROOT/usr/share/X11/locale" 2>/dev/null || true
+    # Mesa's software renderer (llvmpipe: libgallium + LLVM) stays: WebKit draws through EGL even
+    # without a GPU driver. Only the hardware DRI loaders go.
+    find "$ROOT/usr/lib/x86_64-linux-gnu/dri" -name '*_dri.so' ! -name 'swrast_dri.so' ! -name 'kms_swrast_dri.so' -delete 2>/dev/null || true
 fi
 
 # the CA bundle ca-certificates' own script would make (GnuTLS, OpenSSL and Python read it)

@@ -117,9 +117,30 @@ static int vma_insert(struct mm *m, const struct vma *v)
     return 0;
 }
 
+/* the next address at or after va that might have a PTE: skips whole empty tables, so a
+ * 64 GiB reservation (WebKit, Go, Java all make them) costs nothing until it's touched */
+static uint64_t next_present(struct mm *m, uint64_t va, uint64_t end)
+{
+    while (va < end) {
+        uint64_t *t = (uint64_t *)(uintptr_t)m->pml4;
+        int lvl;
+        for (lvl = 3; lvl > 0; lvl--) {
+            int i = (int)((va >> (12 + 9 * lvl)) & 511);
+            if (!(t[i] & P)) break;
+            t = table(t[i]);
+        }
+        if (lvl == 0) return va;                              /* a page table covers va */
+        uint64_t span = 1ULL << (12 + 9 * lvl);
+        uint64_t nx = (va & ~(span - 1)) + span;
+        if (nx <= va) return end;
+        va = nx;
+    }
+    return end;
+}
+
 static void free_range(struct mm *m, uint64_t s, uint64_t e)
 {
-    for (uint64_t a = s; a < e; a += PAGE_SIZE) {
+    for (uint64_t a = next_present(m, s, e); a < e; a = next_present(m, a + PAGE_SIZE, e)) {
         uint64_t *p = pte(m, a, 0);
         if (!p || !(*p & P)) continue;
         if (!(*p & SHR)) pmm_free_page(ADDR(*p));
@@ -199,7 +220,7 @@ static int mm_protect_l(struct mm *m, uint64_t s, uint64_t len, uint32_t prot)
             v = &m->v[i];
         }
         v->prot = prot;
-        for (uint64_t a = v->start; a < v->end; a += PAGE_SIZE) {
+        for (uint64_t a = next_present(m, v->start, v->end); a < v->end; a = next_present(m, a + PAGE_SIZE, v->end)) {
             uint64_t *p = pte(m, a, 0);
             if (p && (*p & P)) { *p = ADDR(*p) | (*p & SHR) | prot_bits(prot); __asm__ volatile("invlpg (%0)" :: "r"(a) : "memory"); }
         }
@@ -258,6 +279,22 @@ static int mm_fault_l(struct mm *m, uint64_t addr, int write)
 }
 
 int mm_unmap(struct mm *m, uint64_t s, uint64_t len) { mm_lock(m); int r = mm_unmap_l(m, s, len); mm_unlock(m); return r; }
+
+/* madvise(MADV_DONTNEED / MADV_FREE / MADV_REMOVE): the pages go; touching them again gives
+ * zeros (anonymous) or the file's contents (file mappings). Allocators count on the zeros. */
+int mm_discard(struct mm *m, uint64_t s, uint64_t len)
+{
+    uint64_t e = (s + len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    if (s & (PAGE_SIZE - 1)) return -22;
+    mm_lock(m);
+    for (int i = 0; i < m->nv; i++) {
+        struct vma *v = &m->v[i];
+        uint64_t a = v->start > s ? v->start : s, b = v->end < e ? v->end : e;
+        if (a < b) free_range(m, a, b);
+    }
+    mm_unlock(m);
+    return 0;
+}
 int mm_map(struct mm *m, uint64_t s, uint64_t len, uint32_t prot, int shared, struct node *file, uint64_t off, uint64_t flen)
 { mm_lock(m); int r = mm_map_l(m, s, len, prot, shared, file, off, flen); mm_unlock(m); return r; }
 int mm_protect(struct mm *m, uint64_t s, uint64_t len, uint32_t prot) { mm_lock(m); int r = mm_protect_l(m, s, len, prot); mm_unlock(m); return r; }
@@ -281,7 +318,7 @@ struct mm *mm_clone_l(struct mm *src)
     for (int i = 0; i < src->nv; i++) {
         struct vma *v = &src->v[i];
         if (vma_insert(m, v) < 0) { mm_put(m); return 0; }
-        for (uint64_t a = v->start; a < v->end; a += PAGE_SIZE) {
+        for (uint64_t a = next_present(src, v->start, v->end); a < v->end; a = next_present(src, a + PAGE_SIZE, v->end)) {
             uint64_t *sp = pte(src, a, 0);
             if (!sp || !(*sp & P)) continue;
             uint64_t *dp = pte(m, a, 1);

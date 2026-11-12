@@ -3,7 +3,7 @@
 use crate::{ffi, heap, irq, rprintln};
 use core::ptr::addr_of_mut;
 
-pub const MAXPROC: usize = 128;
+pub const MAXPROC: usize = 512;   // a browser alone runs a hundred-odd threads
 pub const KSTACK: usize = 64 * 1024;   // Chrono's painting is stack-hungry
 const QUANTUM_TICKS: u64 = 10; // 100 ms at 100 Hz
 

@@ -61,9 +61,11 @@ static int push(struct mm *m, uint64_t *sp, const void *data, size_t n)
 
 int exec_load(struct task *t, const char *path, char *const kargv[], char *const kenvp[], struct trapframe *tf)
 {
-    struct node *n;
-    int r = fs_lookup(t->cwd, path, 1, &n);
+    struct path at;
+    int r = vfs_walk(t, t->ns.cwd, path, 1, &at);
     if (r < 0) return r;
+    struct node *n = at.n;
+    if (at.m && (at.m->flags & MNT_NOEXEC)) return -13;   /* a noexec mount (/proc, /dev …) */
     if (n->type == N_DIR) return -13;
     if (n->type != N_REG) return -13;
     if (!(n->mode & 0111)) return -13;                   /* EACCES */
@@ -107,10 +109,12 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
             size_t l = ph[i].filesz < sizeof ip - 1 ? (size_t)ph[i].filesz : sizeof ip - 1;
             memcpy(ip, n->data + ph[i].off, l);
             ip[l] = 0;
-            struct node *in;
+            struct path ipath;
             struct ehdr ie;
             uint64_t iend;
-            if ((r = fs_lookup(0, ip, 1, &in)) < 0 || (r = check(in, &ie)) < 0) { mm_put(m); return r < 0 ? r : -8; }
+            if ((r = vfs_walk(t, t->ns.root, ip, 1, &ipath)) < 0) { mm_put(m); return r; }   /* in this task's namespace */
+            struct node *in = ipath.n;
+            if ((r = check(in, &ie)) < 0) { mm_put(m); return r < 0 ? r : -8; }
             interp_base = INTERP_BASE - ((in->size + 0x200000) & ~0xFFFFFULL);
             if ((r = load_segments(m, in, &ie, interp_base, &iend)) < 0) { mm_put(m); return r; }
             entry = interp_base + ie.entry;
@@ -164,7 +168,9 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
     if (old) mm_put(old);
     const char *base = strrchr(path, '/');
     strlcpy(t->name, base ? base + 1 : path, sizeof t->name);
-    fs_path(n, t->exe, sizeof t->exe);
+    vfs_pathname(t, at, t->exe, sizeof t->exe);
+    t->ns.exe = at;
+    ns_exec(t);
     memset(tf, 0, sizeof *tf);
     tf->rip = entry;
     tf->rsp = sp;

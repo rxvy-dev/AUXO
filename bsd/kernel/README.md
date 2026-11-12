@@ -77,6 +77,12 @@ multiboot2 /boot/auxobsd.elf accent=rose hostname=summit motd=0 nocolor
 
 `help`, `clear`, `echo`, `uname [-a|-s|-r|-m]`, `uptime`, `free`, `ps`, `demo` (the scheduler
 and `int 0x80` syscall demo threads), `cmdline`, `history`, `reboot`, `poweroff`.
+
+For debugging Linux programs: `strace PROGRAM` (every system call), `strace -e PROGRAM` (only
+the ones that fail), `strace -n NAME …` (only threads whose name starts with NAME), and
+`ustack PID` (the system call each thread of a process is in, and its call chain). A program
+that dies of a crash (SIGSEGV, SIGABRT, SIGILL …) gets a report on the console: where it was
+and its call chain, as `library+offset`, ready for `addr2line` or `nm`.
 Tab completes command names, Up/Down walks the history, Ctrl-C cancels a line, Ctrl-L clears.
 Input works from the PS/2 keyboard and from the serial port.
 
@@ -213,12 +219,47 @@ The version comes from `bsd/kernel/VERSION`.
 Not there yet: Wi-Fi (tether a phone over USB instead), GPU acceleration, sound, the
 Realtek RTL8125 (2.5 Gbit).
 
+## Sandboxing and the web browser
+
+The kernel has what Linux sandboxes are built from, with Linux's system calls and semantics:
+
+- **mount namespaces**: `mount` (bind, recursive bind, remount read-only/nosuid/nodev/noexec,
+  tmpfs, proc, devpts, mqueue), `umount2`, `pivot_root`, `chroot`; every path a program names
+  is looked up in its own namespace and root, and read-only mounts are enforced per path;
+- **PID namespaces** (nested, with an init that reaps orphans and takes everything down with
+  it), **network** (only `lo`, set up through netlink), **UTS** (hostname), **IPC** and
+  **cgroup** namespaces, through `clone`, `clone3` and `unshare`;
+- **seccomp** filters (classic BPF; errno, trap and kill answers; stacked; kept across
+  `fork` and `execve`), `no_new_privs`, capabilities (`capget`, `capset`, the bounding set);
+- **/proc** as a real filesystem: `/proc/PID/{status,maps,mountinfo,fd,ns,…}` and
+  `/proc/sys`, mountable again inside a namespace.
+
+User namespaces aren't there (everything runs as root, as on the AuxoBSD desktop generally);
+programs that ask get `EINVAL`, which is what they check for.
+
+**bubblewrap** (`bwrap`) runs on this, and so does **GNOME Web** (the full root image) with
+WebKit's sandbox on: each web page's process runs in its own mount, PID and network
+namespaces with WebKit's seccomp filter, so a page that took over its renderer still can't
+read your files, see other programs or reach the network on its own. Sign-in pages (Google,
+GitHub, …) are ordinary HTTPS pages to it: certificates are checked against the system's CA
+bundle, and cookies (kept in SQLite) keep you signed in. Saving passwords in GNOME Web needs
+a keyring (the Secret Service), which isn't there yet: it asks every time.
+
+`make test-sandbox` builds `tests/sandbox-escape.c` inside AuxoBSD and tries to get out:
+writing through read-only binds, reaching files that weren't bound in (also by climbing out
+of a chroot), signalling or seeing processes outside, reaching the network, and — with
+WebKit's filter — mounting, unsharing, `chroot` and `pivot_root`. Every attempt has to fail.
+
+The desktop starts a D-Bus session bus for GNOME programs, and Mesa's software renderer
+(llvmpipe) draws WebKit's pages without a GPU driver. GNOME Web wants about 4 GB of RAM
+(the full root image is held in memory).
+
 ## Running it in a VM
 
 - **QEMU:** `make run`, or `qemu-system-x86_64 -cdrom build/auxobsd.iso -m 256M`.
 - **VirtualBox:** create the VM as *Type: Other, Version: Other/Unknown (64-bit)* (or
   *FreeBSD (64-bit)*); EFI on or off both work. Give it 2 GB of RAM or more for the desktop and
-  Linux programs. After you pick a boot menu entry, GRUB loads the 350 MB system image: the
+  Linux programs, 4 GB for GNOME Web. After you pick a boot menu entry, GRUB loads the 350 MB system image: the
   screen says so and stays still for a while, which is normal. A 32-bit VM type hides long mode
   from the guest; AuxoBSD then stops with a message saying so.
   A serial port is optional: without one, auxsh uses the keyboard and the screen only.

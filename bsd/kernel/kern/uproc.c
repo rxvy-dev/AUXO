@@ -7,8 +7,8 @@
 #include "uproc.h"
 #include "inet.h"
 #include "unix.h"
+#include "netlink.h"
 
-#define MAXTASK 128
 static struct task tasks[MAXTASK];
 static volatile int fg_pgid;
 
@@ -71,7 +71,8 @@ void file_put(struct file *f)
     }
     if (f->kind == 5 && f->priv) unix_close(f->priv);
     if (f->kind == 8 && f->priv) inet_close(f->priv);
-    if ((f->kind == 6 || f->kind == 7) && f->priv) rs_kfree(f->priv);
+    if ((f->kind == 6 || f->kind == 7 || f->kind == 9) && f->priv) rs_kfree(f->priv);
+    if (f->kind == 10) nl_close(f->priv);
     if (f->node) fs_put(f->node);
     rs_kfree(f);
 }
@@ -186,6 +187,28 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
         *cnt = 0;
         return 8;
     }
+    if (f->kind == 9) {                                    /* signalfd: one signalfd_siginfo per pending signal */
+        uint64_t mask = *(uint64_t *)f->priv;
+        while (!t || !(t->pending & mask)) { if (!t || (f->flags & 04000)) return -11; if (t->pending & ~t->sigmask & ~mask) return -4; wait_tick(); }
+        size_t o = 0;
+        for (int s = 0; s < 64 && o + 128 <= n; s++) {
+            if (!(t->pending & mask & (1ULL << s))) continue;
+            t->pending &= ~(1ULL << s);
+            memset((uint8_t *)kbuf + o, 0, 128);
+            uint32_t signo = (uint32_t)s + 1;
+            memcpy((uint8_t *)kbuf + o, &signo, 4);
+            o += 128;
+        }
+        return o ? (long)o : -22;
+    }
+    if (f->kind == 10) {                                   /* netlink */
+        for (;;) {
+            long r = nl_recv(f->priv, kbuf, n, 0);
+            if (r != -11 || (f->flags & 04000)) return r;
+            if (t && (t->pending & ~t->sigmask)) return -4;
+            wait_tick();
+        }
+    }
     if ((f->flags & 3) == 1) return -9;
     if (f->kind == 1) {
         struct pipe *p = f->priv;
@@ -205,7 +228,7 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
     if (nd->type == N_CHR) {
         switch (nd->dev) {
         case DEV_NULL: return 0;
-        case DEV_ZERO: memset(kbuf, 0, n); return (long)n;
+        case DEV_ZERO: case DEV_FULL: memset(kbuf, 0, n); return (long)n;
         case DEV_RANDOM:
             for (size_t i = 0; i < n; i++) ((uint8_t *)kbuf)[i] = (uint8_t)((rdtsc() * 6364136223846793005ULL + i * 1442695040888963407ULL) >> 33);
             return (long)n;
@@ -233,6 +256,8 @@ long file_write(struct task *t, struct file *f, const void *kbuf, size_t n)
         }
         return (long)done;
     }
+    if (f->kind == 10) return nl_send(t, f->priv, kbuf, n);
+    if (f->kind == 9) return -22;
     if (f->kind == 6) {
         if (n < 8) return -22;
         uint64_t v; memcpy(&v, kbuf, 8);
@@ -257,6 +282,7 @@ long file_write(struct task *t, struct file *f, const void *kbuf, size_t n)
     if (!nd) return -9;
     if (nd->type == N_CHR) {
         if (nd->dev == DEV_TTY) { console_write(kbuf, n); return (long)n; }
+        if (nd->dev == DEV_FULL) return -28;                   /* ENOSPC: what /dev/full is for */
         return (long)n;                                        /* null, zero, random swallow */
     }
     if (f->flags & 02000) f->pos = nd->size;                    /* O_APPEND */
@@ -329,6 +355,8 @@ static int spawn(const char *path, char *const argv[], char *const envp[], const
     f->refs = 3;
     if (fs_lookup(0, cwd && cwd[0] ? cwd : "/home/root", 1, &wd) < 0) fs_lookup(0, "/", 1, &wd);
     t->cwd = wd;
+    ns_task_init(t, 0);                                    /* the first namespaces, all capabilities */
+    t->ns.cwd.n = wd;
     struct start *st = rs_kmalloc(sizeof *st);
     if (!st) { task_free(t); return -12; }
     st->t = t;

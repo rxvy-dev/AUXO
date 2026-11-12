@@ -27,6 +27,7 @@ _Static_assert(CHRONO_THEMES == CHRONO_THEME_COUNT, "update CHRONO_THEMES in chr
 #define TERM_ROWS 28
 
 /* ── state ──────────────────────────────────────────────────────────── */
+const char *session_bus_env(void);   /* session.c */
 static struct canvas scr, wallc;
 static int W, H, running;
 static int cur = CHRONO_THEME_DEFAULT;
@@ -831,7 +832,7 @@ static int run_detached(const char *path, char *const argv[])
 {
     char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LANG=C.UTF-8", "TERM=linux",
                      "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
-                     "GDK_DEBUG=gl-disable,vulkan-disable", "GTK_A11Y=none", "NO_AT_BRIDGE=1", "DBUS_SESSION_BUS_ADDRESS=disabled:",
+                     "GDK_DEBUG=gl-disable,vulkan-disable", "LIBGL_ALWAYS_SOFTWARE=1", "GTK_A11Y=none", "NO_AT_BRIDGE=1", (char *)session_bus_env(),
                      "XDG_DATA_DIRS=/usr/share", "TMPDIR=/tmp", 0 };
     return uproc_spawn_detached(path, argv, envp, "/home/root");
 }

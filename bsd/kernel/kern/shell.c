@@ -25,7 +25,16 @@ struct cmd {
     const char *help;
 };
 
+const char *session_bus_env(void);   /* session.c */
 static const struct cmd cmds[];
+void uproc_where(int pid);
+static int cmd_ustack(int argc, char **argv)
+{
+    if (argc < 2) { kprintf("usage: ustack PID   (where each thread of a Linux program is)\n"); return 1; }
+    uproc_where(katoi(argv[1]));
+    return 0;
+}
+
 static int cmd_strace(int argc, char **argv);
 
 /* ── line editor ────────────────────────────────────────────────────── */
@@ -572,6 +581,7 @@ static const struct cmd cmds[] = {
     { "cmdline",     cmd_cmdline,     "the kernel command line from the boot loader" },
     { "history",     cmd_history,     "recent commands" },
     { "reboot",      cmd_reboot,      "restart the machine" },
+    { "ustack",      cmd_ustack,      "where each thread of a Linux program is (debugging)" },
     { "poweroff",    cmd_poweroff,    "turn the machine off" },
     { "halt",        cmd_poweroff,    0 },
     { 0, 0, 0 },
@@ -581,11 +591,18 @@ extern int sys_trace;
 static void run(char *line);
 static int cmd_strace(int argc, char **argv)
 {
-    if (argc < 2) { kprintf("usage: strace PROGRAM [ARGS]   (every system call, on the console)\n"); return 1; }
+    extern char sys_trace_name[16];
+    sys_trace_name[0] = 0;
+    if (argc > 2 && !strcmp(argv[1], "-n")) {                  /* only programs whose name starts so */
+        strlcpy(sys_trace_name, argv[2], sizeof sys_trace_name);
+        argv += 2; argc -= 2;
+    }
+    int errors = argc > 1 && !strcmp(argv[1], "-e");          /* only the calls that fail */
+    if (argc < 2 + errors) { kprintf("usage: strace [-e] PROGRAM [ARGS]   (every system call, or with -e the failing ones, on the console)\n"); return 1; }
     char buf[LINE_MAX] = "";
     size_t o = 0;
-    for (int i = 1; i < argc && o < sizeof buf - 2; i++) o += (size_t)ksnprintf(buf + o, sizeof buf - o, "%s%s", i > 1 ? " " : "", argv[i]);
-    sys_trace = 1;
+    for (int i = 1 + errors; i < argc && o < sizeof buf - 2; i++) o += (size_t)ksnprintf(buf + o, sizeof buf - o, "%s%s", i > 1 + errors ? " " : "", argv[i]);
+    sys_trace = errors ? 2 : 1;
     run(buf);
     sys_trace = 0;
     return 0;
@@ -630,7 +647,7 @@ static void run(char *line)
     char *envp[] = { "PATH=/usr/local/bin:/usr/bin:/usr/sbin", "HOME=/home/root", "USER=root", "LOGNAME=root", "SHELL=/bin/sh",
                      "TERM=linux", "LANG=C.UTF-8", "TMPDIR=/tmp", pwd,
                      "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
-                     "GDK_DEBUG=gl-disable,vulkan-disable", "GTK_A11Y=none", "NO_AT_BRIDGE=1", "DBUS_SESSION_BUS_ADDRESS=disabled:",
+                     "GDK_DEBUG=gl-disable,vulkan-disable", "LIBGL_ALWAYS_SOFTWARE=1", "GTK_A11Y=none", "NO_AT_BRIDGE=1", (char *)session_bus_env(),
                      "XDG_DATA_DIRS=/usr/share", 0 };
     char *env[64];
     int ne = 0;

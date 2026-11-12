@@ -100,6 +100,18 @@ static struct node *child_n(struct node *dir, const char *name, size_t n)
     return 0;
 }
 
+struct node *fs_child_n(struct node *dir, const char *name, size_t n) { return dir && dir->type == N_DIR ? child_n(dir, name, n) : 0; }
+
+/* a directory of its own, in no tree: the root of a tmpfs */
+struct node *fs_new_root(uint16_t mode)
+{
+    fs_lock();
+    struct node *n = new_node(0, "", 0, N_DIR, mode);
+    if (n) { n->changed = 0; n->mtime = fs_now(); }
+    fs_unlock();
+    return n;
+}
+
 struct node *fs_create(struct node *dir, const char *name, int type, uint16_t mode)
 {
     fs_lock();
@@ -480,12 +492,13 @@ void fs_init(void)
 {
     root = new_node(0, "", 0, N_DIR, 0755);
     root->parent = root;
-    static const char *const dirs[] = { "dev", "tmp", "home", "home/root", "proc", "run", "etc", "usr", "usr/bin", "var", "var/tmp", 0 };
+    static const char *const dirs[] = { "dev", "dev/shm", "dev/pts", "tmp", "home", "home/root", "proc", "run", "etc", "usr", "usr/bin", "var", "var/tmp",
+                                        "sys", "sys/block", "sys/bus", "sys/class", "sys/dev", "sys/dev/char", "sys/dev/block", "sys/devices", 0 };
     for (int i = 0; dirs[i]; i++) mkdirs(dirs[i], strlen(dirs[i]));
     struct node *dev = fs_child(root, "dev");
     static const struct { const char *n; int d; } devs[] = {
         { "null", DEV_NULL }, { "zero", DEV_ZERO }, { "tty", DEV_TTY }, { "console", DEV_TTY }, { "tty0", DEV_TTY },
-        { "random", DEV_RANDOM }, { "urandom", DEV_RANDOM }, { "fb0", DEV_FB }, { 0, 0 } };
+        { "random", DEV_RANDOM }, { "urandom", DEV_RANDOM }, { "fb0", DEV_FB }, { "full", DEV_FULL }, { 0, 0 } };
     for (int i = 0; devs[i].n; i++) {
         struct node *n = new_node(dev, devs[i].n, strlen(devs[i].n), N_CHR, 0666);
         if (n) n->dev = (uint32_t)devs[i].d;

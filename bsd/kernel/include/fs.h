@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 enum { N_DIR = 1, N_REG, N_LNK, N_CHR, N_FIFO, N_SOCK };
-enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB };
+enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB, DEV_FULL };
 
 struct node {
     char    *name;
@@ -36,6 +36,8 @@ void         fs_unlock(void);
 int          fs_lookup(struct node *cwd, const char *path, int follow, struct node **out);   /* 0 or -errno */
 int          fs_lookup_parent(struct node *cwd, const char *path, struct node **dir, char *name, size_t n);
 struct node *fs_child(struct node *dir, const char *name);
+struct node *fs_child_n(struct node *dir, const char *name, size_t n);
+struct node *fs_new_root(uint16_t mode);            /* a tmpfs: a directory in no tree */
 struct node *fs_create(struct node *dir, const char *name, int type, uint16_t mode);
 int          fs_unlink(struct node *dir, const char *name, int rmdir);
 int          fs_rename(struct node *odir, const char *oname, struct node *ndir, const char *nname);
