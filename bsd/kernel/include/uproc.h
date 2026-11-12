@@ -85,6 +85,7 @@ struct task {
     struct node *cwd;
     uint64_t clear_child_tid;
     uint64_t sigmask, pending;
+    uint64_t alarm_at, alarm_every;  /* ITIMER_REAL / alarm(): kernel ticks, 0 = off */
     struct sigact *sig;            /* 64 actions, shared by threads */
     char   name[16];
     char   exe[128];

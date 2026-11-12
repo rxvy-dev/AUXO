@@ -40,6 +40,19 @@ int  tcp_connect(uint32_t ip, uint16_t port, int timeout_ms);   /* socket or <0 
 int  tcp_send(int s, const void *buf, size_t len);              /* bytes queued, -1 */
 int  tcp_recv(int s, void *buf, size_t cap, int timeout_ms);    /* >0 bytes, 0 closed, -1 error, -2 timeout */
 void tcp_close(int s);
+int  tcp_readable(int s), tcp_writable(int s), tcp_hup(int s);
+void tcp_shutdown(int s);                                       /* our side is done sending */
+void tcp_endpoints(int s, uint32_t *lip, uint16_t *lport, uint32_t *rip, uint16_t *rport);
+
+/* UDP sockets (host byte order addresses) */
+int  udp_open(void);
+int  udp_bind(int s, uint16_t port);                            /* 0 = any free port */
+int  udp_connect(int s, uint32_t ip, uint16_t port);
+int  udp_sendto(int s, uint32_t ip, uint16_t port, const void *buf, size_t len);
+int  udp_recvfrom(int s, void *buf, size_t cap, uint32_t *ip, uint16_t *port);   /* -2: nothing yet */
+int  udp_readable(int s);
+uint16_t udp_local_port(int s);
+void udp_close(int s);
 
 /* http.c: HTTP/1.1 and HTTPS (BearSSL) */
 struct http_result {

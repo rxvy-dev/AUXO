@@ -7,6 +7,8 @@
 #include "uproc.h"
 #include "auxo.h"
 #include "unix.h"
+#include "inet.h"
+#include "net.h"
 
 struct task *task_alloc(void);
 void task_free(struct task *t);
@@ -776,7 +778,8 @@ static int fd_ready(struct task *t, int fd, int events)
     struct file *f = getf(t, fd);
     if (!f) return 0x20;                                  /* POLLNVAL */
     int r = 0;
-    if (f->kind == 5) { if (unix_readable(f->priv)) r |= 1; if (unix_writable(f->priv)) r |= 4; if (((struct usock *)f->priv)->peer_closed) r |= 0x10; }
+    if (f->kind == 8) r = inet_poll(f->priv);
+    else if (f->kind == 5) { if (unix_readable(f->priv)) r |= 1; if (unix_writable(f->priv)) r |= 4; if (((struct usock *)f->priv)->peer_closed) r |= 0x10; }
     else if (f->kind == 6) { if (*(uint64_t *)f->priv) r |= 1; r |= 4; }
     else if (f->kind == 7) {                                   /* an epoll set is readable when a member is */
         struct { int n; struct { int fd; uint32_t events; uint64_t data; } e[64]; } *ep = f->priv;
@@ -1087,6 +1090,198 @@ static long sys_prlimit(struct task *t, long res, uint64_t unew, uint64_t uold)
     return 0;
 }
 
+
+/* ── sockets (AF_INET): TCP clients and UDP, through kern/inet.c ─────── */
+static struct isock *getisock(struct task *t, long fd)
+{
+    struct file *f = getf(t, fd);
+    return f && f->kind == 8 ? f->priv : 0;
+}
+
+static long sin_in(struct task *t, uint64_t ua, uint64_t len, uint32_t *ip, uint16_t *port, int *fam)
+{
+    uint8_t sa[16];
+    memset(sa, 0, sizeof sa);
+    if (len < 2) return -EINVAL;
+    if (copyin(t->mm, sa, ua, len < 16 ? len : 16) < 0) return -EFAULT;
+    *fam = sa[0] | sa[1] << 8;
+    if (*fam != 2 && *fam != 0) return -EAFNOSUPPORT;
+    *port = (uint16_t)(sa[2] << 8 | sa[3]);
+    *ip = (uint32_t)sa[4] << 24 | (uint32_t)sa[5] << 16 | (uint32_t)sa[6] << 8 | sa[7];
+    return 0;
+}
+
+static long sin_out(struct task *t, uint64_t ua, uint64_t ulen, uint32_t ip, uint16_t port)
+{
+    if (!ua || !ulen) return 0;
+    uint32_t l;
+    if (copyin(t->mm, &l, ulen, 4) < 0) return -EFAULT;
+    uint8_t sa[16] = { 2, 0, (uint8_t)(port >> 8), (uint8_t)port, (uint8_t)(ip >> 24), (uint8_t)(ip >> 16), (uint8_t)(ip >> 8), (uint8_t)ip };
+    if (copyout(t->mm, ua, sa, l < 16 ? l : 16) < 0) return -EFAULT;
+    l = 16;
+    return copyout(t->mm, ulen, &l, 4);
+}
+
+static long inet_socket(struct task *t, long type, long proto)
+{
+    int st = (int)(type & 0xF);
+    if (st != 1 && st != 2) return -93;                       /* EPROTONOSUPPORT: no raw sockets */
+    if (proto && proto != (st == 1 ? 6 : 17)) return -93;
+    struct isock *s = inet_new(st == 1 ? INET_STREAM : INET_DGRAM);
+    if (!s) return -ENOMEM;
+    struct file *f = file_new(8, 0, 2 | (int)(type & 04000));
+    if (!f) { inet_close(s); return -ENOMEM; }
+    f->priv = s;
+    strlcpy(f->path, st == 1 ? "socket:[tcp]" : "socket:[udp]", sizeof f->path);
+    int fd = alloc_fd(t, f, 0, (type & 02000000) != 0);
+    if (fd < 0) file_put(f);
+    return fd;
+}
+
+/* one message out of an inet socket: buffer already in the kernel */
+static long inet_sendbuf(struct task *t, long fd, const uint8_t *kb, size_t n, uint64_t ua, uint64_t alen, long flags)
+{
+    struct isock *s = getisock(t, fd);
+    uint32_t ip = 0; uint16_t port = 0; int fam = 2, to = 0;
+    if (ua && alen && s->type == INET_DGRAM) { long r = sin_in(t, ua, alen, &ip, &port, &fam); if (r < 0) return r; to = 1; }
+    long r = inet_send(s, kb, n, to, ip, port);
+    if (r == -EPIPE && !(flags & 0x4000)) t->pending |= 1ULL << 12;   /* SIGPIPE unless MSG_NOSIGNAL */
+    return r;
+}
+
+static long inet_sendto(struct task *t, long fd, uint64_t ubuf, uint64_t n, long flags, uint64_t ua, uint64_t alen)
+{
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    long total = 0;
+    do {
+        size_t c = n > KBUF ? KBUF : n;
+        if (copyin(t->mm, kb, ubuf, c) < 0) { total = total ? total : -EFAULT; break; }
+        long r = inet_sendbuf(t, fd, kb, c, ua, alen, flags);
+        if (r < 0) { total = total ? total : r; break; }
+        total += r; ubuf += (uint64_t)r; n -= (uint64_t)r;
+    } while (n && getisock(t, fd)->type == INET_STREAM);
+    rs_kfree(kb);
+    return total;
+}
+
+static long inet_recvfrom(struct task *t, long fd, uint64_t ubuf, uint64_t n, long flags, uint64_t ua, uint64_t alen)
+{
+    struct file *f = getf(t, fd);
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    uint32_t ip = 0; uint16_t port = 0;
+    long r = inet_recv(t, f->priv, kb, n < KBUF ? n : KBUF, (f->flags & 04000) || (flags & 0x40), &ip, &port);
+    if (r > 0 && copyout(t->mm, ubuf, kb, (size_t)r) < 0) r = -EFAULT;
+    rs_kfree(kb);
+    if (r >= 0 && ua) sin_out(t, ua, alen, ip, port);
+    return r;
+}
+
+static long inet_msg(struct task *t, long fd, uint64_t umsg, long flags, int out)
+{
+    struct file *f = getf(t, fd);
+    uint64_t m[7];
+    if (copyin(t->mm, m, umsg, 56) < 0) return -EFAULT;
+    uint8_t *kb = kbuf_get();
+    if (!kb) return -ENOMEM;
+    uint64_t iov[64][2], niov = m[3] < 64 ? m[3] : 64;
+    size_t total = 0;
+    for (uint64_t i = 0; i < niov; i++) { if (copyin(t->mm, iov[i], m[2] + i * 16, 16) < 0) { rs_kfree(kb); return -EFAULT; } }
+    long r;
+    if (out) {
+        for (uint64_t i = 0; i < niov; i++) {
+            size_t c = iov[i][1] < KBUF - total ? iov[i][1] : KBUF - total;
+            if (c && copyin(t->mm, kb + total, iov[i][0], c) < 0) { rs_kfree(kb); return -EFAULT; }
+            total += c;
+        }
+        r = inet_sendbuf(t, fd, kb, total, m[0], m[1], flags);
+    } else {
+        for (uint64_t i = 0; i < niov; i++) total += iov[i][1];
+        uint32_t ip = 0; uint16_t port = 0;
+        r = inet_recv(t, f->priv, kb, total < KBUF ? total : KBUF, (f->flags & 04000) || (flags & 0x40), &ip, &port);
+        size_t o = 0;
+        for (uint64_t i = 0; r > 0 && i < niov && o < (size_t)r; i++) {
+            size_t c = (size_t)r - o < iov[i][1] ? (size_t)r - o : iov[i][1];
+            if (copyout(t->mm, iov[i][0], kb + o, c) < 0) { r = -EFAULT; break; }
+            o += c;
+        }
+        if (r >= 0) {
+            if (m[0] && m[1] >= 16) {
+                uint8_t sa[16] = { 2, 0, (uint8_t)(port >> 8), (uint8_t)port, (uint8_t)(ip >> 24), (uint8_t)(ip >> 16), (uint8_t)(ip >> 8), (uint8_t)ip };
+                copyout(t->mm, m[0], sa, 16);
+                uint32_t l = 16; copyout(t->mm, umsg + 8, &l, 4);
+            }
+            uint64_t zero = 0; int mf = 0;
+            copyout(t->mm, umsg + 40, &zero, 8);              /* no control data */
+            copyout(t->mm, umsg + 48, &mf, 4);
+        }
+    }
+    rs_kfree(kb);
+    return r;
+}
+
+static long inet_sockopt(struct task *t, struct isock *s, long level, long opt, uint64_t uval, uint64_t ulen)
+{
+    int v = 0;
+    if (level == 1) {
+        if (opt == 3) v = s->type == INET_STREAM ? 1 : 2;      /* SO_TYPE */
+        else if (opt == 7 || opt == 8) v = 65536;              /* SO_SNDBUF / SO_RCVBUF */
+        else if (opt == 39) v = 2;                             /* SO_DOMAIN */
+        else if (opt == 38) v = s->type == INET_STREAM ? 6 : 17;   /* SO_PROTOCOL */
+    }
+    uint32_t l = 4;
+    copyout(t->mm, uval, &v, 4);
+    return copyout(t->mm, ulen, &l, 4);
+}
+
+/* alarm, setitimer, getitimer: ITIMER_REAL only (SIGALRM), in timer ticks */
+static uint64_t tv_ticks(const int64_t tv[2]) { return (uint64_t)tv[0] * AUXO_HZ + ((uint64_t)tv[1] * AUXO_HZ + 999999) / 1000000; }
+static void ticks_tv(uint64_t k, int64_t tv[2]) { tv[0] = (int64_t)(k / AUXO_HZ); tv[1] = (int64_t)(k % AUXO_HZ * (1000000 / AUXO_HZ)); }
+
+static long sys_alarm(struct task *t, uint64_t sec)
+{
+    uint64_t now = kernel_ticks();
+    long left = t->alarm_at > now ? (long)((t->alarm_at - now + AUXO_HZ - 1) / AUXO_HZ) : 0;
+    t->alarm_every = 0;
+    t->alarm_at = sec ? now + sec * AUXO_HZ : 0;
+    return left;
+}
+
+static long sys_itimer(struct task *t, long which, uint64_t unew, uint64_t uold, int set)
+{
+    if (which != 0) return set ? 0 : -EINVAL;              /* VIRTUAL/PROF: accepted, never fire */
+    uint64_t now = kernel_ticks();
+    if (uold) {
+        int64_t v[4];
+        ticks_tv(t->alarm_every, v);
+        ticks_tv(t->alarm_at > now ? t->alarm_at - now : 0, v + 2);
+        if (copyout(t->mm, uold, v, 32) < 0) return -EFAULT;
+    }
+    if (!set) return 0;
+    int64_t v[4];
+    if (copyin(t->mm, v, unew, 32) < 0) return -EFAULT;
+    uint64_t first = tv_ticks(v + 2);
+    t->alarm_every = tv_ticks(v);
+    t->alarm_at = first ? now + first : 0;
+    return 0;
+}
+
+/* sendmmsg / recvmmsg: glibc's resolver asks for A and AAAA in one call */
+static long sys_sendmsg(struct task *t, long fd, uint64_t umsg, long flags);
+static long sys_recvmsg(struct task *t, long fd, uint64_t umsg, long flags);
+static long sys_mmsg(struct task *t, long fd, uint64_t vec, long vlen, long flags, int out)
+{
+    long n = 0;
+    for (; n < vlen && n < 64; n++) {
+        long r = out ? sys_sendmsg(t, fd, vec + (uint64_t)n * 64, flags) : sys_recvmsg(t, fd, vec + (uint64_t)n * 64, n ? flags | 0x40 : flags);
+        if (r < 0) return n ? n : r;
+        uint32_t len = (uint32_t)r;
+        copyout(t->mm, vec + (uint64_t)n * 64 + 56, &len, 4);
+    }
+    return n;
+}
+
 /* ── sockets (AF_UNIX) ──────────────────────────────────────────────── */
 static struct usock *getsock(struct task *t, long fd, long *err)
 {
@@ -1108,9 +1303,10 @@ static long sock_fd(struct task *t, struct usock *u, long flags)
     return fd;
 }
 
-static long sys_socket(struct task *t, long domain, long type)
+static long sys_socket(struct task *t, long domain, long type, long proto)
 {
-    if (domain != 1) return -EAFNOSUPPORT;            /* AF_UNIX only, so far */
+    if (domain == 2) return inet_socket(t, type, proto);
+    if (domain != 1) return -EAFNOSUPPORT;            /* AF_UNIX and AF_INET; IPv6 programs fall back */
     struct usock *u = unix_new();
     if (!u) return -ENOMEM;
     return sock_fd(t, u, type);
@@ -1130,6 +1326,7 @@ static long sun_path(struct task *t, uint64_t uaddr, uint64_t len, char *out)
 
 static long sys_bind(struct task *t, long fd, uint64_t ua, uint64_t len)
 {
+    if (getisock(t, fd)) { uint32_t ip; uint16_t port; int fam; long e = sin_in(t, ua, len, &ip, &port, &fam); return e < 0 ? e : inet_bind(getisock(t, fd), ip, port); }
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     char p[110];
     if ((r = sun_path(t, ua, len, p)) < 0) return r;
@@ -1138,6 +1335,7 @@ static long sys_bind(struct task *t, long fd, uint64_t ua, uint64_t len)
 
 static long sys_connect(struct task *t, long fd, uint64_t ua, uint64_t len)
 {
+    if (getisock(t, fd)) { uint32_t ip; uint16_t port; int fam; long e = sin_in(t, ua, len, &ip, &port, &fam); return e < 0 ? e : inet_connect(getisock(t, fd), fam ? ip : 0, port); }
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     char p[110];
     if ((r = sun_path(t, ua, len, p)) < 0) return r;
@@ -1146,6 +1344,7 @@ static long sys_connect(struct task *t, long fd, uint64_t ua, uint64_t len)
 
 static long sys_accept(struct task *t, long fd, long flags)
 {
+    if (getisock(t, fd)) return -EOPNOTSUPP;          /* TCP: clients only */
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     struct file *lf = getf(t, fd);
     struct usock *c;
@@ -1171,6 +1370,7 @@ static long sys_socketpair(struct task *t, long type, uint64_t usv)
 
 static long sys_sendmsg(struct task *t, long fd, uint64_t umsg, long flags)
 {
+    if (getisock(t, fd)) return inet_msg(t, fd, umsg, flags, 1);
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     struct file *sf = getf(t, fd);
     uint64_t m[7];
@@ -1221,6 +1421,7 @@ static long sys_sendmsg(struct task *t, long fd, uint64_t umsg, long flags)
 
 static long sys_recvmsg(struct task *t, long fd, uint64_t umsg, long flags)
 {
+    if (getisock(t, fd)) return inet_msg(t, fd, umsg, flags, 0);
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     struct file *sf = getf(t, fd);
     uint64_t m[7];
@@ -1272,6 +1473,7 @@ static long sys_recvmsg(struct task *t, long fd, uint64_t umsg, long flags)
 
 static long sys_sockopt(struct task *t, long fd, long level, long opt, uint64_t uval, uint64_t ulen)
 {
+    if (getisock(t, fd)) return inet_sockopt(t, getisock(t, fd), level, opt, uval, ulen);
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     if (level != 1) return -ENOPROTOOPT_;
     int v = 0;
@@ -1289,8 +1491,14 @@ static long sys_sockopt(struct task *t, long fd, long level, long opt, uint64_t 
     return copyout(t->mm, ulen, &l, 4);
 }
 
-static long sys_sockname(struct task *t, long fd, uint64_t ua, uint64_t ulen)
+static long sys_sockname(struct task *t, long fd, uint64_t ua, uint64_t ulen, int peer)
 {
+    if (getisock(t, fd)) {
+        uint32_t lip, rip; uint16_t lp, rp;
+        inet_names(getisock(t, fd), &lip, &lp, &rip, &rp);
+        if (peer && !getisock(t, fd)->connected) return -107;      /* ENOTCONN */
+        return peer ? sin_out(t, ua, ulen, rip, rp) : sin_out(t, ua, ulen, lip, lp);
+    }
     long r; struct usock *u = getsock(t, fd, &r); if (!u) return r;
     (void)u;
     uint16_t fam = 1;
@@ -1433,18 +1641,25 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 33: return sys_dup3(t, (long)a, (long)b, 0);
     case 35: return sys_nanosleep(t, a);
     case 39: return t->tgid;
-    case 41: return sys_socket(t, (long)a, (long)b);
+    case 41: return sys_socket(t, (long)a, (long)b, (long)c);
     case 42: return sys_connect(t, (long)a, b, c);
     case 43: return sys_accept(t, (long)a, 0);
     case 288: return sys_accept(t, (long)a, (long)d);
-    case 44: { if (e) return sys_write(t, (long)a, b, c); return sys_write(t, (long)a, b, c); }
-    case 45: return sys_read(t, (long)a, b, c);
+    case 44: if (getisock(t, (long)a)) return inet_sendto(t, (long)a, b, c, (long)d, e, f); return sys_write(t, (long)a, b, c);
+    case 45: if (getisock(t, (long)a)) return inet_recvfrom(t, (long)a, b, c, (long)d, e, f); return sys_read(t, (long)a, b, c);
     case 46: return sys_sendmsg(t, (long)a, b, (long)c);
     case 47: return sys_recvmsg(t, (long)a, b, (long)c);
-    case 48: { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; if (u->peer) u->peer->peer_closed = 1; return 0; }
+    case 48: if (getisock(t, (long)a)) { inet_shutdown(getisock(t, (long)a), (int)b); return 0; }
+             { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; if (u->peer) u->peer->peer_closed = 1; return 0; }
     case 49: return sys_bind(t, (long)a, b, c);
-    case 50: { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; return unix_listen(u); }
-    case 51: case 52: return sys_sockname(t, (long)a, b, c);
+    case 50: if (getisock(t, (long)a)) return -EOPNOTSUPP;
+             { long r; struct usock *u = getsock(t, (long)a, &r); if (!u) return r; return unix_listen(u); }
+    case 51: case 52: return sys_sockname(t, (long)a, b, c, nr == 52);
+    case 37: return sys_alarm(t, a);
+    case 36: return sys_itimer(t, (long)a, 0, b, 0);
+    case 38: return sys_itimer(t, (long)a, b, c, 1);
+    case 307: return sys_mmsg(t, (long)a, b, (long)c, (long)d, 1);
+    case 299: return sys_mmsg(t, (long)a, b, (long)c, (long)d, 0);
     case 53: return sys_socketpair(t, (long)b, d);
     case 54: return 0;
     case 55: return sys_sockopt(t, (long)a, (long)b, (long)c, d, e);

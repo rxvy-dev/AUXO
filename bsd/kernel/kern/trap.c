@@ -2,6 +2,7 @@
 #include "kern.h"
 #include "arch.h"
 #include "rs.h"
+void uproc_tick(uint64_t now);
 #include "uproc.h"
 
 static volatile uint64_t ticks;
@@ -83,7 +84,7 @@ void trap_dispatch(struct trapframe *tf)
         else if (irq == 4) input_serial_irq();
         else if (irq == 12) mouse_irq();
         pic_eoi(irq);                 /* EOI first: the scheduler may not return here */
-        if (irq == 0) { ticks++; rs_tick(); }
+        if (irq == 0) { ticks++; uproc_tick(ticks); rs_tick(); }
         if (user) uproc_irq_return(tf);
     } else if (tf->vector == 0x80) {
         /* BSD-style: number in rax, args in rdi/rsi/rdx, result in rax (<0 = -errno) */

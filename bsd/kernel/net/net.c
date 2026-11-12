@@ -8,6 +8,7 @@
 #include "rs.h"
 #include "pci.h"
 #include "net.h"
+#include "vfs.h"
 
 /* ── byte order and checksums ───────────────────────────────────────── */
 static inline uint16_t htons(uint16_t v) { return (uint16_t)(v << 8 | v >> 8); }
@@ -242,10 +243,37 @@ static int udp_send(uint32_t dst, uint16_t sport, uint16_t dport, const void *da
     return ip_send(dst, 17, p, sizeof *u + len, 1);
 }
 
+/* UDP sockets for programs (DNS lookups by glibc, mostly): a small queue of datagrams each */
+#define NUSK 16
+#define UQ 8
+struct usk {
+    int used, connected;
+    uint16_t lport, rport;
+    uint32_t rip;
+    int qh, qn;
+    struct { uint32_t ip; uint16_t port, len; uint8_t data[1472]; } q[UQ];
+};
+static struct usk usks[NUSK];
+static uint16_t next_uport = 33000;
+static uint32_t cur_src;                     /* source address of the datagram being handled */
+
 static void udp_input(const uint8_t *p, size_t len)
 {
     if (len < sizeof(struct udp)) return;
     const struct udp *u = (const struct udp *)p;
+    for (int i = 0; i < NUSK; i++) {
+        struct usk *k = &usks[i];
+        if (!k->used || k->lport != ntohs(u->dport)) continue;
+        if (k->connected && (k->rip != cur_src || k->rport != ntohs(u->sport))) continue;
+        if (k->qn == UQ) return;
+        size_t n = len - sizeof *u;
+        if (n > sizeof k->q[0].data) n = sizeof k->q[0].data;
+        int slot = (k->qh + k->qn) % UQ;
+        k->q[slot].ip = cur_src; k->q[slot].port = ntohs(u->sport); k->q[slot].len = (uint16_t)n;
+        memcpy(k->q[slot].data, p + sizeof *u, n);
+        k->qn++;
+        return;
+    }
     if (!udp_wait_port || ntohs(u->dport) != udp_wait_port || udp_reply_len) return;
     size_t n = len - sizeof *u;
     if (n > sizeof udp_reply) n = sizeof udp_reply;
@@ -420,7 +448,7 @@ struct tcph {
 #define ACK 0x10
 
 enum { T_FREE, T_SYN_SENT, T_EST, T_FIN_WAIT, T_CLOSE_WAIT, T_DONE, T_RESET };
-#define NSOCK 8
+#define NSOCK 32
 #define RBUF (64 * 1024)
 #define SBUF (16 * 1024)
 
@@ -672,6 +700,120 @@ void tcp_close(int s)
     net_unlock();
 }
 
+/* ── for sockets in Linux programs (sys.c) ──────────────────────────── */
+int tcp_readable(int s)
+{
+    if (s < 0 || s >= NSOCK) return 1;
+    struct tcb *t = &socks[s];
+    return t->rlen || t->peer_fin || t->state == T_RESET || t->state == T_FREE;
+}
+
+int tcp_writable(int s)
+{
+    if (s < 0 || s >= NSOCK) return 0;
+    struct tcb *t = &socks[s];
+    return (t->state == T_EST || t->state == T_CLOSE_WAIT) && t->slen < SBUF && !t->fin_queued;
+}
+
+int tcp_hup(int s)
+{
+    if (s < 0 || s >= NSOCK) return 1;
+    struct tcb *t = &socks[s];
+    return t->state == T_RESET || t->state == T_FREE || (t->peer_fin && t->fin_queued);
+}
+
+void tcp_shutdown(int s)
+{
+    if (s < 0 || s >= NSOCK) return;
+    struct tcb *t = &socks[s];
+    net_lock();
+    if (t->state == T_EST || t->state == T_CLOSE_WAIT) { t->fin_queued = 1; tcp_push(t); }
+    net_unlock();
+}
+
+void tcp_endpoints(int s, uint32_t *lip, uint16_t *lport, uint32_t *rip, uint16_t *rport)
+{
+    struct tcb *t = &socks[s < 0 || s >= NSOCK ? 0 : s];
+    *lip = my_ip; *lport = t->lport; *rip = t->rip; *rport = t->rport;
+}
+
+int udp_open(void)
+{
+    net_lock();
+    for (int i = 0; i < NUSK; i++)
+        if (!usks[i].used) {
+            memset(&usks[i], 0, sizeof usks[i]);
+            usks[i].used = 1;
+            net_unlock();
+            return i;
+        }
+    net_unlock();
+    return -1;
+}
+
+static int uport_free(uint16_t p)
+{
+    for (int i = 0; i < NUSK; i++) if (usks[i].used && usks[i].lport == p) return 0;
+    return p != 68;
+}
+
+int udp_bind(int s, uint16_t port)
+{
+    if (s < 0 || s >= NUSK || !usks[s].used) return -1;
+    net_lock();
+    if (!port) {
+        for (int k = 0; k < 20000 && !port; k++) {
+            uint16_t c = next_uport++;
+            if (next_uport > 60999) next_uport = 33000;
+            if (uport_free(c)) port = c;
+        }
+    } else if (!uport_free(port)) { net_unlock(); return -2; }
+    usks[s].lport = port;
+    net_unlock();
+    return port ? 0 : -1;
+}
+
+int udp_connect(int s, uint32_t ip, uint16_t port)
+{
+    if (s < 0 || s >= NUSK || !usks[s].used) return -1;
+    if (!usks[s].lport && udp_bind(s, 0) < 0) return -1;
+    usks[s].rip = ip; usks[s].rport = port; usks[s].connected = ip != 0;
+    return 0;
+}
+
+int udp_sendto(int s, uint32_t ip, uint16_t port, const void *buf, size_t len)
+{
+    if (s < 0 || s >= NUSK || !usks[s].used || !ready) return -1;
+    if (!usks[s].lport && udp_bind(s, 0) < 0) return -1;
+    if (len > 1472) return -2;
+    net_lock();
+    int r = udp_send(ip, usks[s].lport, port, buf, len);
+    net_unlock();
+    return r < 0 ? -1 : (int)len;
+}
+
+/* one datagram, or -2 when none is waiting */
+int udp_recvfrom(int s, void *buf, size_t cap, uint32_t *ip, uint16_t *port)
+{
+    if (s < 0 || s >= NUSK || !usks[s].used) return -1;
+    net_lock();
+    poll_locked();
+    struct usk *k = &usks[s];
+    if (!k->qn) { net_unlock(); return -2; }
+    size_t n = k->q[k->qh].len < cap ? k->q[k->qh].len : cap;
+    memcpy(buf, k->q[k->qh].data, n);
+    if (ip) *ip = k->q[k->qh].ip;
+    if (port) *port = k->q[k->qh].port;
+    k->qh = (k->qh + 1) % UQ;
+    k->qn--;
+    net_unlock();
+    return (int)n;
+}
+
+int udp_readable(int s) { return s >= 0 && s < NUSK && usks[s].used && usks[s].qn > 0; }
+uint16_t udp_local_port(int s) { return s >= 0 && s < NUSK ? usks[s].lport : 0; }
+void udp_close(int s) { if (s >= 0 && s < NUSK) { net_lock(); usks[s].used = 0; net_unlock(); } }
+
 /* ── receive path ───────────────────────────────────────────────────── */
 static void ip_input(const uint8_t *p, size_t len)
 {
@@ -687,7 +829,7 @@ static void ip_input(const uint8_t *p, size_t len)
     switch (h->proto) {
     case 1:  icmp_input(src, pl, pll); break;
     case 6:  tcp_input(src, pl, pll); break;
-    case 17: udp_input(pl, pll); break;
+    case 17: cur_src = src; udp_input(pl, pll); break;
     }
 }
 
@@ -756,6 +898,14 @@ static void net_thread(uintptr_t arg)
     ksnprintf(status_line, sizeof status_line, "%s via %s (%s), gateway %s", ip, nic.driver, nic.model, gw);
     ready = 1;
     tls_seed();
+    {   /* for Linux programs: the DNS server DHCP gave us, and the usual name service files */
+        char dns[16], rc[64];
+        ip_fmt(my_dns ? my_dns : my_gw, dns, sizeof dns);
+        int n = ksnprintf(rc, sizeof rc, "nameserver %s\n", dns);
+        vfs_write("/etc/resolv.conf", rc, (size_t)n);
+        if (!vfs_exists("/etc/hosts")) { static const char h[] = "127.0.0.1 localhost\n::1 localhost\n"; vfs_write("/etc/hosts", h, sizeof h - 1); }
+        if (!vfs_exists("/etc/nsswitch.conf")) { static const char ns[] = "passwd: files\ngroup: files\nhosts: files dns\n"; vfs_write("/etc/nsswitch.conf", ns, sizeof ns - 1); }
+    }
     for (;;) {
         net_lock();
         poll_locked();

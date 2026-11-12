@@ -5,6 +5,7 @@
 #include "rs.h"
 #include "fs.h"
 #include "uproc.h"
+#include "inet.h"
 #include "unix.h"
 
 #define MAXTASK 128
@@ -69,6 +70,7 @@ void file_put(struct file *f)
         if (!p->readers && !p->writers) { pmm_free_page((uint64_t)(uintptr_t)p->buf); rs_kfree(p); }
     }
     if (f->kind == 5 && f->priv) unix_close(f->priv);
+    if (f->kind == 8 && f->priv) inet_close(f->priv);
     if ((f->kind == 6 || f->kind == 7) && f->priv) rs_kfree(f->priv);
     if (f->node) fs_put(f->node);
     rs_kfree(f);
@@ -167,6 +169,7 @@ int tty_read(void *kbuf, size_t n, int nonblock)
 long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
 {
     (void)t;
+    if (f->kind == 8) return inet_recv(t, f->priv, kbuf, n, (f->flags & 04000) != 0, 0, 0);
     if (f->kind == 5) {                                    /* socket */
         for (;;) {
             long r = unix_recv(f->priv, kbuf, n, 0, 0, 0);
@@ -219,6 +222,7 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
 long file_write(struct task *t, struct file *f, const void *kbuf, size_t n)
 {
     (void)t;
+    if (f->kind == 8) return inet_send(f->priv, kbuf, n, 0, 0, 0);
     if (f->kind == 5) {
         size_t done = 0;
         while (done < n) {
@@ -368,3 +372,14 @@ void uproc_set_fg(int pgid) { fg_pgid = pgid; }
 
 /* iterate tasks for sys.c */
 struct task *task_slot(int i) { return i >= 0 && i < MAXTASK ? &tasks[i] : 0; }
+
+/* from the timer interrupt: SIGALRM for tasks whose alarm() / setitimer() ran out */
+void uproc_tick(uint64_t now)
+{
+    for (int i = 0; i < MAXTASK; i++) {
+        struct task *t = &tasks[i];
+        if (!t->used || !t->alarm_at || now < t->alarm_at) continue;
+        t->pending |= 1ULL << 13;                          /* SIGALRM */
+        t->alarm_at = t->alarm_every ? now + t->alarm_every : 0;
+    }
+}
