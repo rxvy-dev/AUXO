@@ -77,6 +77,9 @@ static struct {
     uint64_t *bdl;
     int running;
     uint32_t cbl;
+    int dead;                  /* a command went unanswered: stop asking (a codec or controller we don't follow) */
+    int budget;                /* commands left for setting up: a strange codec can't hold up the boot */
+    uint8_t seen[128];         /* nodes the path search has been through */
 } h;
 
 int hda_present(void) { return h.m && h.dac > 0; }
@@ -104,12 +107,14 @@ static int wait_bits(uint32_t off, int size, uint32_t mask, uint32_t want, int m
 /* one command, one response (polled) */
 static int cmd(int nid, uint32_t verb, uint32_t payload, uint32_t *resp)
 {
+    if (h.dead || h.budget-- <= 0) return -1;
     uint32_t c = (uint32_t)h.cad << 28 | (uint32_t)(nid & 0x7F) << 20;
     c |= verb <= 0xF ? (verb << 16 | (payload & 0xFFFF)) : (verb << 8 | (payload & 0xFF));
     uint16_t wp = (uint16_t)((r16(CORBWP) + 1) % h.corb_n);
     h.corb[wp] = c;
     w16(CORBWP, wp);
-    for (int i = 0; i < 20000; i++) {
+    uint64_t until = mono_ns() + 50000000ULL;                 /* 50 ms: codecs answer in microseconds */
+    for (;;) {
         uint16_t rwp = r16(RIRBWP) & 0xFF;
         if (rwp != h.rirb_rp) {
             h.rirb_rp = (uint16_t)((h.rirb_rp + 1) % h.rirb_n);
@@ -118,8 +123,10 @@ static int cmd(int nid, uint32_t verb, uint32_t payload, uint32_t *resp)
             if (resp) *resp = (uint32_t)e;
             return 0;
         }
-        for (volatile int k = 0; k < 200; k++) { }
+        if (mono_ns() > until) break;
+        __asm__ volatile("pause");
     }
+    h.dead = 1;
     if (hda_debug) kprintf("hda: no answer to %08x (corb wp %u rp %u, rirb wp %u, ours %u, sts %x)\n", c, r16(CORBWP), r16(CORBRP), r16(RIRBWP), h.rirb_rp, r8(RIRBSTS));
     return -1;
 }
@@ -144,7 +151,8 @@ static int wtype(int nid) { return (int)((param(nid, P_WCAP) >> 20) & 0xF); }
 /* depth-first from a pin to an audio output (DAC), through mixers and selectors */
 static int find_dac(int nid, int depth)
 {
-    if (depth > 5) return 0;
+    if (depth > 5 || nid < 0 || nid > 127 || h.seen[nid]) return 0;
+    h.seen[nid] = 1;                                         /* each node once: no going round mixers forever */
     int t = wtype(nid);
     if (t == 0) { h.path[h.npath++] = nid; return 1; }
     if (depth && t != 2 && t != 3) return 0;              /* only mixers and selectors in between */
@@ -211,6 +219,7 @@ static int setup_codec(int cad)
         }
         if (best < 0) continue;
         h.npath = 0;
+        memset(h.seen, 0, sizeof h.seen);
         if (!find_dac(best, 0)) continue;
         h.pin = best;
         h.dac = h.path[h.npath - 1];
@@ -279,7 +288,8 @@ int hda_init(void)
     uint16_t codecs = r16(STATESTS);
     w16(STATESTS, codecs);
     int ok = -1;
-    for (int c = 0; c < 15 && ok < 0; c++) if (codecs & (1u << c)) ok = setup_codec(c);
+    for (int c = 0; c < 15 && ok < 0; c++) if (codecs & (1u << c)) { h.dead = 0; h.budget = 3000; ok = setup_codec(c); }
+    h.budget = 1 << 30;
     if (ok < 0) { kprintf("hda : controller %04x:%04x, but no codec with an output\n", d->vendor, d->device); h.dac = 0; return -1; }
     /* the play-out ring: 256 KiB, and the buffer descriptor list */
     h.ring_cap = 256 * 1024;

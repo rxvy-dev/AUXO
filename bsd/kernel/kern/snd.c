@@ -666,9 +666,11 @@ int snd_ready(struct file *f)
 
 uint64_t snd_rdev(struct node *n) { return n->dev == DEV_SND_CTL ? (116u << 8) | 0 : (116u << 8) | 16; }
 
-/* /dev/snd: made when there's a sound card */
-void snd_init(void)
+/* /dev/snd: made when there's a sound card. In a thread of its own, after the boot: a sound
+   chip that's slow to answer (or one we don't understand) must never hold up the desktop. */
+static void snd_thread(uintptr_t arg)
 {
+    (void)arg;
     if (hda_init() < 0) return;
     pcm.ring = hda_ring(&pcm.ring_cap);
     /* the ring as a file of its own, for mmap: its pages are the controller's, never moved or freed */
@@ -688,3 +690,5 @@ void snd_init(void)
     }
     kprintf("snd : HDA Intel, codec %s, playing on the %s: /dev/snd (ALSA)\n", hda_codec_name(), hda_output_name());
 }
+
+void snd_init(void) { rs_spawn("snd", snd_thread, 0); }

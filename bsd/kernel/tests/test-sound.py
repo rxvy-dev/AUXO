@@ -59,6 +59,7 @@ def main():
         if not up:
             return
         m.run("")
+        m.run("busybox sleep 2")                         # (the card is set up in the background)
         hw.check(re.search(r"snd : HDA Intel, codec 1af4:\w+, playing on the line out", m.text()) is not None,
                  "the HD Audio card and its codec are found", m.text()[-2500:])
         out = m.run("busybox ls -l /dev/snd")
