@@ -14,12 +14,14 @@ OUT=${1:-build}
 SET=${ROOTFS_SET:-dev}
 WORK=$OUT/rootfs-work
 ROOT=$OUT/rootfs
+rm -rf "$ROOT" "$WORK/debs"            # start clean: nothing left over from another set
 mkdir -p "$WORK/debs" "$ROOT"
 
 PKGS="gcc cpp binutils libc6-dev make busybox-static"
 if [ "$SET" = full ]; then
     PKGS="$PKGS python3 python3-gi python3-gi-cairo python3-cairo libc-bin gir1.2-gtk-4.0 gir1.2-gtksource-5 libgtk-4-1 libgtksourceview-5-0
-          fonts-dejavu-core fonts-dejavu-mono fonts-dejavu-extra adwaita-icon-theme gsettings-desktop-schemas shared-mime-info"
+          fonts-dejavu-core fonts-dejavu-mono fonts-dejavu-extra adwaita-icon-theme gsettings-desktop-schemas shared-mime-info
+          ca-certificates glib-networking"
 fi
 
 echo "rootfs: resolving $SET packages"
@@ -27,7 +29,7 @@ echo "rootfs: resolving $SET packages"
 apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces \
     --no-enhances $PKGS 2>/dev/null | grep -v '^ ' | grep -v '^<' | sort -u > "$WORK/pkgs.txt"
 # things a package needs only for its maintainer scripts (we never run those)
-grep -vxE 'debconf|perl-base|dpkg|install-info|libdebconfclient0|sensible-utils|ucf|tzdata|base-files|mount|util-linux|libpam.*|login|passwd|adduser|init-system-helpers|systemd.*|libsystemd.*|dbus.*|libdbus.*|lsb-base|coreutils|bash|dash|debianutils|diffutils|findutils|grep|gzip|sed|tar|hostname|ncurses-bin|ncurses-base|libselinux1|libsemanage.*|libaudit.*|libcap-ng0|libacl1|libattr1|libpcre2-8-0|libbz2-1.0|liblzma5|libudev1|libmount1|libblkid1|libsmartcols1|gpgv|libgcrypt20|libgpg-error0|libcap2|libxxhash0|libzstd1-x' \
+grep -vxE 'debconf|perl-base|dpkg|install-info|sensible-utils|ucf|tzdata|base-files|mount|util-linux|login|passwd|adduser|init-system-helpers|systemd|systemd-.*|dbus|dbus-.*|lsb-base|coreutils|bash|dash|debianutils|diffutils|findutils|grep|gzip|sed|tar|hostname|ncurses-bin|ncurses-base|gpgv' \
     "$WORK/pkgs.txt" > "$WORK/want.txt" || true
 grep -qx libpcre2-8-0 "$WORK/pkgs.txt" && echo libpcre2-8-0 >> "$WORK/want.txt"      # GLib needs it
 grep -qx libselinux1 "$WORK/pkgs.txt" && echo libselinux1 >> "$WORK/want.txt"        # GLib/GIO link it
@@ -86,11 +88,23 @@ if [ "$SET" = full ]; then
            "$ROOT/usr/lib/x86_64-linux-gnu/libLLVM"* "$ROOT/usr/lib/x86_64-linux-gnu/libgallium"* 2>/dev/null || true
 fi
 
+# the CA bundle ca-certificates' own script would make (GnuTLS, OpenSSL and Python read it)
+if [ -d "$ROOT/usr/share/ca-certificates/mozilla" ]; then
+    mkdir -p "$ROOT/etc/ssl/certs"
+    cat "$ROOT"/usr/share/ca-certificates/mozilla/*.crt > "$ROOT/etc/ssl/certs/ca-certificates.crt"
+fi
+
 # drop what a live system doesn't need
 rm -rf "$ROOT/usr/share/doc" "$ROOT/usr/share/man" "$ROOT/usr/share/info" "$ROOT/usr/share/lintian" \
        "$ROOT/usr/share/locale" "$ROOT/usr/lib/x86_64-linux-gnu/gconv" "$ROOT/usr/share/bug"
 # sanitizer runtimes are large and need a real Linux kernel anyway
-rm -f "$ROOT"/usr/lib/x86_64-linux-gnu/lib{a,hwa,l,t,ub}san.so* 2>/dev/null || true
+for s in asan hwasan lsan tsan ubsan; do rm -f "$ROOT"/usr/lib/x86_64-linux-gnu/lib$s.so*; done   # (sh: no {a,b} expansion)
+# spelling dictionaries: every language comes in through "one of these" dependencies; English stays
+rm -rf "$ROOT/usr/share/hunspell-bdic" "$ROOT/usr/share/aspell" "$ROOT/usr/share/ispell" "$ROOT/usr/share/myspell" \
+       "$ROOT/usr/lib/x86_64-linux-gnu/aspell" 2>/dev/null || true
+if [ -d "$ROOT/usr/share/hunspell" ]; then
+    find "$ROOT/usr/share/hunspell" -mindepth 1 ! -name 'en_US*' -exec rm -rf {} + 2>/dev/null || true
+fi
 
 mkdir -p "$ROOT/etc" "$ROOT/home/root" "$ROOT/tmp" "$ROOT/root" "$ROOT/dev" "$ROOT/proc" "$ROOT/run" "$ROOT/var/tmp"
 cat > "$ROOT/etc/os-release" <<EOF

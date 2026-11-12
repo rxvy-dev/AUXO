@@ -595,8 +595,23 @@ static void run(char *line)
     char *argv[MAXARGS];
     int argc = split(line, argv);
     if (!argc) return;
-    for (const struct cmd *c = cmds; c->name; c++)
-        if (!strcmp(c->name, argv[0])) { c->fn(argc, argv); return; }
+    /* NAME=value before the command: extra environment, as in any shell */
+    char *extra[16];
+    int nextra = 0;
+    while (argc > 1 && nextra < 16) {
+        char *eq = strchr(argv[0], '=');
+        if (!eq || eq == argv[0]) break;
+        int ok = 1;
+        for (char *q = argv[0]; q < eq; q++) if (!((*q >= 'A' && *q <= 'Z') || (*q >= 'a' && *q <= 'z') || (*q >= '0' && *q <= '9') || *q == '_')) ok = 0;
+        if (!ok) break;
+        extra[nextra++] = argv[0];
+        memmove(argv, argv + 1, sizeof argv[0] * (size_t)(--argc));
+    }
+    int background = argc > 1 && !strcmp(argv[argc - 1], "&");   /* `prog &`: don't wait for it */
+    if (background) argc--;
+    if (!nextra && !background)
+        for (const struct cmd *c = cmds; c->name; c++)
+            if (!strcmp(c->name, argv[0])) { c->fn(argc, argv); return; }
     /* a program from the root filesystem: real Linux binaries (gcc, make, busybox …) */
     char path[VFS_PATH];
     struct node *n = 0;
@@ -616,8 +631,24 @@ static void run(char *line)
                      "XDG_RUNTIME_DIR=/run/user/0", "WAYLAND_DISPLAY=wayland-0", "GDK_BACKEND=wayland", "GSK_RENDERER=cairo",
                      "GDK_DEBUG=gl-disable,vulkan-disable", "GTK_A11Y=none", "NO_AT_BRIDGE=1", "DBUS_SESSION_BUS_ADDRESS=disabled:",
                      "XDG_DATA_DIRS=/usr/share", 0 };
+    char *env[64];
+    int ne = 0;
+    for (int i = 0; envp[i]; i++) {                              /* defaults, minus the ones given */
+        size_t kl = (size_t)(strchr(envp[i], '=') - envp[i]);
+        int over = 0;
+        for (int j = 0; j < nextra; j++) if (!strncmp(extra[j], envp[i], kl + 1)) over = 1;
+        if (!over) env[ne++] = envp[i];
+    }
+    for (int j = 0; j < nextra; j++) env[ne++] = extra[j];
+    env[ne] = 0;
     argv[argc] = 0;
-    int pid = uproc_spawn(path, argv, envp, cwd);
+    if (background) {
+        int pid = uproc_spawn_detached(path, argv, env, cwd);
+        if (pid < 0) kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid);
+        else kprintf("[%d] %s\n", pid, argv[0]);
+        return;
+    }
+    int pid = uproc_spawn(path, argv, env, cwd);
     if (pid < 0) { kprintf("auxsh: %s: can't start it (error %d)\n", argv[0], -pid); return; }
     int st = 0;
     uproc_wait(pid, &st);

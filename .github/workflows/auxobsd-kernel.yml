@@ -9,7 +9,7 @@ on:
 
 jobs:
   kernel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04            # AuxoBSD's root image and pkg are Ubuntu 24.04 (noble)
     timeout-minutes: 90
     defaults:
       run:

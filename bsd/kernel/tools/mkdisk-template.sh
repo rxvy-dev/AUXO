@@ -25,7 +25,9 @@ EOF
 dd if=/dev/zero of="$OUT/install.img" bs=1M count=17 status=none
 
 # BIOS: boot.img points at core.img on LBA 1; diskboot's block list loads the rest from LBA 2
-grub-mkimage -O i386-pc -o "$W/core.img" -c "$W/early.cfg" -p /boot/grub biosdisk $MODS
+# only the modules this GRUB has (newer builds dropped some, efi_uga for one)
+have() { dir=/usr/lib/grub/$1; shift; for m in "$@"; do [ -f "$dir/$m.mod" ] && printf '%s ' "$m"; done; }
+grub-mkimage -O i386-pc -o "$W/core.img" -c "$W/early.cfg" -p /boot/grub $(have i386-pc biosdisk $MODS)
 SECTORS=$(( ($(stat -c %s "$W/core.img") + 511) / 512 ))
 [ "$SECTORS" -lt 2040 ] || { echo "core.img too big ($SECTORS sectors)"; exit 1; }
 dd if=/usr/lib/grub/i386-pc/boot.img of="$OUT/install.img" bs=446 count=1 conv=notrunc status=none
@@ -42,7 +44,7 @@ open(path, "wb").write(img)
 EOF
 
 # UEFI: an ESP with \EFI\BOOT\BOOTX64.EFI
-grub-mkimage -O x86_64-efi -o "$W/BOOTX64.EFI" -c "$W/early.cfg" -p /boot/grub $MODS efi_gop efi_uga
+grub-mkimage -O x86_64-efi -o "$W/BOOTX64.EFI" -c "$W/early.cfg" -p /boot/grub $(have x86_64-efi $MODS efi_gop efi_uga)
 rm -f "$W/esp.img"
 mformat -i "$W/esp.img" -C -T 32768 -h 2 -s 16 -v AUXOBSD-EFI ::
 mmd -i "$W/esp.img" ::/EFI ::/EFI/BOOT
