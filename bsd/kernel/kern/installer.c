@@ -89,7 +89,7 @@ void installer_paint(const struct app_ctx *a)
         button(c, a, &next_b, X + a->w - 160, Y + a->h - 58, 130, "Next", k->accent, k->accent_fg);
     } else if (step == S_DISK) {
         gfx_text(c, &font_head, cx, cy, "Choose a disk", k->fg);
-        if (!disk_count()) gfx_text_fit(c, &font_ui, cx, cy + 50, cw, "No disks found. (IDE, SATA/AHCI and NVMe are supported.)", k->dim);
+        if (!disk_count()) gfx_text_fit(c, &font_ui, cx, cy + 50, cw, "No disks found. (IDE, SATA/AHCI, NVMe and USB are supported.)", k->dim);
         for (int i = 0; i < disk_count() && i < 16; i++) {
             struct disk *d = disk_get(i);
             int y = cy + 50 + i * 66;
@@ -98,6 +98,7 @@ void installer_paint(const struct app_ctx *a)
             uint32_t fg = i == sel ? k->accent_fg : k->fg;
             char sz[24];
             size_str(d->sectors, sz, sizeof sz);
+            if (d->gone) strlcpy(sz, "unplugged", sizeof sz);
             ksnprintf(line, sizeof line, "%s  ·  %s", d->model[0] ? d->model : "Disk", sz);
             gfx_text_fit(c, &font_bold, cx + 16, y + 10, cw - 32, line, fg);
             ksnprintf(line, sizeof line, "%s  ·  %s%s", d->name, d->bus, d->boot ? "  ·  AuxoBSD is installed here" : "");
@@ -153,7 +154,7 @@ int installer_click(int x, int y, int w, int h)
     switch (step) {
     case S_WELCOME: if (in(&next_b, x, y)) step = S_DISK; break;
     case S_DISK:
-        for (int i = 0; i < disk_count() && i < 16; i++) if (in(&disk_b[i], x, y)) sel = i;
+        for (int i = 0; i < disk_count() && i < 16; i++) if (in(&disk_b[i], x, y) && !disk_get(i)->gone) sel = i;
         if (in(&back_b, x, y)) step = S_WELCOME;
         if (in(&next_b, x, y) && sel >= 0) { step = S_OPTIONS; agree = 0; }
         break;

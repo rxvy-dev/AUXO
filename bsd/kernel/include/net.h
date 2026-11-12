@@ -21,6 +21,8 @@ struct nic {
 
 int  e1000_probe(struct pci_dev *d, struct nic *n);      /* 0 if it took the card */
 int  rtl8169_probe(struct pci_dev *d, struct nic *n);
+int  igb_probe(struct pci_dev *d, struct nic *n);        /* I210/I211/I350/82576, I225/I226 */
+void net_attach(const struct nic *n);     /* a USB adapter or phone was plugged in */
 
 /* net.c */
 void net_init(void);                 /* find a card, start the net thread (DHCP) */

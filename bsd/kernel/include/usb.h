@@ -12,5 +12,6 @@ int usb_list(char *out, size_t n);          /* lsusb lines; returns the device c
 /* what the USB thread feeds into */
 void input_scancode(unsigned char sc);      /* a PS/2 set-1 scancode, as if from the keyboard */
 void mouse_push(int dx, int dy, int wheel, int buttons);
+void mouse_push_abs(int ax, int ay, int wheel, int buttons);      /* 0..32767 */
 void mouse_usb_attached(void);
 #endif

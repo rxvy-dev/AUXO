@@ -46,6 +46,8 @@ static void apply_kv(const char *kv)
         auxo.motd = strcmp(val, "0") && strcmp(val, "off");
     } else if (!strcmp(key, "nocolor") || !strcmp(key, "NO_COLOR")) {
         auxo.color = 0;
+    } else if (!strcmp(key, "text") || !strcmp(key, "nogui")) {
+        auxo.text = 1;
     } else if (!strcmp(key, "color")) {
         auxo.color = strcmp(val, "0") && strcmp(val, "off");
     }

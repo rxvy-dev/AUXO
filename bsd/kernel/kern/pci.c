@@ -202,6 +202,10 @@ static const struct idname known[] = {
     { 0x10DE, 0x1F02, "GeForce RTX 2070" },     { 0x10DE, 0x1F08, "GeForce RTX 2060" },
     { 0x10DE, 0x2184, "GeForce GTX 1660" },     { 0x10DE, 0x1B80, "GeForce GTX 1080" },
     { 0x10DE, 0x1B81, "GeForce GTX 1070" },     { 0x10DE, 0x1C82, "GeForce GTX 1050 Ti" },
+    /* Intel Ethernet */
+    { 0x8086, 0x1533, "Ethernet I210" }, { 0x8086, 0x1539, "Ethernet I211" }, { 0x8086, 0x15F3, "Ethernet I225-V" },
+    { 0x8086, 0x125C, "Ethernet I226-V" }, { 0x8086, 0x125B, "Ethernet I226-LM" }, { 0x8086, 0x10C9, "82576 Gigabit" },
+    { 0x8086, 0x1521, "Ethernet I350" },
     /* AMD Radeon: RDNA 4, 3, 2 */
     { 0x1002, 0x7550, "Radeon RX 9070 / 9070 XT" }, { 0x1002, 0x7590, "Radeon RX 9060 XT" },
     { 0x1002, 0x744C, "Radeon RX 7900 XT/XTX" },    { 0x1002, 0x7448, "Radeon Pro W7900" },
@@ -232,7 +236,7 @@ static const struct idname known[] = {
     { 0x8086, 0x15B8, "I219-V" },               { 0x8086, 0x15BC, "I219-V" },
     { 0x8086, 0x15FA, "I219-V" },               { 0x8086, 0x1A1F, "I219-V" },
     { 0x10EC, 0x8168, "RTL8111/8168 Gigabit" }, { 0x10EC, 0x8169, "RTL8169 Gigabit" },
-    { 0x10EC, 0x8161, "RTL8111 Gigabit" },      { 0x10EC, 0x8125, "RTL8125 2.5GbE" },
+    { 0x10EC, 0x8161, "RTL8111 Gigabit" },     
     { 0x10EC, 0x8139, "RTL8139" },              { 0x8086, 0x15F3, "I225-V 2.5GbE" },
     { 0x8086, 0x125C, "I226-V 2.5GbE" },
     /* Wi-Fi */

@@ -858,6 +858,27 @@ int net_wait_ready(int timeout_ms)
     return ready ? 0 : -1;
 }
 
+/* a network adapter that turned up later (USB Ethernet, a phone tethering over USB): it's used
+ * if there's no card yet, or if the card has no cable and no address yet */
+static struct nic pending;
+static volatile int have_pending;
+void net_attach(const struct nic *n)
+{
+    pending = *n;
+    have_pending = 1;
+}
+
+static int take_pending(void)
+{
+    if (!have_pending) return 0;
+    net_lock();
+    nic = pending;
+    have_pending = 0;
+    have_nic = 1;
+    net_unlock();
+    return 1;
+}
+
 /* ── the net thread ─────────────────────────────────────────────────── */
 static void net_thread(uintptr_t arg)
 {
@@ -866,19 +887,21 @@ static void net_thread(uintptr_t arg)
         struct pci_dev *d = pci_get(i);
         if (d->class != 0x02 || d->subclass != 0x00) continue;
         memset(&nic, 0, sizeof nic);
-        if (e1000_probe(d, &nic) == 0 || rtl8169_probe(d, &nic) == 0) have_nic = 1;
+        if (e1000_probe(d, &nic) == 0 || igb_probe(d, &nic) == 0 || rtl8169_probe(d, &nic) == 0) have_nic = 1;
     }
     if (!have_nic) {
         const struct pci_dev *eth = pci_find_class(0x02, 0x00, 0), *wifi = pci_wifi();
         char nm[64];
-        if (eth) { pci_describe(eth, nm, sizeof nm); ksnprintf(status_line, sizeof status_line, "no driver for %s", nm); }
-        else if (wifi) { pci_describe(wifi, nm, sizeof nm); ksnprintf(status_line, sizeof status_line, "Wi-Fi only (%s): not supported yet", nm); }
-        return;
+        if (eth) { pci_describe(eth, nm, sizeof nm); ksnprintf(status_line, sizeof status_line, "no driver for %s (USB tethering works)", nm); }
+        else if (wifi) { pci_describe(wifi, nm, sizeof nm); ksnprintf(status_line, sizeof status_line, "Wi-Fi (%s) isn't supported: plug in a phone with USB tethering on", nm); }
+        else ksnprintf(status_line, sizeof status_line, "no network adapter: plug in a phone with USB tethering on, or a USB Ethernet adapter");
+        while (!take_pending()) wait_tick();                 /* until something's plugged in */
     }
     char mac[24];
     ksnprintf(mac, sizeof mac, "%02x:%02x:%02x:%02x:%02x:%02x", nic.mac[0], nic.mac[1], nic.mac[2], nic.mac[3], nic.mac[4], nic.mac[5]);
     ksnprintf(status_line, sizeof status_line, "%s (%s), waiting for link", nic.model, nic.driver);
     for (int tries = 0; ; tries++) {
+        if (have_pending && !nic.link(&nic)) take_pending();   /* no cable, but a phone's plugged in */
         if (!nic.link(&nic)) {
             ksnprintf(status_line, sizeof status_line, "%s: cable unplugged", nic.model);
             for (int i = 0; i < 100; i++) wait_tick();

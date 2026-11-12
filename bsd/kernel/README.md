@@ -199,14 +199,32 @@ make USE_RUST=0 # build without Rust (needs rs_* stubs)
 
 The version comes from `bsd/kernel/VERSION`.
 
+## Hardware support
+
+| Area | Drivers |
+|---|---|
+| Graphics | any firmware framebuffer (BIOS VBE or UEFI GOP; 15/16/24/32 bpp), mapped wherever the card puts it, above 4 GiB and 512 GiB included (NVIDIA, AMD and Intel cards alike); a text console on the framebuffer when there's no VGA text mode |
+| Wired network | Intel e1000/e1000e (82540–82579, I217–I219), Intel igb/igc (82576, I210, I211, I350, I225, I226), Realtek RTL8111/8168/8169 |
+| USB | xHCI with hubs and hot-plug; keyboards, mice, tablets/touchscreens (absolute pointers), USB sticks and drives (`usbN` disks), phone tethering and USB Ethernet (RNDIS, CDC-ECM) |
+| Storage | AHCI (SATA), NVMe, IDE, USB mass storage |
+| Memory | up to 128 GiB |
+| Power | ACPI power off and reset |
+
+Not there yet: Wi-Fi (tether a phone over USB instead), GPU acceleration, sound, the
+Realtek RTL8125 (2.5 Gbit).
+
 ## Running it in a VM
 
 - **QEMU:** `make run`, or `qemu-system-x86_64 -cdrom build/auxobsd.iso -m 256M`.
 - **VirtualBox:** create the VM as *Type: Other, Version: Other/Unknown (64-bit)* (or
-  *FreeBSD (64-bit)*), leave **EFI off** (the ISO boots through BIOS GRUB), 64 MB of RAM or more.
-  A 32-bit VM type hides long mode from the guest; AuxoBSD then stops with a message saying so
-  (older builds triple-faulted, which VirtualBox reports as a "critical error").
-  A serial port is optional: without one, auxsh uses the PS/2 keyboard and the screen only.
+  *FreeBSD (64-bit)*); EFI on or off both work. Give it 2 GB of RAM or more for the desktop and
+  Linux programs. After you pick a boot menu entry, GRUB loads the 350 MB system image: the
+  screen says so and stays still for a while, which is normal. A 32-bit VM type hides long mode
+  from the guest; AuxoBSD then stops with a message saying so.
+  A serial port is optional: without one, auxsh uses the keyboard and the screen only.
+- **If the screen stays black** after that, pick *text console* in the boot menu: it draws a
+  plain console on the framebuffer, BIOS or UEFI. If the kernel ever crashes, the error is drawn
+  on the screen over the desktop; a photo of it is the most useful bug report.
 
 ## Boot Output
 

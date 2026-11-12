@@ -217,11 +217,18 @@ static long sys_read(struct task *t, long fd, uint64_t ubuf, uint64_t n)
     }
     uint8_t *kb = kbuf_get();
     if (!kb) return -ENOMEM;
-    if (n > KBUF) n = KBUF;
-    long r = file_read(t, f, kb, n);
-    if (r > 0 && copyout(t->mm, ubuf, kb, (size_t)r) < 0) r = -EFAULT;
+    /* /dev/zero and /dev/urandom fill the whole read, as on Linux (dd counts on it) */
+    int full = f->node && f->node->type == N_CHR && (f->node->dev == DEV_ZERO || f->node->dev == DEV_RANDOM);
+    long total = 0;
+    do {
+        size_t c = n - (uint64_t)total > KBUF ? KBUF : (size_t)(n - (uint64_t)total);
+        long r = file_read(t, f, kb, c);
+        if (r > 0 && copyout(t->mm, ubuf + (uint64_t)total, kb, (size_t)r) < 0) r = -EFAULT;
+        if (r <= 0) { if (!total) total = r; break; }
+        total += r;
+    } while (full && (uint64_t)total < n);
     rs_kfree(kb);
-    return r;
+    return total;
 }
 
 static long sys_write(struct task *t, long fd, uint64_t ubuf, uint64_t n)

@@ -279,7 +279,20 @@ int fs_reserve(struct node *n, uint64_t want)
     uint64_t cap = n->cap ? n->cap : PAGE_SIZE;
     while (cap < want) cap *= 2;
     if (cap < PAGE_SIZE) cap = PAGE_SIZE;
-    uint64_t pg = pmm_alloc_contig(cap / PAGE_SIZE);
+    /* our own pages, nothing mapped shared: grow in place when the pages after are free (no copy,
+     * and no holes left behind, which big files would otherwise run into) */
+    if (n->cap && !n->maps) {
+        uint64_t exact = (want + 0x1FFFFF) & ~0x1FFFFFULL;      /* or just what's needed, in 2 MiB */
+        uint64_t tries[2] = { cap, exact < cap ? exact : cap };
+        for (int k = 0; k < 2; k++)
+            if (pmm_grow((uint64_t)(uintptr_t)n->data, n->cap / PAGE_SIZE, tries[k] / PAGE_SIZE) == 0) {
+                memset(n->data + n->cap, 0, tries[k] - n->cap);
+                n->cap = tries[k];
+                return 0;
+            }
+    }
+    uint64_t pg = pmm_alloc_contig_any(cap / PAGE_SIZE);
+    if (!pg && want > PAGE_SIZE) { cap = (want + 0x1FFFFF) & ~0x1FFFFFULL; pg = pmm_alloc_contig_any(cap / PAGE_SIZE); }
     if (!pg) return -12;
     uint8_t *d = (uint8_t *)(uintptr_t)pg;
     if (n->size) memcpy(d, n->data, n->size);

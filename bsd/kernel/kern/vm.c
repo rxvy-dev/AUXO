@@ -6,25 +6,60 @@
 
 extern uint64_t boot_pdpt[512];
 
+/* 2 MiB mappings anywhere. Firmware puts 64-bit device memory (GPU framebuffers, xHCI and NVMe
+ * registers) wherever it likes: above 512 GiB is common with UEFI, terabytes up on some boards.
+ * Below 64 TiB it's mapped at the same address (identity); higher than that isn't a valid
+ * x86-64 address, so it goes into a window of its own. Page tables come from a small static
+ * pool until the page allocator is up (the framebuffer is mapped before that). */
+extern uint64_t pml4[512];
+static uint64_t early_tables[8][512] __attribute__((aligned(4096)));
+static int early_used;
+#define HIGH_WINDOW (1ULL << 46)                        /* 64 TiB: device memory above it lands here */
+static uint64_t window_next = HIGH_WINDOW;
+
+static uint64_t *new_table(void)
+{
+    uint64_t *t = 0;
+    if (pmm_ready()) { uint64_t p = pmm_alloc_page(); t = (uint64_t *)(uintptr_t)p; }
+    else if (early_used < 8) t = early_tables[early_used++];
+    if (t) memset(t, 0, PAGE_SIZE);
+    return t;
+}
+
+static int map_2m(uint64_t va, uint64_t pa, uint64_t attr)
+{
+    uint64_t *l4 = &pml4[(va >> 39) & 511];
+    if (!(*l4 & 1)) { uint64_t *t = new_table(); if (!t) return -1; *l4 = (uint64_t)(uintptr_t)t | 3; }
+    uint64_t *pdpt = (uint64_t *)(uintptr_t)(*l4 & 0x000FFFFFFFFFF000ULL);
+    uint64_t *l3 = &pdpt[(va >> 30) & 511];
+    if (!(*l3 & 1)) { uint64_t *t = new_table(); if (!t) return -1; *l3 = (uint64_t)(uintptr_t)t | 3; }
+    if (*l3 & 0x80) return 0;                                         /* a 1 GiB page is there already */
+    uint64_t *pd = (uint64_t *)(uintptr_t)(*l3 & 0x000FFFFFFFFFF000ULL);
+    pd[(va >> 21) & 511] = (pa & ~0x1FFFFFULL) | 0x83 | attr;
+    __asm__ volatile("invlpg (%0)" :: "r"(va) : "memory");
+    return 0;
+}
+
+static void *map_range(uint64_t phys, uint64_t len, uint64_t attr)
+{
+    if (!len) return 0;
+    uint64_t base = phys & ~0x1FFFFFULL, end = (phys + len + 0x1FFFFF) & ~0x1FFFFFULL;
+    uint64_t va = base;
+    if (end > HIGH_WINDOW) {                                          /* not addressable as is */
+        va = window_next;
+        window_next += end - base;
+        if (window_next > (1ULL << 47)) return 0;
+    }
+    for (uint64_t a = base; a < end; a += 0x200000)
+        if (map_2m(va + (a - base), a, attr) < 0) return 0;
+    return (void *)(uintptr_t)(va + (phys - base));
+}
+
 void *vm_map_mmio(uint64_t phys, uint64_t len, int uncached)
 {
     if (!len) return 0;
-    uint64_t end = phys + len;
-    if (end <= 0x100000000ULL) return (void *)(uintptr_t)phys;      /* already there */
-    if (end > 512ULL << 30) return 0;                                /* one PDPT = 512 GiB */
-    for (uint64_t a = phys & ~0x1FFFFFULL; a < end; a += 0x200000) {
-        int pdpi = (int)(a >> 30), pdi = (int)((a >> 21) & 511);
-        if (!(boot_pdpt[pdpi] & 1)) {
-            uint64_t pg = pmm_alloc_page();
-            if (!pg) return 0;
-            memset((void *)(uintptr_t)pg, 0, PAGE_SIZE);
-            boot_pdpt[pdpi] = pg | 3;
-        }
-        uint64_t *pd = (uint64_t *)(uintptr_t)(boot_pdpt[pdpi] & ~0xFFFULL);
-        pd[pdi] = a | 0x83 | (uncached ? 0x18 : 0);                  /* P | RW | PS (| PWT | PCD) */
-        __asm__ volatile("invlpg (%0)" :: "r"(a) : "memory");
-    }
-    return (void *)(uintptr_t)phys;
+    if (phys + len <= 0x100000000ULL) return (void *)(uintptr_t)phys;   /* already there */
+    return map_range(phys, len, uncached ? 0x18 : 0);
 }
 
 /* PAT: entry 1 (PWT alone) becomes write-combining. A framebuffer mapped write-combining is
@@ -47,23 +82,19 @@ void pat_init(void)
     pat_ok = 1;
 }
 
-/* The framebuffer, write-combining. Runs before the page allocator, so page directories for
- * a framebuffer above 4 GiB come from here (2 GiB of 2 MiB pages is far more than any mode). */
-static uint64_t fb_pd[2][512] __attribute__((aligned(4096)));
+/* The framebuffer, write-combining (below 4 GiB too: the boot map makes that window uncached) */
 void *vm_map_fb(uint64_t phys, uint64_t len)
 {
-    uint64_t end = phys + len, attr = pat_ok ? 0x08 : 0x18;          /* PWT = WC, else UC */
-    if (!len || end > 512ULL << 30) return 0;
-    int used = 0;
-    for (uint64_t a = phys & ~0x1FFFFFULL; a < end; a += 0x200000) {
-        int pdpi = (int)(a >> 30), pdi = (int)((a >> 21) & 511);
-        if (!(boot_pdpt[pdpi] & 1)) {
-            if (used == 2) return 0;
-            boot_pdpt[pdpi] = (uint64_t)(uintptr_t)fb_pd[used++] | 3;
-        }
-        uint64_t *pd = (uint64_t *)(uintptr_t)(boot_pdpt[pdpi] & ~0xFFFULL);
-        pd[pdi] = a | 0x83 | attr;
-        __asm__ volatile("invlpg (%0)" :: "r"(a) : "memory");
+    return map_range(phys, len, pat_ok ? 0x08 : 0x18);                /* PWT = WC, else UC */
+}
+
+/* RAM above 4 GiB, identity-mapped write-back with 2 MiB pages (base and len 2 MiB aligned) */
+int vm_map_ram(uint64_t base, uint64_t len)
+{
+    for (uint64_t a = base; a < base + len; a += 0x200000) {
+        if (map_2m(a, a, 0) < 0) return -1;                       /* present, writable, 2 MiB */
     }
-    return (void *)(uintptr_t)phys;
+    uint64_t cr3;
+    __asm__ volatile("mov %%cr3, %0; mov %0, %%cr3" : "=r"(cr3) :: "memory");
+    return 0;
 }

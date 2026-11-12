@@ -41,7 +41,7 @@ static uint64_t *table(uint64_t e) { return (uint64_t *)(uintptr_t)ADDR(e); }
 
 static uint64_t zpage(void)
 {
-    uint64_t p = pmm_alloc_page();
+    uint64_t p = pmm_alloc_page_any();
     if (p) memset((void *)(uintptr_t)p, 0, PAGE_SIZE);
     return p;
 }
@@ -287,7 +287,7 @@ struct mm *mm_clone_l(struct mm *src)
             uint64_t *dp = pte(m, a, 1);
             if (!dp) { mm_put(m); return 0; }
             if (*sp & SHR) { *dp = *sp; continue; }
-            uint64_t pg = pmm_alloc_page();
+            uint64_t pg = pmm_alloc_page_any();
             if (!pg) { mm_put(m); return 0; }
             memcpy((void *)(uintptr_t)pg, (void *)(uintptr_t)ADDR(*sp), PAGE_SIZE);
             *dp = pg | (*sp & 0xFFF);

@@ -6,17 +6,25 @@ xHCI) and checks:
   - the xHCI driver finds the keyboards, the mouse and the hub (lsusb);
   - typing on the USB keyboard works, Shift included (keys go through QEMU's USB keyboard);
   - unplugging a USB device is noticed;
-  - ACPI power-off really switches the machine off.
+  - ACPI power-off really switches the machine off;
+  - then a second PC with an Intel I210-class card (QEMU's igb, an 82576), a USB stick and a
+    USB tablet: DHCP on igb, a 3 MB download that checksums right, the stick as a disk usb0
+    (write + read back), the tablet as an absolute pointer;
+  - and a third with no network card at all, only a phone tethered over USB (RNDIS): DHCP
+    and the same download over it.
 
   python3 tests/test-hw.py build/auxobsd.iso
 """
 import os
+import hashlib
+import http.server
 import re
 import shutil
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 ANSI = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
@@ -37,19 +45,20 @@ def check(ok, what, detail=""):
 
 
 class Machine:
-    def __init__(self, tmp, iso):
-        self.ser, self.mon = os.path.join(tmp, "ttyS0"), os.path.join(tmp, "mon")
+    def __init__(self, tmp, iso, devices=None, name="a"):
+        self.ser, self.mon = os.path.join(tmp, name + "-ttyS0"), os.path.join(tmp, name + "-mon")
         qemu = os.environ.get("QEMU", "qemu-system-x86_64")
+        if devices is None:
+            devices = ["-device", "qemu-xhci,id=xhci",
+                       "-device", "usb-kbd,bus=xhci.0,port=1,id=kbd1",
+                       "-device", "usb-mouse,bus=xhci.0,port=2",
+                       "-device", "usb-hub,bus=xhci.0,port=3,id=hub",
+                       "-device", "usb-kbd,bus=xhci.0,port=3.2,id=kbd2"]
         args = [qemu, "-machine", "q35,i8042=off", "-m", "1G", "-display", "none", "-vga", "std", "-no-reboot",
-                "-cdrom", iso,
-                "-device", "qemu-xhci,id=xhci",
-                "-device", "usb-kbd,bus=xhci.0,port=1,id=kbd1",
-                "-device", "usb-mouse,bus=xhci.0,port=2",
-                "-device", "usb-hub,bus=xhci.0,port=3,id=hub",
-                "-device", "usb-kbd,bus=xhci.0,port=3.2,id=kbd2",
+                "-cdrom", iso] + devices + [
                 "-chardev", f"socket,id=s0,path={self.ser},server=on,wait=on", "-serial", "chardev:s0",
                 "-monitor", f"unix:{self.mon},server=on,wait=off"]
-        self.p = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=open(os.path.join(tmp, "qemu.log"), "wb"),
+        self.p = subprocess.Popen(args, stdin=subprocess.DEVNULL, stdout=open(os.path.join(tmp, name + "-qemu.log"), "wb"),
                                   stderr=subprocess.STDOUT)
         self.buf = b""
         self.s = None
@@ -115,9 +124,102 @@ def rows(out, kind):
     return [m.group(1) for m in ROW.finditer(out) if kind in m.group(2)]
 
 
+class Quiet(http.server.SimpleHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+
+def serve(directory):
+    """a web server on the host; the guest reaches it as 10.0.2.2:PORT through QEMU's user net"""
+    h = lambda *a, **k: Quiet(*a, directory=directory, **k)
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), h)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv.server_address[1]
+
+
+FETCH = ("python3 -c \"import urllib.request,hashlib;print('sha', hashlib.sha256(urllib.request.urlopen("
+         "'http://10.0.2.2:{port}/big.bin', timeout=60).read()).hexdigest())\"")
+
+
+def download(m, port, want, nic):
+    out = m.run(FETCH.format(port=port), timeout=180)
+    check(f"sha {want}" in out, f"a 3 MB download over {nic} arrives intact", out)
+
+
+def nic_pc(tmp, iso, port, want):
+    disk = os.path.join(tmp, "stick.img")
+    with open(disk, "wb") as f:
+        f.truncate(64 << 20)
+    m = Machine(tmp, iso, ["-nic", "user,model=igb",
+                           "-device", "qemu-xhci,id=xhci",
+                           "-drive", f"if=none,id=stick,file={disk},format=raw",
+                           "-device", "usb-storage,bus=xhci.0,drive=stick",
+                           "-device", "usb-tablet,bus=xhci.0"], "b")
+    try:
+        print("▲ a PC with an Intel I210-class card, a USB stick and a tablet", flush=True)
+        up = m.pump(240, PROMPT)
+        check(up, "boots to auxsh", m.text()[-1500:])
+        if not up:
+            return
+        m.run("")
+        out = ""
+        for _ in range(20):
+            out = m.run("ifconfig")
+            if "inet 10.0.2.15" in out:
+                break
+            time.sleep(1)
+        check(re.search(r"^igb: .*link up", out, re.M) and "inet 10.0.2.15" in out, "igb: link up, DHCP address", out)
+        download(m, port, want, "igb")
+        out = m.run("lsusb")
+        check(rows(out, "storage") and rows(out, "pointer"), "lsusb: the USB stick and the tablet", out)
+        out = m.run("lsblk")
+        check(re.search(r"^usb0\s+USB\s+64 MB", out, re.M), "the stick is a disk, usb0", out)
+        out = m.run("disktest usb0", timeout=60)
+        check("usb0: write ok, read ok, data matches" in out, "writing to the stick and reading it back", out)
+    finally:
+        m.close()
+
+
+def tether_pc(tmp, iso, port, want):
+    m = Machine(tmp, iso, ["-nic", "none", "-device", "qemu-xhci,id=xhci",
+                           "-netdev", "user,id=phone", "-device", "usb-net,bus=xhci.0,netdev=phone"], "c")
+    try:
+        print("▲ a PC with no network card, a phone tethered over USB", flush=True)
+        up = m.pump(240, PROMPT)
+        check(up, "boots to auxsh", m.text()[-1500:])
+        if not up:
+            return
+        m.run("")
+        out = ""
+        for _ in range(30):
+            out = m.run("ifconfig")
+            if "inet 10.0.2.15" in out:
+                break
+            time.sleep(1)
+        check(re.search(r"^rndis: .*link up", out, re.M) and "inet 10.0.2.15" in out, "USB tethering (RNDIS): DHCP address", out)
+        download(m, port, want, "USB tethering")
+    finally:
+        m.close()
+
+
 def main():
     iso = sys.argv[1] if len(sys.argv) > 1 else "build/auxobsd.iso"
     tmp = tempfile.mkdtemp(prefix="auxobsd-hw-")
+    www = os.path.join(tmp, "www")
+    os.mkdir(www)
+    blob = os.urandom(3_000_000)
+    with open(os.path.join(www, "big.bin"), "wb") as f:
+        f.write(blob)
+    port, want = serve(www), hashlib.sha256(blob).hexdigest()
+    try:
+        usb_pc(tmp, iso)
+        nic_pc(tmp, iso, port, want)
+        tether_pc(tmp, iso, port, want)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def usb_pc(tmp, iso):
     m = Machine(tmp, iso)
     try:
         print("▲ a PC with USB input only", flush=True)
@@ -161,7 +263,6 @@ def main():
         check(m.p.poll() is not None, "poweroff switches the machine off")
     finally:
         m.close()
-        shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":

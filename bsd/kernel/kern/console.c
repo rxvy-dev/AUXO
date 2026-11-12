@@ -32,6 +32,11 @@ static volatile uint16_t *vga = (volatile uint16_t *)0xB8000;
 static int grid_w = VGA_W, grid_h = VGA_H, textmode = 1;
 static volatile uint32_t grid_gen;          /* bumped on every change, so the GUI knows to redraw */
 static int cx, cy;
+/* framebuffer text (fbcon.c): no VGA text mode to draw in, so every cell change is drawn */
+#define FB_COLS 256
+#define FB_ROWS 160
+static uint16_t fbgrid[FB_COLS * FB_ROWS];
+static int fbdirect, fbcx = -1, fbcy;
 static uint8_t fg = C_FG;
 static int serial_color = 1;
 
@@ -139,9 +144,24 @@ static uint32_t xterm256(int n)
 /* ── VGA text ───────────────────────────────────────────────────────── */
 static inline uint16_t cell(uint8_t ch) { return (uint16_t)((C_BG << 12) | (fg << 8) | ch); }
 
+static void put(int i, uint16_t v)
+{
+    vga[i] = v;
+    if (fbdirect) fbcon_cell(i % grid_w, i / grid_w, v, pal);
+}
+
+static void fb_cursor(void)
+{
+    if (fbcx >= 0 && fbcx < grid_w && fbcy < grid_h) fbcon_cell(fbcx, fbcy, vga[fbcy * grid_w + fbcx], pal);
+    fbcx = cx < grid_w ? cx : grid_w - 1; fbcy = cy;
+    uint16_t c = vga[fbcy * grid_w + fbcx];
+    fbcon_cell(fbcx, fbcy, (uint16_t)((C_FG << 12) | (C_BG << 8) | (c & 0xff)), pal);   /* a block cursor */
+}
+
 static void vga_cursor(void)
 {
     grid_gen++;
+    if (fbdirect) { fb_cursor(); return; }
     if (!textmode) return;
     uint16_t pos = (uint16_t)(cy * grid_w + cx);
     outb(0x3D4, 0x0F); outb(0x3D5, (uint8_t)(pos & 0xFF));
@@ -150,8 +170,9 @@ static void vga_cursor(void)
 
 static void vga_clear(void)
 {
-    for (int i = 0; i < grid_w * grid_h; i++) vga[i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+    for (int i = 0; i < grid_w * grid_h; i++) put(i, (uint16_t)((C_BG << 12) | (C_FG << 8) | ' '));
     cx = cy = 0;
+    fbcx = -1;
     vga_cursor();
 }
 
@@ -161,12 +182,17 @@ static void vga_glyph(uint8_t c)
     else if (c == '\r') cx = 0;
     else if (c == '\t') cx = (cx + 8) & ~7;
     else if (c == '\b') { if (cx > 0) cx--; }
-    else { vga[cy * grid_w + cx] = cell(c); cx++; }
+    else { put(cy * grid_w + cx, cell(c)); cx++; }
 
     if (cx >= grid_w) { cx = 0; cy++; }
     if (cy >= grid_h) {
+        if (fbdirect) {                          /* the cursor cell scrolls with the text: put it back first */
+            if (fbcx >= 0 && fbcy < grid_h) fbcon_cell(fbcx, fbcy, vga[fbcy * grid_w + fbcx], pal);
+            fbcx = -1;
+            fb_scroll(16, pal[C_BG]);
+        }
         for (int i = 0; i < grid_w * (grid_h - 1); i++) vga[i] = vga[i + grid_w];
-        for (int i = 0; i < grid_w; i++) vga[(grid_h - 1) * grid_w + i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+        for (int i = 0; i < grid_w; i++) put((grid_h - 1) * grid_w + i, (uint16_t)((C_BG << 12) | (C_FG << 8) | ' '));
         cy = grid_h - 1;
     }
 }
@@ -235,7 +261,7 @@ static void vga_putc(char ch)
         if (c == 'm') sgr(par, np);
         else if (c == 'J' && np && par[0] == 2) vga_clear();
         else if (c == 'H') { cx = cy = 0; }
-        else if (c == 'K') { for (int x = cx; x < grid_w; x++) vga[cy * grid_w + x] = cell(' '); }
+        else if (c == 'K') { for (int x = cx; x < grid_w; x++) put(cy * grid_w + x, cell(' ')); }
         return;
     }
     if (c == 0x1b) { state = 1; return; }
@@ -264,6 +290,37 @@ void console_attach_grid(uint16_t *cells, int w, int h)
     grid_w = w; grid_h = h; textmode = 0;
     cy = rows - 1 < 0 ? 0 : rows - 1; cx = 0;
     grid_gen++;
+}
+
+/* the framebuffer instead of VGA text (UEFI, or the `text` boot option with a graphics mode) */
+void console_use_fb(void)
+{
+    int w = fb_width() / 8, h = fb_height() / 16;
+    if (w < 1 || h < 1) return;
+    vga = fbgrid;
+    grid_w = w < FB_COLS ? w : FB_COLS; grid_h = h < FB_ROWS ? h : FB_ROWS;
+    textmode = 0; fbdirect = 1;
+    vga_clear();
+}
+
+/* a panic under the desktop: the compositor won't run again, so take the screen back and draw
+ * the console (the Terminal's last rows, then the panic message) straight onto it */
+void console_fb_takeover(void)
+{
+    if (fbdirect || textmode || !fb_width()) return;
+    const volatile uint16_t *old = vga;
+    int ow = grid_w, oh = grid_h, used = cy + 1;
+    int w = fb_width() / 8, h = fb_height() / 16;
+    if (w > FB_COLS) w = FB_COLS;
+    if (h > FB_ROWS) h = FB_ROWS;
+    int rows = used < h - 1 ? used : h - 1, from = used - rows;
+    for (int i = 0; i < w * h; i++) fbgrid[i] = (uint16_t)((C_BG << 12) | (C_FG << 8) | ' ');
+    for (int y = 0; y < rows; y++)
+        for (int x = 0; x < w && x < ow; x++) fbgrid[y * w + x] = old[(from + y) * ow + x];
+    (void)oh;
+    vga = fbgrid; grid_w = w; grid_h = h; fbdirect = 1; fbcx = -1;
+    for (int i = 0; i < w * h; i++) fbcon_cell(i % w, i / w, fbgrid[i], pal);
+    cy = rows; cx = 0;
 }
 
 void console_grid_info(int *w, int *h, int *cur_x, int *cur_y, uint32_t *gen)

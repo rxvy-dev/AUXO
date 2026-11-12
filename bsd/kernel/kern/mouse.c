@@ -51,7 +51,7 @@ void mouse_byte(uint8_t b)
     pkt[npkt++] = b;
     if (npkt < pktlen) return;
     npkt = 0;
-    struct mouse_event e;
+    struct mouse_event e = { 0 };
     e.buttons = pkt[0] & 7;
     e.dx = (int)pkt[1] - ((pkt[0] & 0x10) ? 256 : 0);
     e.dy = -((int)pkt[2] - ((pkt[0] & 0x20) ? 256 : 0));      /* screen y grows downwards */
@@ -80,11 +80,22 @@ int mouse_poll(struct mouse_event *ev)
 
 /* USB mice (usb/xhci.c), from a thread */
 void mouse_usb_attached(void) { present = 1; }
+void mouse_push_abs(int ax, int ay, int wheel, int buttons)        /* tablets: VirtualBox, QEMU */
+{
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    struct mouse_event e = { 0, 0, wheel, buttons, 1, ax, ay };
+    int n = (qh + 1) % QN;
+    if (n != qt) { q[qh] = e; qh = n; }
+    present = 1;
+    __asm__ volatile("push %0; popfq" :: "r"(f) : "memory", "cc");
+}
+
 void mouse_push(int dx, int dy, int wheel, int buttons)
 {
     uint64_t f;
     __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
-    struct mouse_event e = { dx, dy, wheel, buttons };
+    struct mouse_event e = { dx, dy, wheel, buttons, 0, 0, 0 };
     int n = (qh + 1) % QN;
     if (n != qt) { q[qh] = e; qh = n; }
     present = 1;

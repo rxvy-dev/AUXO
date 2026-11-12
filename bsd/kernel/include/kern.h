@@ -44,8 +44,13 @@ int    katoi(const char *s);
 
 /* pmm.c */
 void     pmm_init(uint32_t mbi_addr);
+int      pmm_ready(void);
 uint64_t pmm_alloc_page(void);
-uint64_t pmm_alloc_contig(size_t pages);
+uint64_t pmm_alloc_contig(size_t pages);          /* below 4 GiB, like pmm_alloc_page */
+uint64_t pmm_alloc_page_any(void);               /* above 4 GiB if there is RAM there (not for DMA) */
+uint64_t pmm_alloc_contig_any(size_t pages);
+uint64_t pmm_map_high(void);
+int      pmm_grow(uint64_t addr, size_t oldpages, size_t newpages);   /* in place, or -1 */                     /* map RAM above 4 GiB; bytes mapped */
 void     pmm_free_page(uint64_t addr);
 size_t   pmm_free_pages(void);
 size_t   pmm_total_pages(void);
@@ -71,14 +76,19 @@ void input_serial_irq(void);
 void input_kbd_irq(void);
 
 /* fb.c: the linear framebuffer (graphics mode) */
-int  fb_init(void);                               /* 1 if a usable 24/32-bit RGB framebuffer is there */
+int  fb_init(void);                               /* 1 if a usable 15/16/24/32-bit RGB framebuffer is there */
 int  fb_width(void);
 uint64_t fb_phys(void);                         /* where the framebuffer is (0: none) */
 int  fb_height(void);
 void fb_present(const uint32_t *src, int stride, int x, int y, int w, int h);   /* XRGB → screen */
+void fb_blit(const uint32_t *px, int stride, int x, int y, int w, int h);   /* a small XRGB picture → (x,y) */
+void fb_scroll(int rows, uint32_t bg);              /* the text console: everything up, rows of bg */
+void fbcon_cell(int x, int y, uint16_t cell, const uint32_t *pal);   /* one 8x16 console cell */
+void console_use_fb(void);                          /* the console draws on the framebuffer itself */
+void console_fb_takeover(void);                     /* panic: leave the desktop, show the console */
 
 /* mouse.c: PS/2 mouse on IRQ12 (IntelliMouse wheel when available) */
-struct mouse_event { int dx, dy, wheel, buttons; };
+struct mouse_event { int dx, dy, wheel, buttons, abs, ax, ay; };   /* abs: ax, ay are 0..32767 */
 int  mouse_init(void);                            /* 0 if there's no PS/2 mouse */
 int  mouse_poll(struct mouse_event *ev);          /* 1 when an event was taken */
 void mouse_irq(void);

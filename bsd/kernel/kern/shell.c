@@ -229,9 +229,10 @@ static int cmd_lsusb(int argc, char **argv)
 static int cmd_lsblk(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    if (!disk_count()) { kprintf("no disks found (IDE, SATA/AHCI and NVMe are supported)\n"); return 0; }
+    if (!disk_count()) { kprintf("no disks found (IDE, SATA/AHCI, NVMe and USB are supported)\n"); return 0; }
     for (int i = 0; i < disk_count(); i++) {
         struct disk *d = disk_get(i);
+        if (d->gone || !d->sectors) continue;                  /* unplugged */
         uint64_t mb = d->sectors / 2048;
         kprintf("%-7s %-5s %6lu %s  %s\n", d->name, d->bus, (unsigned long)(mb >= 10240 ? mb / 1024 : mb), mb >= 10240 ? "GB" : "MB", d->model);
     }
@@ -243,7 +244,7 @@ static int cmd_disktest(int argc, char **argv)
 {
     if (argc < 2) { kprintf("usage: disktest DISK   (overwrites 64 sectors near its end)\n"); return 1; }
     struct disk *d = 0;
-    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1])) d = disk_get(i);
+    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1]) && !disk_get(i)->gone) d = disk_get(i);
     if (!d) { kprintf("disktest: no disk %s\n", argv[1]); return 1; }
     uint8_t *a = (uint8_t *)(uintptr_t)pmm_alloc_contig(8), *b = (uint8_t *)(uintptr_t)pmm_alloc_contig(8);
     if (!a || !b) return 1;
@@ -272,7 +273,7 @@ static int cmd_install(int argc, char **argv)
     int yes = !strcmp(argv[argc - 1], "--yes");
     if (yes) argc--;
     int idx = -1;
-    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1])) idx = i;
+    for (int i = 0; i < disk_count(); i++) if (!strcmp(disk_get(i)->name, argv[1]) && !disk_get(i)->gone) idx = i;
     if (idx < 0) { kprintf("install: no disk %s (see lsblk)\n", argv[1]); return 1; }
     struct disk *d = disk_get(idx);
     if (!yes) {

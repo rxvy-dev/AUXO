@@ -1118,7 +1118,8 @@ void chrono_main(uintptr_t arg)
         if (req_url) { req_url = 0; chrono_open_url(req_link); dirty = 1; }
         while (mouse_poll(&ev)) {
             int old = buttons;
-            mx += ev.dx; my += ev.dy;
+            if (ev.abs) { mx = (int)((int64_t)ev.ax * W / 32768); my = (int)((int64_t)ev.ay * H / 32768); }
+            else { mx += ev.dx; my += ev.dy; }
             if (mx < 0) mx = 0;
             if (my < 0) my = 0;
             if (mx >= W) mx = W - 1;

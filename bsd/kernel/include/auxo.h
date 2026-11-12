@@ -9,6 +9,7 @@ struct auxo_settings {
     int  accent;            /* index into auxo_accents[] */
     char hostname[32];
     int  motd;              /* show auxo-motd when the shell starts */
+    int  text;              /* `text` on the boot line: a plain text console, no desktop */
     int  color;             /* ANSI colour on the serial console */
 };
 extern struct auxo_settings auxo;

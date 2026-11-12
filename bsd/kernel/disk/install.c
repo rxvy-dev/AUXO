@@ -131,7 +131,7 @@ static void install_thread(uintptr_t arg)
     dk = disk_get(req.disk);
     const uint8_t *tpl, *kern_elf, *root, *ov = 0;
     size_t tpl_len, kern_len, root_len = 0, ov_len = 0;
-    if (!dk) { msg("That disk is gone."); install_state = 3; return; }
+    if (!dk || dk->gone) { msg("That disk is gone."); install_state = 3; return; }
     if (boot_module("installer", &tpl, &tpl_len) < 0 || boot_module("kernel", &kern_elf, &kern_len) < 0) {
         msg("This boot of AuxoBSD has no install image (start it from the AuxoBSD ISO).");
         install_state = 3;
@@ -165,18 +165,20 @@ static void install_thread(uintptr_t arg)
     install_pct = 10;
 
     msg("Copying AuxoBSD to the disk…");
-    char cfg[1536];
+    char cfg[2048];
     int n = ksnprintf(cfg, sizeof cfg,
         "# AuxoBSD, installed. Settings go on the multiboot2 line (see auxo-tweak).\n"
         "set timeout=2\nset default=0\ninsmod all_video\n"
         "set menu_color_normal=light-gray/black\nset menu_color_highlight=black/light-magenta\n\n"
         "menuentry \"AuxoBSD " AUXO_VERSION "\" {\n"
         "    set gfxpayload=1920x1080x32,1600x900x32,1366x768x32,1280x800x32,1024x768x32,auto\n"
+        "    echo \"Loading AuxoBSD...\"\n"
         "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed\n"
         "    module2 /boot/rootfs.tar rootfs\n    if [ -f /boot/overlay.tar ]; then module2 /boot/overlay.tar overlay; fi\n    boot\n}\n\n"
         "menuentry \"AuxoBSD " AUXO_VERSION " (text console)\" {\n"
-        "    set gfxpayload=text\n"
-        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed\n"
+        "    if [ \"$grub_platform\" = \"efi\" ]; then set gfxpayload=keep; else set gfxpayload=text; fi\n"
+        "    echo \"Loading AuxoBSD...\"\n"
+        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed text\n"
         "    module2 /boot/rootfs.tar rootfs\n    if [ -f /boot/overlay.tar ]; then module2 /boot/overlay.tar overlay; fi\n    boot\n}\n\n"
         "menuentry \"Reboot\" { reboot }\nmenuentry \"Power off\" { halt }\n",
         auxo_accents[req.accent].name, req.hostname, auxo_accents[req.accent].name, req.hostname);

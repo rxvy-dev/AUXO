@@ -60,6 +60,8 @@ static const char *const exc_name[32] = {
 
 static void exception(struct trapframe *tf)
 {
+    cli();
+    console_fb_takeover();                       /* under the desktop: show this, not a frozen screen */
     kprintf("\n--- CPU exception %lu: %s (err=%lx) ---\n", tf->vector, exc_name[tf->vector], tf->err);
     kprintf("rip=%016lx cs=%lx rflags=%lx\n", tf->rip, tf->cs, tf->rflags);
     kprintf("rax=%016lx rbx=%016lx rcx=%016lx\n", tf->rax, tf->rbx, tf->rcx);

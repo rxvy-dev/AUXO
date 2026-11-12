@@ -12,6 +12,7 @@
 #include "rs.h"
 #include "pci.h"
 #include "usb.h"
+#include "usbdev.h"
 
 #define NTRB      256
 #define MAXDEV    32
@@ -19,21 +20,38 @@
 #define NFN       3                 /* HID functions per device (keyboard + mouse receivers) */
 #define INFLIGHT  8                 /* interrupt transfers queued per endpoint */
 
-enum { TRB_NORMAL = 1, TRB_SETUP = 2, TRB_DATA = 3, TRB_STATUS = 4, TRB_LINK = 6, TRB_ENABLE_SLOT = 9,
+enum { TRB_NORMAL = 1, TRB_SETUP = 2, TRB_DATA = 3, TRB_STATUS = 4, TRB_LINK = 6, TRB_NOOP = 8, TRB_STOP_EP = 15, TRB_ENABLE_SLOT = 9,
        TRB_DISABLE_SLOT = 10, TRB_ADDRESS = 11, TRB_CONFIG_EP = 12, TRB_EVAL = 13, TRB_RESET_EP = 14,
        TRB_SET_DEQ = 16, EV_TRANSFER = 32, EV_CMD = 33, EV_PORT = 34 };
 enum { CC_SUCCESS = 1, CC_STALL = 6, CC_SHORT = 13 };
 enum { SPEED_FS = 1, SPEED_LS = 2, SPEED_HS = 3, SPEED_SS = 4 };
-enum { FN_NONE, FN_KBD, FN_MOUSE };
+enum { FN_NONE, FN_KBD, FN_MOUSE, FN_POINTER };   /* POINTER: a mouse or tablet in report protocol */
+
+/* a field of a HID report, from the report descriptor */
+struct hfield { int8_t rid; uint8_t size, rel; uint16_t off; int32_t lmin, lmax; };
+
 
 struct trb { volatile uint32_t d0, d1, d2, d3; };
 struct ring { struct trb *t; int idx, cycle; };
+
+/* bulk endpoints (storage, network): one transfer in flight per endpoint */
+#define MAXTRB_PER_XFER 64
+struct pipe {
+    int dci, mps, used;
+    struct ring r;
+    volatile int done, cc, residual;
+    volatile uint64_t ev_trb;
+    uint64_t trb[MAXTRB_PER_XFER]; uint32_t len[MAXTRB_PER_XFER]; int ntrb;
+};
 
 struct fn {
     int kind, iface, dci, mps;
     struct ring r;
     uint8_t *bufs;                  /* INFLIGHT x 64 bytes */
     uint8_t prev[8];                /* keyboard: last report */
+    int rdlen;                      /* report protocol: its report descriptor's length … */
+    int rids;                       /* … whether reports start with an ID … */
+    struct hfield x, y, wheel, btn[5];   /* … and where things are in them */
 };
 
 struct hc;
@@ -49,8 +67,12 @@ struct dev {
     int is_hub, nports;
     uint32_t hubconn;               /* hub: ports with a device attached (bitmask) */
     struct fn fn[NFN];
+    struct pipe pipes[32];          /* by DCI */
     uint16_t vid, pid;
     char name[48];
+    void *drv;                      /* a class driver's state (msc.c, usbnet.c) */
+    const char *drvkind;            /* "storage", "network" (lsusb) */
+    void (*drv_detach)(void *);
 };
 
 struct hc {
@@ -71,6 +93,27 @@ static struct hc hcs[MAXHC];
 static int nhc;
 static struct dev devs[MAXDEV];
 static int nkbd, nmouse;
+
+/* one lock for the controllers: the USB thread and threads doing disk or network I/O all use them */
+static volatile int lock_owner = -1, lock_depth;
+static void ulock(void)
+{
+    int me = rs_current_pid();
+    for (;;) {
+        uint64_t f;
+        __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+        if (lock_owner == -1 || lock_owner == me) { lock_owner = me; lock_depth++; if (f & 0x200) __asm__ volatile("sti"); return; }
+        if (f & 0x200) __asm__ volatile("sti");
+        rs_yield();
+    }
+}
+static void uunlock(void)
+{
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    if (--lock_depth == 0) lock_owner = -1;
+    if (f & 0x200) __asm__ volatile("sti");
+}
 
 static uint32_t rd32(volatile uint8_t *b, uint32_t o) { return *(volatile uint32_t *)(b + o); }
 static void wr32(volatile uint8_t *b, uint32_t o, uint32_t v) { *(volatile uint32_t *)(b + o) = v; }
@@ -135,6 +178,14 @@ static void transfer_event(struct hc *h, struct trb *e)
     struct dev *d = dev_by_slot(h, slot);
     if (!d) return;
     if (ep == 1) { d->ctrl_cc = cc; d->ctrl_len = (int)(e->d2 & 0xFFFFFF); d->ctrl_done = 1; return; }
+    if (ep < 32 && d->pipes[ep].used) {
+        struct pipe *pp = &d->pipes[ep];
+        pp->ev_trb = (uint64_t)e->d0 | (uint64_t)e->d1 << 32;
+        pp->residual = (int)(e->d2 & 0xFFFFFF);
+        pp->cc = cc;
+        pp->done = 1;
+        return;
+    }
     for (int i = 0; i < NFN; i++) {
         struct fn *f = &d->fn[i];
         if (!f->kind || f->dci != ep) continue;
@@ -248,7 +299,81 @@ static int ep_interval(int speed, int binterval)
     return e;
 }
 
-static const char *kind_name(int k) { return k == FN_KBD ? "keyboard" : k == FN_MOUSE ? "mouse" : "device"; }
+static const char *kind_name(int k) { return k == FN_KBD ? "keyboard" : k == FN_MOUSE ? "mouse" : k == FN_POINTER ? "pointer" : "device"; }
+
+/* the report descriptor of a mouse or tablet: where X, Y, the wheel and the buttons are */
+static int hid_parse(struct fn *f, const uint8_t *r, int len)
+{
+    struct { uint16_t page; int32_t lmin, lmax; uint8_t size, count; int8_t rid; } g = { 0 }, stack[4];
+    int sp = 0, nusage = 0, umin = -1, umax = -1, depth = 0, in_pointer = 0, done = 0;
+    uint32_t usages[16];
+    uint16_t bitoff[256] = { 0 };                     /* per report ID */
+    memset(&f->x, 0, sizeof f->x); memset(&f->y, 0, sizeof f->y); memset(&f->wheel, 0, sizeof f->wheel); memset(f->btn, 0, sizeof f->btn);
+    f->x.size = f->y.size = 0;
+    for (int i = 0; i < len; ) {
+        uint8_t b = r[i];
+        if (b == 0xFE) { i += 3 + (i + 1 < len ? r[i + 1] : 0); continue; }        /* long item */
+        int sz = b & 3; if (sz == 3) sz = 4;
+        int type = (b >> 2) & 3, tag = b >> 4;
+        if (i + 1 + sz > len) break;
+        uint32_t u = 0;
+        for (int k = 0; k < sz; k++) u |= (uint32_t)r[i + 1 + k] << (8 * k);
+        int32_t sv = sz == 1 ? (int8_t)u : sz == 2 ? (int16_t)u : (int32_t)u;
+        i += 1 + sz;
+        if (type == 1) {                                                         /* global */
+            switch (tag) {
+            case 0: g.page = (uint16_t)u; break;
+            case 1: g.lmin = sv; break;
+            case 2: g.lmax = sz < 4 && sv < 0 && g.lmin >= 0 ? (int32_t)u : sv; break;
+            case 7: g.size = (uint8_t)u; break;
+            case 8: g.rid = (int8_t)u; f->rids = 1; break;
+            case 9: g.count = (uint8_t)u; break;
+            case 10: if (sp < 4) stack[sp++] = g; break;
+            case 11: if (sp > 0) g = stack[--sp]; break;
+            }
+        } else if (type == 2) {                                                  /* local */
+            uint32_t full = sz == 4 ? u : (uint32_t)g.page << 16 | u;
+            if (tag == 0 && nusage < 16) usages[nusage++] = full;
+            if (tag == 1) umin = (int)u;
+            if (tag == 2) umax = (int)u;
+        } else if (type == 0) {                                                  /* main */
+            if (tag == 10) {                                                     /* collection */
+                depth++;
+                if (depth == 1 && nusage && (usages[0] == 0x10002 || usages[0] == 0x10001)) in_pointer = !done;
+            } else if (tag == 12) {                                              /* end collection */
+                if (--depth == 0 && in_pointer) { in_pointer = 0; done = 1; }
+            } else if (tag == 8) {                                               /* input */
+                uint8_t rid = (uint8_t)g.rid;
+                for (int k = 0; k < g.count; k++) {
+                    uint32_t usage = nusage ? usages[k < nusage ? k : nusage - 1] : umin >= 0 ? (uint32_t)g.page << 16 | (uint32_t)(umin + k) : 0;
+                    if (umin >= 0 && umax >= umin && umin + k > umax) usage = 0;
+                    struct hfield fl = { g.rid, g.size, (uint8_t)((u >> 2) & 1), bitoff[rid], g.lmin, g.lmax };
+                    if (in_pointer && !(u & 1)) {                                /* not constant padding */
+                        if (usage == 0x10030 && !f->x.size) f->x = fl;
+                        else if (usage == 0x10031 && !f->y.size) f->y = fl;
+                        else if (usage == 0x10038 && !f->wheel.size) f->wheel = fl;
+                        else if ((usage >> 16) == 9 && (usage & 0xFFFF) >= 1 && (usage & 0xFFFF) <= 5) f->btn[(usage & 0xFFFF) - 1] = fl;
+                    }
+                    bitoff[rid] = (uint16_t)(bitoff[rid] + g.size);
+                }
+            }
+            if (tag == 8 || tag == 9 || tag == 11 || tag == 10) { nusage = 0; umin = umax = -1; }
+        }
+    }
+    return f->x.size && f->y.size ? 0 : -1;
+}
+
+static int32_t hget(const uint8_t *r, int len, const struct hfield *h, int skip)
+{
+    int32_t v = 0;
+    for (int k = 0; k < h->size; k++) {
+        int bit = h->off + k, byte = skip + bit / 8;
+        if (byte >= len) return 0;
+        if (r[byte] >> (bit % 8) & 1) v |= (int32_t)1 << k;
+    }
+    if (h->lmin < 0 && h->size < 32 && (v >> (h->size - 1) & 1)) v -= (int32_t)1 << h->size;   /* signed */
+    return v;
+}
 
 static int setup_device(int di)
 {
@@ -300,7 +425,7 @@ static int setup_device(int di)
     if (get_desc(d, 2, 0, 0, total) < 9) { pmm_free_page(phys(in)); return -1; }
     uint8_t cfg[1024];
     memcpy(cfg, d->buf, (size_t)total);
-    int cfgval = cfg[5], cur_iface = -1, cur_kind = 0, hub_ep = 0, hub_mps = 0, hub_int = 0, nf = 0;
+    int cfgval = cfg[5], cur_iface = -1, cur_kind = 0, hub_ep = 0, hub_mps = 0, hub_int = 0, nf = 0, cur_rdlen = 0;
     d->is_hub = dclass == 9;
     for (int o = 0; o + 2 <= total && cfg[o] >= 2; o += cfg[o]) {
         int type = cfg[o + 1];
@@ -310,6 +435,10 @@ static int setup_device(int di)
             if (cfg[o + 5] == 9) d->is_hub = 1;
             if (cfg[o + 5] == 3 && cfg[o + 6] == 1 && cfg[o + 3] == 0)  /* HID, boot subclass, alt 0 */
                 cur_kind = cfg[o + 7] == 1 ? FN_KBD : cfg[o + 7] == 2 ? FN_MOUSE : 0;
+            else if (cfg[o + 5] == 3 && cfg[o + 3] == 0 && cfg[o + 7] != 1)   /* other HID: maybe a pointer */
+                cur_kind = FN_POINTER;
+        } else if (type == 0x21 && o + 9 <= total && cur_kind == FN_POINTER) {   /* HID descriptor */
+            cur_rdlen = cfg[o + 7] | cfg[o + 8] << 8;
         } else if (type == 5 && o + 7 <= total && (cfg[o + 2] & 0x80) && (cfg[o + 3] & 3) == 3) {
             int epn = cfg[o + 2] & 15, mps = (cfg[o + 4] | cfg[o + 5] << 8) & 0x7FF;
             if (d->is_hub && !hub_ep) { hub_ep = epn; hub_mps = mps; hub_int = cfg[o + 6]; }
@@ -318,6 +447,7 @@ static int setup_device(int di)
                 f->kind = cur_kind; f->iface = cur_iface; f->dci = epn * 2 + 1;
                 f->mps = mps > 64 ? 64 : mps;
                 f->prev[0] = (uint8_t)cfg[o + 6];                     /* bInterval, until configured */
+                f->rdlen = cur_rdlen;
                 cur_kind = 0;                                         /* one endpoint per interface */
             }
         }
@@ -359,7 +489,11 @@ static int setup_device(int di)
         return 0;
     }
 
-    if (!nf) { pmm_free_page(phys(in)); return 0; }                   /* something we don't drive */
+    if (!nf) {                                                        /* storage, network …? */
+        pmm_free_page(phys(in));
+        if (msc_probe((struct usbd *)d, cfg, total) || usbnet_probe((struct usbd *)d, cfg, total)) return 0;
+        return 0;                                                     /* something we don't drive */
+    }
     memset(in, 0, PAGE_SIZE);
     int maxdci = 1;
     uint32_t add = 1;
@@ -387,7 +521,13 @@ static int setup_device(int di)
     for (int i = 0; i < nf; i++) {
         struct fn *f = &d->fn[i];
         if (!f->kind) continue;
-        control(d, 0x21, 0x0B, 0, (uint16_t)f->iface, 0);              /* SET_PROTOCOL(boot) */
+        if (f->kind == FN_POINTER) {
+            if (!f->rdlen || f->rdlen > (int)PAGE_SIZE || control(d, 0x81, 6, 0x2200, (uint16_t)f->iface, (uint16_t)f->rdlen) < 8 ||
+                hid_parse(f, d->buf, f->rdlen) < 0) {
+                f->kind = 0;                                          /* not a pointer we understand */
+                continue;
+            }
+        } else control(d, 0x21, 0x0B, 0, (uint16_t)f->iface, 0);       /* SET_PROTOCOL(boot) */
         control(d, 0x21, 0x0A, 0, (uint16_t)f->iface, 0);              /* SET_IDLE(0): only on change */
         for (int k = 0; k < INFLIGHT; k++) {
             uint64_t bp = phys(f->bufs) + (uint64_t)k * 64;
@@ -395,7 +535,7 @@ static int setup_device(int di)
         }
         h->db[slot] = (uint32_t)f->dci;
         if (f->kind == FN_KBD) nkbd++; else nmouse++;
-        if (f->kind == FN_MOUSE) mouse_usb_attached();
+        if (f->kind != FN_KBD) mouse_usb_attached();
         kprintf("usb : %s: %s\n", kind_name(f->kind), d->name);
     }
     return 0;
@@ -430,6 +570,8 @@ static void detach(int di)
     if (!d->used) return;
     for (int i = 0; i < MAXDEV; i++) if (devs[i].used && devs[i].parent == di && i != di) detach(i);
     struct hc *h = d->hc;
+    if (d->drv_detach) { d->drv_detach(d->drv); d->drv_detach = 0; d->drv = 0; }
+    for (int i = 0; i < 32; i++) if (d->pipes[i].used) { ring_free(&d->pipes[i].r); d->pipes[i].used = 0; }
     for (int i = 0; i < NFN; i++) {
         struct fn *f = &d->fn[i];
         if (f->kind == FN_KBD) nkbd--;
@@ -548,6 +690,22 @@ static uint64_t rep_at;
 static void hid_report(struct dev *d, struct fn *f, const uint8_t *r, int len)
 {
     (void)d;
+    if (f->kind == FN_POINTER) {
+        int skip = f->rids ? 1 : 0;
+        if (len < 1 + skip) return;
+        if (f->rids && r[0] != (uint8_t)f->x.rid) return;               /* another report */
+        int b = 0;
+        for (int k = 0; k < 5; k++) if (f->btn[k].size && hget(r, len, &f->btn[k], skip)) b |= k == 1 ? 2 : k == 2 ? 4 : 1 << k;
+        b &= 7;
+        int wheel = f->wheel.size ? -hget(r, len, &f->wheel, skip) : 0;
+        int32_t x = hget(r, len, &f->x, skip), y = hget(r, len, &f->y, skip);
+        if (f->x.rel) mouse_push(x, y, wheel, b);
+        else {
+            int32_t sx = f->x.lmax > f->x.lmin ? f->x.lmax - f->x.lmin : 1, sy = f->y.lmax > f->y.lmin ? f->y.lmax - f->y.lmin : 1;
+            mouse_push_abs((int)((int64_t)(x - f->x.lmin) * 32767 / sx), (int)((int64_t)(y - f->y.lmin) * 32767 / sy), wheel, b);
+        }
+        return;
+    }
     if (f->kind == FN_MOUSE) {
         if (len < 3) return;
         int wheel = len >= 4 ? -(int8_t)r[3] : 0;
@@ -622,7 +780,7 @@ static int hc_init(struct hc *h, struct pci_dev *pd)
     }
     uint64_t len = pd->barsize[0] ? pd->barsize[0] : 0x10000;
     h->cap = vm_map_mmio(pd->bar[0], len, 1);
-    if (!h->cap) return -1;
+    if (!h->cap) { kprintf("usb : can't map the xHCI registers at %lx\n", (unsigned long)pd->bar[0]); return -1; }
     h->op = h->cap + (rd32(h->cap, 0) & 0xFF);
     h->rt = h->cap + (rd32(h->cap, 0x18) & ~0x1Fu);
     h->db = (volatile uint32_t *)(h->cap + (rd32(h->cap, 0x14) & ~3u));
@@ -639,7 +797,7 @@ static int hc_init(struct hc *h, struct pci_dev *pd)
     wr32(h->op, 0, 2);                                               /* HCRST */
     for (int i = 0; i < 1000 && (rd32(h->op, 0) & 2); i++) kdelay_ms(1);
     for (int i = 0; i < 1000 && (rd32(h->op, 4) & (1u << 11)); i++) kdelay_ms(1);   /* CNR */
-    if (rd32(h->op, 0) & 2) return -1;
+    if (rd32(h->op, 0) & 2) { kprintf("usb : the xHCI controller didn't finish resetting\n"); return -1; }
 
     wr32(h->op, 0x38, (uint32_t)h->maxslots);                        /* CONFIG: slots enabled */
     h->dcbaa = page();
@@ -684,6 +842,7 @@ static void usb_thread(uintptr_t arg)
     msleep(50);                                                      /* let ports settle after reset */
     uint64_t next_scan = 0;
     for (;;) {
+        ulock();
         for (int i = 0; i < nhc; i++) poll_events(&hcs[i]);
         key_repeat();
         if (kernel_ticks() >= next_scan) {
@@ -692,6 +851,7 @@ static void usb_thread(uintptr_t arg)
             next_scan = kernel_ticks() + AUXO_HZ / 2;
             settled = 1;
         }
+        uunlock();
         wait_tick();
     }
 }
@@ -726,7 +886,7 @@ int usb_list(char *out, size_t n)
         char kinds[32] = "";
         for (int k = 0; k < NFN; k++)
             if (d->fn[k].kind) { if (kinds[0]) strlcpy(kinds + strlen(kinds), "+", sizeof kinds - strlen(kinds)); strlcpy(kinds + strlen(kinds), kind_name(d->fn[k].kind), sizeof kinds - strlen(kinds)); }
-        if (!what) what = kinds[0] ? kinds : "(no driver)";
+        if (!what) what = kinds[0] ? kinds : d->drvkind ? d->drvkind : "(no driver)";
         static const char *const sp[] = { "?", "12M", "1.5M", "480M", "5G", "10G" };
         char path[16];
         if (d->depth) ksnprintf(path, sizeof path, "%d-%d.%d", (int)(d->hc - hcs) + 1, d->rootport, d->port);
@@ -746,3 +906,128 @@ void usb_wait_settled(int ms)
     uint64_t end = kernel_ticks() + (uint64_t)ms * AUXO_HZ / 1000;
     while (!settled && kernel_ticks() < end) rs_sleep(1);      /* from a thread (the shell) */
 }
+
+/* ── for class drivers (usbdev.h) ───────────────────────────────────── */
+int usbd_configure(struct usbd *ud, const struct usb_ep *eps, int n)
+{
+    struct dev *d = (struct dev *)ud;
+    struct hc *h = d->hc;
+    ulock();
+    uint8_t *in = page();
+    if (!in) { uunlock(); return -1; }
+    uint32_t add = 1;
+    int maxdci = 1;
+    for (int i = 0; i < 32; i++) if (d->pipes[i].used && i > maxdci) maxdci = i;
+    for (int i = 0; i < NFN; i++) if (d->fn[i].kind && d->fn[i].dci > maxdci) maxdci = d->fn[i].dci;
+    for (int i = 0; i < n; i++) {
+        int in_ep = eps[i].addr & 0x80, dci = (eps[i].addr & 15) * 2 + (in_ep ? 1 : 0), type = eps[i].attr & 3;
+        struct pipe *p = &d->pipes[dci];
+        if (p->used) ring_free(&p->r);
+        memset(p, 0, sizeof *p);
+        if (ring_init(&p->r) < 0) { pmm_free_page(phys(in)); uunlock(); return -1; }
+        p->used = 1; p->dci = dci; p->mps = eps[i].mps;
+        add |= 1u << dci;
+        if (dci > maxdci) maxdci = dci;
+        int xt = type == 2 ? (in_ep ? 6 : 2) : type == 3 ? (in_ep ? 7 : 3) : 0;
+        volatile uint32_t *e = ictx(h, in, dci);
+        e[0] = type == 3 ? (uint32_t)ep_interval(d->speed, eps[i].interval) << 16 : 0;
+        e[1] = 3u << 1 | (uint32_t)xt << 3 | (uint32_t)eps[i].burst << 8 | (uint32_t)eps[i].mps << 16;
+        uint64_t q = phys(p->r.t) | 1;
+        e[2] = (uint32_t)q; e[3] = (uint32_t)(q >> 32);
+        e[4] = (uint32_t)(type == 2 ? 3072 : eps[i].mps) | (type == 3 ? (uint32_t)eps[i].mps << 16 : 0);
+    }
+    ictx(h, in, -1)[1] = add;
+    volatile uint32_t *sc = ictx(h, in, 0);
+    sc[0] = (d->route & 0xFFFFF) | (uint32_t)d->speed << 20 | (uint32_t)maxdci << 27;
+    sc[1] = (uint32_t)d->rootport << 16;
+    sc[2] = (uint32_t)d->ttslot | (uint32_t)d->ttport << 8;
+    int cc = command(h, (uint32_t)phys(in), (uint32_t)(phys(in) >> 32), 0, TRB_CONFIG_EP << 10 | (uint32_t)d->slot << 24, 0);
+    pmm_free_page(phys(in));
+    uunlock();
+    return cc == CC_SUCCESS ? 0 : -1;
+}
+
+int usbd_control(struct usbd *ud, uint8_t rt, uint8_t req, uint16_t val, uint16_t idx, void *data, uint16_t len)
+{
+    struct dev *d = (struct dev *)ud;
+    if (len > PAGE_SIZE) return -3;
+    ulock();
+    if (!d->used) { uunlock(); return -4; }
+    if (len && !(rt & 0x80) && data) memcpy(d->buf, data, len);
+    int r = control(d, rt, req, val, idx, len);
+    if (r > 0 && (rt & 0x80) && data) memcpy(data, d->buf, (size_t)r);
+    uunlock();
+    return r;
+}
+
+static void recover_pipe(struct dev *d, int dci, int stop)
+{
+    struct pipe *p = &d->pipes[dci];
+    struct hc *h = d->hc;
+    command(h, 0, 0, 0, (uint32_t)(stop ? TRB_STOP_EP : TRB_RESET_EP) << 10 | (uint32_t)dci << 16 | (uint32_t)d->slot << 24, 0);
+    uint64_t deq = phys(&p->r.t[p->r.idx]) | (uint64_t)p->r.cycle;
+    command(h, (uint32_t)deq, (uint32_t)(deq >> 32), 0, TRB_SET_DEQ << 10 | (uint32_t)dci << 16 | (uint32_t)d->slot << 24, 0);
+}
+
+int usbd_xfer(struct usbd *ud, uint8_t ep, void *buf, uint32_t len, int timeout_ms)
+{
+    struct dev *d = (struct dev *)ud;
+    int dci = (ep & 15) * 2 + ((ep & 0x80) ? 1 : 0);
+    ulock();
+    struct pipe *p = &d->pipes[dci];
+    if (!d->used || !p->used) { uunlock(); return -4; }
+    struct hc *h = d->hc;
+    /* TRBs: none may cross a 64 KiB boundary; the transfer must not wrap the ring (pad with no-ops) */
+    int need = 0;
+    uint64_t a = phys(buf);
+    for (uint32_t left = len; left || !need; ) {
+        uint32_t c = 0x10000 - (uint32_t)(a & 0xFFFF);
+        if (c > left) c = left;
+        need++; a += c; left -= c;
+        if (!c) break;
+    }
+    if (need > MAXTRB_PER_XFER) { uunlock(); return -3; }
+    if (p->r.idx + need > NTRB - 1)
+        while (p->r.idx != 0) ring_put(&p->r, 0, 0, 0, TRB_NOOP << 10);
+    p->done = 0; p->ntrb = 0;
+    a = phys(buf);
+    uint32_t left = len;
+    do {
+        uint32_t c = 0x10000 - (uint32_t)(a & 0xFFFF);
+        if (c > left) c = left;
+        int last = c == left;
+        struct trb *t = ring_put(&p->r, (uint32_t)a, (uint32_t)(a >> 32), c,
+                                 TRB_NORMAL << 10 | 1u << 2 | (last ? 1u << 5 : 1u << 4));
+        p->trb[p->ntrb] = phys(t); p->len[p->ntrb++] = c;
+        a += c; left -= c;
+    } while (left);
+    h->db[d->slot] = (uint32_t)dci;
+    uint64_t end = kernel_ticks() + (uint64_t)(timeout_ms > 0 ? timeout_ms : 1) * AUXO_HZ / 1000 + 1;
+    for (;;) {
+        for (int k = 0; k < 500 && !p->done; k++) { poll_events(h); __asm__ volatile("pause"); }
+        if (p->done || !d->used || kernel_ticks() > end) break;
+        uunlock();
+        wait_tick();
+        ulock();
+    }
+    if (!d->used) { uunlock(); return -4; }
+    if (!p->done) { recover_pipe(d, dci, 1); uunlock(); return -1; }
+    int cc = p->cc;
+    if (cc == CC_SUCCESS || cc == CC_SHORT) {
+        uint32_t got = 0;
+        for (int i = 0; i < p->ntrb; i++) {
+            if (p->trb[i] == p->ev_trb) { got += p->len[i] - (uint32_t)p->residual; break; }
+            got += p->len[i];
+        }
+        uunlock();
+        return (int)got;
+    }
+    recover_pipe(d, dci, 0);
+    uunlock();
+    return cc == CC_STALL ? -2 : -3;
+}
+
+int usbd_clear_halt(struct usbd *ud, uint8_t ep) { return usbd_control(ud, 0x02, 1, 0, ep, 0, 0); }   /* CLEAR_FEATURE(ENDPOINT_HALT) */
+const char *usbd_name(struct usbd *ud) { return ((struct dev *)ud)->name; }
+int usbd_speed(struct usbd *ud) { return ((struct dev *)ud)->speed; }
+void usbd_set_driver(struct usbd *ud, void *drv, void (*detach)(void *), const char *kind) { struct dev *d = (struct dev *)ud; d->drv = drv; d->drv_detach = detach; d->drvkind = kind; }

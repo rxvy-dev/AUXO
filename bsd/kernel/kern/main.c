@@ -39,7 +39,9 @@ void kmain(uint32_t mbi)
     auxo_conf_init(boot_cmdline());   /* accent / colour first, so the boot log is drawn in them */
     console_init();
     int gui = fb_init();              /* graphics mode: the console goes to Chrono's Terminal */
-    if (gui) chrono_attach_console();
+    if (gui && auxo.text) { console_use_fb(); gui = 0; }   /* `text`: the console on the framebuffer */
+    else if (gui) chrono_attach_console();
+    else if (boot_framebuffer() && boot_framebuffer()->type != 2) console_use_fb();   /* no-op without a usable one */
 
     c_rgb_bold(auxo_c1()); kprintf(AUXO_NAME " " AUXO_VERSION); c_reset();
     kprintf(" (x86_64) - C + Rust + Assembly · part of Auxo · " AUXO_URL "\n");
@@ -51,10 +53,13 @@ void kmain(uint32_t mbi)
     tsc_calibrate();
 
     pmm_init(mbi);
+    uint64_t hi = pmm_map_high();
     ok("pmm");
-    kprintf("%lu MiB usable, %lu MiB free\n",
+    kprintf("%lu MiB usable, %lu MiB free",
             (unsigned long)(pmm_total_pages() * PAGE_SIZE >> 20),
             (unsigned long)(pmm_free_pages() * PAGE_SIZE >> 20));
+    if (hi) kprintf(" (%lu MiB of it above 4 GiB)", (unsigned long)(hi >> 20));
+    kprintf("\n");
 
     uint64_t heap = pmm_alloc_contig(HEAP_PAGES);
     if (!heap) panic("cannot allocate kernel heap");
@@ -70,8 +75,11 @@ void kmain(uint32_t mbi)
     if (gui) {
         ok("fb");
         kprintf("%dx%d framebuffer, PS/2 mouse %s\n", fb_width(), fb_height(), mouse ? "found" : "not found");
+    } else if (fb_width()) {
+        const struct fbinfo *f = boot_framebuffer();
+        ok("fb"); kprintf("%dx%d framebuffer, %d bpp, pitch %u: text console\n", fb_width(), fb_height(), f->bpp, f->pitch);
     }
-    ok("tty");  kprintf("%s%s, %s\n", gui ? "Chrono Terminal" : "VGA text 80x25",
+    ok("tty");  kprintf("%s%s, %s\n", gui ? "Chrono Terminal" : fb_width() ? "framebuffer text" : "VGA text 80x25",
                         console_serial_present() ? " + ttyS0 115200" : "", inb(0x64) == 0xFF ? "no PS/2 controller" : "PS/2 keyboard");
     ok("auxo"); kprintf("accent %s, hostname %s\n", auxo_accent_name(), auxo.hostname);
 

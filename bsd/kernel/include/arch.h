@@ -55,6 +55,7 @@ void     tsc_calibrate(void);
 void *vm_map_mmio(uint64_t phys, uint64_t len, int uncached);   /* NULL if it can't */
 void  pat_init(void);                                            /* PAT entry 1 = write-combining */
 void *vm_map_fb(uint64_t phys, uint64_t len);                    /* the framebuffer, write-combining */
+int   vm_map_ram(uint64_t base, uint64_t len);                   /* RAM above 4 GiB, identity, write-back */
 
 /* rust: give up the CPU to the next runnable thread */
 void rs_yield(void);

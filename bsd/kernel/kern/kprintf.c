@@ -115,6 +115,7 @@ int ksnprintf(char *buf, size_t n, const char *fmt, ...)
 void panic(const char *fmt, ...)
 {
     cli();
+    console_fb_takeover();
     kprintf("\n\033[0m\033[1;38;2;248;113;113m*** " AUXO_NAME " PANIC:\033[0m ");
     va_list ap;
     va_start(ap, fmt);

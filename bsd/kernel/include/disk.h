@@ -1,7 +1,8 @@
 #ifndef AUXO_DISK_H
 #define AUXO_DISK_H
 /* Disks: IDE (ATA PIO), SATA (AHCI) and NVMe drivers behind one block interface.
- * Sectors are 512 bytes; buffers are kernel memory below 4 GiB (identity mapped). */
+ * Sectors are 512 bytes; buffers are kernel memory below 4 GiB (identity mapped). USB storage
+ * (usb/msc.c) adds and removes disks while running. */
 #include <stdint.h>
 #include <stddef.h>
 
@@ -14,6 +15,7 @@ struct disk {
     int (*write)(struct disk *d, uint64_t lba, uint32_t count, const void *buf);
     void *priv;
     int  removable, boot;             /* boot: AuxoBSD booted from here (installed system) */
+    volatile int gone;                /* unplugged (USB): reads and writes fail */
 };
 
 void         disk_init(void);           /* probe every controller */
