@@ -7,6 +7,7 @@
 #include "net.h"
 #include "bearssl.h"
 #include "trust_anchors.h"
+#include "cookies.h"
 
 static volatile int busy;
 static unsigned char seed[64];
@@ -132,7 +133,7 @@ static const char *tls_error(int e)
     }
 }
 
-static int fetch_once(const char *url, char *buf, size_t cap, size_t *got, struct http_result *r, void (*progress)(size_t))
+static int fetch_once(const struct http_req *q, const char *url, char *buf, size_t cap, size_t *got, struct http_result *r, void (*progress)(size_t))
 {
     struct url u;
     if (parse_url(url, &u) < 0) { ksnprintf(r->error, sizeof r->error, "not an http:// or https:// address"); return -1; }
@@ -141,11 +142,30 @@ static int fetch_once(const char *url, char *buf, size_t cap, size_t *got, struc
     int s = tcp_connect(ip, u.port, 10000);
     if (s < 0) { ksnprintf(r->error, sizeof r->error, "can't connect to %s:%u", u.host, u.port); return -1; }
 
-    char req[1024];
+    static char req[8192], cookie[6144];
+    char hostport[140];
+    if ((u.tls && u.port != 443) || (!u.tls && u.port != 80)) ksnprintf(hostport, sizeof hostport, "%s:%u", u.host, u.port);
+    else strlcpy(hostport, u.host, sizeof hostport);
+    int post = q->body != 0;
     int rl = ksnprintf(req, sizeof req,
-                       "GET %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (AuxoBSD; x86_64) Chrono-Browser/0.1\r\n"
+                       "%s %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: Mozilla/5.0 (AuxoBSD; x86_64) Chrono-Browser/0.2\r\n"
                        "Accept: text/html,text/plain,*/*\r\nAccept-Encoding: identity\r\nAccept-Language: en\r\n"
-                       "Connection: close\r\n\r\n", u.path, u.host);
+                       "Connection: close\r\n", post ? "POST" : "GET", u.path, hostport);
+    if (cookies_header(u.host, u.path, u.tls, cookie, sizeof cookie))
+        rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "Cookie: %s\r\n", cookie);
+    if (q->referer && q->referer[0] && (!u.tls || !strncmp(q->referer, "https:", 6)))
+        rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "Referer: %s\r\n", q->referer);
+    if (post) {
+        struct url ref;
+        if (q->referer && parse_url(q->referer, &ref) == 0) {
+            if ((ref.tls && ref.port != 443) || (!ref.tls && ref.port != 80)) rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "Origin: %s://%s:%u\r\n", ref.tls ? "https" : "http", ref.host, ref.port);
+            else rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "Origin: %s://%s\r\n", ref.tls ? "https" : "http", ref.host);
+        }
+        rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "Content-Type: %s\r\nContent-Length: %lu\r\n",
+                        q->content_type ? q->content_type : "application/x-www-form-urlencoded", (unsigned long)q->body_len);
+    }
+    rl += ksnprintf(req + rl, sizeof req - (size_t)rl, "\r\n");
+    if (rl >= (int)sizeof req) rl = (int)sizeof req - 1;
     size_t n = 0;
     int ok = 1;
     if (u.tls) {
@@ -160,7 +180,9 @@ static int fetch_once(const char *url, char *buf, size_t cap, size_t *got, struc
         br_ssl_engine_inject_entropy(&sc.eng, &t, sizeof t);
         br_ssl_client_reset(&sc, u.host, 0);
         br_sslio_init(&ioc, &sc.eng, sock_read, &s, sock_write, &s);
-        if (br_sslio_write_all(&ioc, req, (size_t)rl) < 0 || br_sslio_flush(&ioc) < 0) ok = 0;
+        if (br_sslio_write_all(&ioc, req, (size_t)rl) < 0) ok = 0;
+        if (ok && post && q->body_len && br_sslio_write_all(&ioc, q->body, q->body_len) < 0) ok = 0;
+        if (ok && br_sslio_flush(&ioc) < 0) ok = 0;
         while (ok && n < cap) {
             int k = br_sslio_read(&ioc, buf + n, cap - n);
             if (k <= 0) break;
@@ -178,6 +200,7 @@ static int fetch_once(const char *url, char *buf, size_t cap, size_t *got, struc
         }
     } else {
         if (tcp_send(s, req, (size_t)rl) < 0) ok = 0;
+        if (ok && post && q->body_len && tcp_send(s, q->body, q->body_len) < 0) ok = 0;
         while (ok && n < cap) {
             int k = tcp_recv(s, buf + n, cap - n, 20000);
             if (k <= 0) break;
@@ -226,6 +249,14 @@ static size_t dechunk(char *b, size_t n)
 
 int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void (*progress)(size_t))
 {
+    struct http_req q = { url, 0, 0, 0, 0 };
+    return http_request(&q, buf, cap, r, progress);
+}
+
+int http_request(const struct http_req *req, char *buf, size_t cap, struct http_result *r, void (*progress)(size_t))
+{
+    struct http_req q = *req;
+    const char *url = q.url;
     while (__atomic_exchange_n(&busy, 1, __ATOMIC_ACQUIRE)) rs_yield();
     memset(r, 0, sizeof *r);
     r->status = -1;
@@ -237,7 +268,7 @@ int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void
     }
     for (int hop = 0; hop < 6; hop++) {
         size_t n = 0;
-        if (fetch_once(r->url, buf, cap - 1, &n, r, progress) < 0) break;
+        if (fetch_once(&q, r->url, buf, cap - 1, &n, r, progress) < 0) break;
         buf[n] = 0;
         /* status line + headers */
         char *end = 0;
@@ -247,12 +278,15 @@ int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void
         r->status = sp ? katoi(sp + 1) : -1;
         int chunked = 0;
         char location[512] = "";
+        struct url cu;
+        parse_url(r->url, &cu);
         for (char *line = strchr(buf, '\n') + 1; line < end; ) {
             char *nl = strchr(line, '\n');
             if (!nl || nl > end + 2) nl = end;
             char save = *nl; *nl = 0;
             char *cr = strchr(line, '\r'); if (cr) *cr = 0;
-            if (ci_prefix(line, "location:")) { char *v = line + 9; while (*v == ' ') v++; strlcpy(location, v, sizeof location); }
+            if (ci_prefix(line, "set-cookie:")) { char *v = line + 11; while (*v == ' ') v++; cookies_set(cu.host, cu.path, cu.tls, v); }
+            else if (ci_prefix(line, "location:")) { char *v = line + 9; while (*v == ' ') v++; strlcpy(location, v, sizeof location); }
             else if (ci_prefix(line, "content-type:")) { char *v = line + 13; while (*v == ' ') v++; strlcpy(r->content_type, v, sizeof r->content_type); }
             else if (ci_prefix(line, "transfer-encoding:") && strchr(line, 'c')) chunked = 1;
             if (cr) *cr = '\r';
@@ -265,6 +299,7 @@ int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void
             char next[512];
             resolve(r->url, location, next, sizeof next);
             strlcpy(r->url, next, sizeof r->url);
+            if (r->status != 307 && r->status != 308) { q.body = 0; q.body_len = 0; }   /* POST → GET */
             continue;
         }
         if (chunked) blen = dechunk(body, blen);
@@ -273,10 +308,12 @@ int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void
         r->body = buf;
         r->len = blen;
         __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+        cookies_save();
         return 0;
     }
     if (r->status >= 300 && r->status < 400 && !r->error[0]) ksnprintf(r->error, sizeof r->error, "too many redirects");
     if (r->status > 0 && !r->error[0]) r->status = -1;
     __atomic_store_n(&busy, 0, __ATOMIC_RELEASE);
+    cookies_save();
     return -1;
 }

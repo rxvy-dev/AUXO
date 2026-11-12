@@ -63,8 +63,17 @@ struct http_result {
     char  *body;
     size_t len;
 };
-/* GET url into buf (cap bytes). Follows up to 5 redirects. progress(bytes) may be NULL. */
+/* GET url into buf (cap bytes). Follows up to 5 redirects. progress(bytes) may be NULL.
+ * Cookies (net/cookies.c) are sent and stored on every request. */
 int http_get(const char *url, char *buf, size_t cap, struct http_result *r, void (*progress)(size_t));
+struct http_req {
+    const char *url;
+    const char *body;              /* non-NULL: POST it */
+    size_t      body_len;
+    const char *content_type;      /* default application/x-www-form-urlencoded */
+    const char *referer;           /* the page the request comes from (also gives Origin for POST) */
+};
+int http_request(const struct http_req *q, char *buf, size_t cap, struct http_result *r, void (*progress)(size_t));
 void tls_seed(void);                 /* entropy for BearSSL; called by net_init */
 
 #endif

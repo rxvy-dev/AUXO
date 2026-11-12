@@ -19,10 +19,14 @@ static void www_thread(uintptr_t arg)
         while (www.state != WWW_REQUESTED) wait_tick();
         www.state = WWW_LOADING;
         www.bytes = 0;
-        char url[sizeof www.url];
+        char url[sizeof www.url], ref[sizeof www.referer];
         strlcpy(url, www.url, sizeof url);
+        strlcpy(ref, www.referer, sizeof ref);
         if (!net_ready()) net_wait_ready(10000);
-        http_get(url, www.buf, www.cap, &www.res, progress);
+        struct http_req q = { url, www.post, www.post_len, 0, ref };
+        http_request(&q, www.buf, www.cap, &www.res, progress);
+        www.post = 0; www.post_len = 0;
+        www.referer[0] = 0;
         www.gen++;
         www.state = WWW_DONE;
     }
@@ -43,5 +47,20 @@ void www_request(const char *url)
 {
     if (www.state == WWW_LOADING) return;    /* one at a time; the browser shows "loading" */
     strlcpy(www.url, url, sizeof www.url);
+    www.post = 0; www.post_len = 0;
+    www.state = WWW_REQUESTED;
+}
+
+void www_set_referer(const char *referer) { strlcpy(www.referer, referer ? referer : "", sizeof www.referer); }
+
+static char postbuf[16384];
+void www_post(const char *url, const char *body, size_t len, const char *referer)
+{
+    if (www.state == WWW_LOADING) return;
+    if (len > sizeof postbuf) len = sizeof postbuf;
+    memcpy(postbuf, body, len);
+    strlcpy(www.url, url, sizeof www.url);
+    strlcpy(www.referer, referer ? referer : "", sizeof www.referer);
+    www.post = postbuf; www.post_len = len;
     www.state = WWW_REQUESTED;
 }

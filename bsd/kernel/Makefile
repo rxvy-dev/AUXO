@@ -9,7 +9,7 @@ USE_RUST ?= 1
 VERSION  := $(shell cat VERSION)
 .DEFAULT_GOAL := all
 
-CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -m64 -march=x86-64 -mtune=generic -Iinclude -ffreestanding -fno-pic -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -fno-tree-loop-distribute-patterns -DAUXO_VERSION='"$(VERSION)"'
+CFLAGS := -std=gnu11 -O2 -g -Wall -Wextra -m64 -march=x86-64 -mtune=generic -Iinclude -ffreestanding -fno-pic -fno-pie -fno-stack-protector -mno-red-zone -mgeneral-regs-only -mcmodel=small -fno-tree-loop-distribute-patterns -DAUXO_VERSION='"$(VERSION)"' -MMD -MP
 LDFLAGS := -n -nostdlib --no-warn-rwx-segments -z max-page-size=0x1000 -T linker.ld
 
 # The Chrono desktop (kern/chrono.c) and its drawing library (kern/gfx.c) use SSE floating point.
@@ -31,6 +31,7 @@ $(GUI_OBJS): include/gfx.h include/fonts.h include/chrono_themes.h include/chron
 SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c) $(wildcard net/*.c) $(wildcard disk/*.c) $(wildcard usb/*.c) $(wildcard third_party/bearssl/*.c)
 SRCS_S := $(wildcard arch/x86_64/*.S)
 OBJS := $(patsubst %.c,build/%.o,$(SRCS_C)) $(patsubst %.S,build/%.o,$(SRCS_S))
+-include $(OBJS:.o=.d)                 # header dependencies (-MMD): a changed struct rebuilds its users
 
 RUSTLIB := rust/target/x86_64-unknown-none/release/libauxo_rs.a
 
@@ -47,7 +48,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test test-install rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test test-install test-hw test-browser rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -132,6 +133,14 @@ test: iso
 # installs onto a blank disk image, then boots it with BIOS and (if OVMF is there) UEFI
 test-install: iso
 >$(PYTHON) -I tests/test-install.py build/auxobsd.iso
+
+# a PC with USB input only and ACPI
+test-hw: iso
+>$(PYTHON) -I tests/test-hw.py build/auxobsd.iso
+
+# tabs, sign-in (POST, cookies), saved passwords, the session file
+test-browser: iso
+>$(PYTHON) -I tests/test-browser.py build/auxobsd.iso
 
 menuconfig:
 >$(PYTHON) config/kconfig.py menuconfig

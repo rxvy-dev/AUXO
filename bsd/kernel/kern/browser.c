@@ -2,17 +2,26 @@
  *
  * Pages are fetched by the "www" loader thread (net/www.c, TLS by BearSSL) and laid out here:
  * an HTML tokenizer feeding a flow layout of words, headings, lists, quotes, preformatted
- * text, rules, tables (one row per line), links and simple GET forms. No JavaScript, no CSS,
- * no images (their alt text is shown). about:home, file:// (the in-memory filesystem, for
- * Aether's preview) and http(s):// URLs. */
+ * text, rules, tables (one row per line), links and forms (GET and POST). No JavaScript, no
+ * CSS, no images (their alt text is shown). about:home, file:// (the in-memory filesystem, for
+ * Aether's preview) and http(s):// URLs.
+ *
+ * Tabs, and what the browser remembers in /home/root/.config/browser (kept on the disk of an
+ * installed system): the open tabs (session), cookies (net/cookies.c: you stay signed in) and
+ * saved logins (offered after you sign in, filled in when you come back). */
 #include "kern.h"
 #include "gfx.h"
 #include "fonts.h"
 #include "apps.h"
 #include "www.h"
 #include "vfs.h"
+#include "cookies.h"
 
+#define TABBAR 32
 #define TOOLBAR 44
+#define TOP (TABBAR + TOOLBAR)
+#define MAXTABS 8
+#define LOGINBAR 38
 #define STATUSBAR 22
 #define MARGIN 16
 #define MAXITEMS 60000
@@ -27,9 +36,9 @@ static const struct font *const FONTS[] = { &font_ui, &font_bold, &font_mono, &f
 enum { IT_UNDER = 1, IT_RULE = 2, IT_FIELD = 4, IT_DIM = 8, IT_ACCENT = 16, IT_BULLET = 32 };
 
 struct item { int32_t x, y; uint32_t off; int32_t link; int16_t w; uint8_t font, flags; };
-enum { FT_TEXT, FT_PASSWORD, FT_SUBMIT, FT_HIDDEN };
-struct field { int item, form, type; char name[48]; char value[256]; int x, y, w, h; };
-struct form { char action[512]; };
+enum { FT_TEXT, FT_PASSWORD, FT_SUBMIT, FT_HIDDEN, FT_CHECK };
+struct field { int item, form, type, checked; char name[48]; char value[256]; int x, y, w, h; };
+struct form { char action[512]; int post; };
 
 /* ── page state ─────────────────────────────────────────────────────── */
 static int inited;
@@ -61,6 +70,23 @@ static int view_h = 400, view_w = 600;
 static int hover_link = -1;
 static uint32_t loaded_gen;
 static int loading, https_guess;   /* https_guess: we added https:// to a typed address */
+static uint32_t page_gen, fields_gen; /* a new page vs. the same page laid out again (resize) */
+static int restore_scroll = -1;
+
+/* tabs: the page state above belongs to tabs[active]; the others keep theirs here */
+struct tab {
+    char url[512], title[128];
+    char back[HIST][512], fwd[HIST][512];
+    int nback, nfwd, scroll;
+    char *cache; size_t cache_len, cache_pages; int cache_plain, cache_latin1;
+};
+static struct tab tabs[MAXTABS];
+static int ntabs, active, loading_tab = -1;
+static char deferred[512];
+static int deferred_tab = -1;
+
+/* saved logins: offered after a form with a password is sent */
+static struct { int active, survive; char site[128], user[256], pass[256]; } offer;
 
 const char *browser_title(void) { return title[0] ? title : "Browser"; }
 
@@ -509,6 +535,8 @@ static void tag(const char *name, int closing, int selfclose)
         if (!closing && nforms < MAXFORMS) {
             const char *a = get_attr("action");
             url_resolve(base, a && *a ? a : url, forms[nforms].action, sizeof forms[nforms].action);
+            const char *m = get_attr("method");
+            forms[nforms].post = m && ci_eq(m, "post");
             L.form = nforms++;
         } else if (closing) L.form = -1;
         return;
@@ -520,6 +548,10 @@ static void tag(const char *name, int closing, int selfclose)
         else if (ci_eq(ty, "password")) add_field(FT_PASSWORD, nm, val, 200);
         else if (ci_eq(ty, "submit") || ci_eq(ty, "button") || ci_eq(ty, "image")) add_field(FT_SUBMIT, nm, val ? val : "Submit", 0);
         else if (ci_eq(ty, "hidden")) add_field(FT_HIDDEN, nm, val, 0);
+        else if (ci_eq(ty, "checkbox")) {
+            add_field(FT_CHECK, nm, val ? val : "on", 18);
+            if (nfields && fields[nfields - 1].type == FT_CHECK) fields[nfields - 1].checked = get_attr("checked") != 0;
+        }
         return;
     }
     if (!strcmp(name, "button")) {
@@ -531,8 +563,15 @@ static void tag(const char *name, int closing, int selfclose)
     (void)selfclose;
 }
 
+static void autofill(void);
+static struct { char value[256]; int checked; char name[48]; } kept[MAXFIELDS];
+
 static void layout(int width)
 {
+    int nkept = 0;
+    if (fields_gen == page_gen)                /* same page, new width: keep what was typed */
+        for (; nkept < nfields; nkept++) { strlcpy(kept[nkept].value, fields[nkept].value, sizeof kept[0].value); kept[nkept].checked = fields[nkept].checked; strlcpy(kept[nkept].name, fields[nkept].name, sizeof kept[0].name); }
+    fields_gen = page_gen;
     nitems = 0; alen = 0; nlinks = 0; nfields = 0; nforms = 0; truncated = 0;
     title[0] = 0;
     refresh_pending = 0;
@@ -542,7 +581,7 @@ static void layout(int width)
     layout_w = width;
     if (L.right < L.left + 100) L.right = L.left + 100;
     const char *s = src, *e = src + srclen;
-    if (src_plain) { L.pre = 1; text(s, srclen); newline(); doc_h = L.y + 20; return; }
+    if (src_plain) { L.pre = 1; text(s, srclen); newline(); doc_h = L.y + 20; nfields = 0; return; }
 
     static char buf[16384];
     while (s < e && !truncated) {
@@ -635,6 +674,9 @@ static void layout(int width)
     /* trim the title */
     char *t = title; while (*t == ' ') t++;
     if (t != title) memmove(title, t, strlen(t) + 1);
+    for (int i = 0; i < nkept && i < nfields; i++)
+        if (!strcmp(kept[i].name, fields[i].name)) { strlcpy(fields[i].value, kept[i].value, sizeof fields[i].value); fields[i].checked = kept[i].checked; }
+    if (!nkept) autofill();
 }
 
 /* ── loading ────────────────────────────────────────────────────────── */
@@ -668,6 +710,7 @@ static void set_page(const char *data, size_t len, int plain)
     src_plain = plain;
     scroll = 0;
     layout_w = -1;
+    page_gen++;
     field_focus = -1;
     hover_link = -1;
 }
@@ -692,24 +735,191 @@ static int ensure_init(void)
     return 0;
 }
 
-static void load(const char *u, int push_history)
+/* ── what the browser keeps: /home/root/.config/browser ─────────────── */
+#define SESSION "/home/root/.config/browser/session"
+#define LOGINS  "/home/root/.config/browser/logins"
+
+static void pct_decode(const char *s, size_t n, char *out, size_t cap)
+{
+    size_t o = 0;
+    for (size_t i = 0; i < n && o + 1 < cap; i++) {
+        char c = s[i];
+        if (c == '+') c = ' ';
+        else if (c == '%' && i + 2 < n) {
+            int h = 0;
+            for (int k = 1; k <= 2; k++) { char d = s[i + k]; h = h * 16 + (d >= '0' && d <= '9' ? d - '0' : (d | 32) - 'a' + 10); }
+            c = (char)h; i += 2;
+        }
+        out[o++] = c;
+    }
+    out[o] = 0;
+}
+
+/* the part of a URL a login belongs to: host, plus the port when it isn't the default */
+static void site_of(const char *u, char *out, size_t n)
+{
+    out[0] = 0;
+    if (ci_starts(u, "https://")) u += 8; else if (ci_starts(u, "http://")) u += 7; else return;
+    size_t i = 0;
+    while (*u && *u != '/' && *u != '?' && *u != '#' && i + 1 < n) out[i++] = (char)lower(*u++);
+    out[i] = 0;
+}
+
+/* 1: found (user/pass filled; if user was given, only that user), -1: "never" for this site, 0: none */
+static int login_find(const char *site, char *user, size_t un, char *pass, size_t pn, int want_user)
+{
+    const char *d; size_t n;
+    if (vfs_read(LOGINS, &d, &n) < 0) return 0;
+    int found = 0;
+    for (size_t i = 0; i < n; ) {
+        size_t e = i; while (e < n && d[e] != '\n') e++;
+        const char *f[4]; size_t fl[4]; int k = 0; size_t st = i;
+        for (size_t j = i; j <= e && k < 4; j++) if (j == e || d[j] == '\t') { f[k] = d + st; fl[k] = j - st; k++; st = j + 1; }
+        char s2[128];
+        if (k >= 2) {
+            size_t l = fl[1] < sizeof s2 - 1 ? fl[1] : sizeof s2 - 1;
+            memcpy(s2, f[1], l); s2[l] = 0;
+            if (!strcmp(s2, site)) {
+                if (fl[0] == 5 && !memcmp(f[0], "never", 5)) found = -1;
+                else if (k == 4 && fl[0] == 5 && !memcmp(f[0], "login", 5)) {
+                    char u[256]; pct_decode(f[2], fl[2], u, sizeof u);
+                    if (!want_user || !strcmp(u, user)) {
+                        strlcpy(user, u, un);
+                        pct_decode(f[3], fl[3], pass, pn);
+                        found = 1;
+                    }
+                }
+            }
+        }
+        i = e + 1;
+    }
+    return found;
+}
+
+static void login_store(const char *site, const char *user, const char *pass, int never)
+{
+    const char *d; size_t n;
+    static char out[32768];
+    size_t o = 0;
+    if (vfs_read(LOGINS, &d, &n) == 0)                 /* keep every other line */
+        for (size_t i = 0; i < n; ) {
+            size_t e = i; while (e < n && d[e] != '\n') e++;
+            char site2[128] = "", u2[256] = "";
+            const char *t1 = memchr(d + i, '\t', e - i);
+            if (t1) {
+                const char *t2 = memchr(t1 + 1, '\t', (size_t)(d + e - t1 - 1));
+                size_t l = (size_t)((t2 ? t2 : d + e) - t1 - 1);
+                if (l < sizeof site2) { memcpy(site2, t1 + 1, l); site2[l] = 0; }
+                if (t2) { const char *t3 = memchr(t2 + 1, '\t', (size_t)(d + e - t2 - 1)); if (t3) pct_decode(t2 + 1, (size_t)(t3 - t2 - 1), u2, sizeof u2); }
+            }
+            int same = !strcmp(site2, site) && (never || !strcmp(u2, user) || !strncmp(d + i, "never", 5));
+            if (!same && e > i && o + (e - i) + 1 < sizeof out) { memcpy(out + o, d + i, e - i); o += e - i; out[o++] = '\n'; }
+            i = e + 1;
+        }
+    char eu[800], ep[800];
+    if (never) o += (size_t)ksnprintf(out + o, sizeof out - o, "never\t%s\n", site);
+    else {
+        url_encode(user, eu, sizeof eu); url_encode(pass, ep, sizeof ep);
+        o += (size_t)ksnprintf(out + o, sizeof out - o, "login\t%s\t%s\t%s\n", site, eu, ep);
+    }
+    vfs_write(LOGINS, out, o < sizeof out ? o : sizeof out);
+}
+
+/* the text field a password field goes with: the last one before it in the same form */
+static int user_field_for(int pw)
+{
+    for (int i = pw - 1; i >= 0; i--)
+        if (fields[i].form == fields[pw].form && fields[i].type == FT_TEXT) return i;
+    return -1;
+}
+
+static void autofill(void)
+{
+    char site[128];
+    site_of(url, site, sizeof site);
+    if (!site[0]) return;
+    for (int i = 0; i < nfields; i++) {
+        if (fields[i].type != FT_PASSWORD || fields[i].value[0]) continue;
+        int u = user_field_for(i);
+        char user[256] = "", pass[256];
+        int want = u >= 0 && fields[u].value[0];
+        if (want) strlcpy(user, fields[u].value, sizeof user);
+        if (login_find(site, user, sizeof user, pass, sizeof pass, want) != 1) continue;
+        strlcpy(fields[i].value, pass, sizeof fields[i].value);
+        if (u >= 0 && !fields[u].value[0]) strlcpy(fields[u].value, user, sizeof fields[u].value);
+        ksnprintf(status, sizeof status, "Filled in your saved login for %s", site);
+    }
+}
+
+static void offer_login(int form)
+{
+    char site[128];
+    site_of(url, site, sizeof site);
+    if (!site[0]) return;
+    for (int i = 0; i < nfields; i++) {
+        if (fields[i].form != form || fields[i].type != FT_PASSWORD || !fields[i].value[0]) continue;
+        int u = user_field_for(i);
+        char user[256] = "", pass[256] = "";
+        if (u >= 0) strlcpy(user, fields[u].value, sizeof user);
+        int r = login_find(site, user, sizeof user, pass, sizeof pass, 1);
+        if (r == -1 || (r == 1 && !strcmp(pass, fields[i].value))) return;   /* "never", or saved as is */
+        strlcpy(offer.site, site, sizeof offer.site);
+        strlcpy(offer.user, u >= 0 ? fields[u].value : "", sizeof offer.user);
+        strlcpy(offer.pass, fields[i].value, sizeof offer.pass);
+        offer.active = 1; offer.survive = 1;
+        return;
+    }
+}
+
+/* the session: which tabs were open, so they come back next time */
+static void tab_save_state(int i);
+static void save_session(void)
+{
+    if (ntabs <= 0) return;
+    tab_save_state(active);
+    static char out[8192];
+    size_t o = (size_t)ksnprintf(out, sizeof out, "active\t%d\n", active);
+    for (int i = 0; i < ntabs && o < sizeof out - 700; i++) {
+        char t[128];
+        strlcpy(t, tabs[i].title, sizeof t);
+        for (char *p = t; *p; p++) if (*p == '\t' || *p == '\n' || *p == '\r') *p = ' ';
+        o += (size_t)ksnprintf(out + o, sizeof out - o, "tab\t%s\t%s\n", tabs[i].url[0] ? tabs[i].url : "about:home", t);
+    }
+    const char *d; size_t n;
+    if (vfs_read(SESSION, &d, &n) == 0 && n == o && !memcmp(d, out, o)) return;   /* unchanged */
+    vfs_write(SESSION, out, o);
+}
+
+/* ── loading ────────────────────────────────────────────────────────── */
+static void push_history(void)
+{
+    if (!url[0]) return;
+    if (nback == HIST) { memmove(back_hist[0], back_hist[1], sizeof back_hist[0] * (HIST - 1)); nback--; }
+    strlcpy(back_hist[nback++], url, sizeof back_hist[0]);
+    nfwd = 0;
+}
+
+static int www_busy(void) { return www.state == WWW_REQUESTED || www.state == WWW_LOADING; }
+
+static void load(const char *u, int push)
 {
     if (ensure_init() < 0) return;
     https_guess = 0;
-    if (push_history && url[0] && strcmp(url, u)) {
-        if (nback == HIST) { memmove(back_hist[0], back_hist[1], sizeof back_hist[0] * (HIST - 1)); nback--; }
-        strlcpy(back_hist[nback++], url, sizeof back_hist[0]);
-        nfwd = 0;
-    }
+    char from[512];
+    strlcpy(from, url, sizeof from);
+    if (push && url[0] && strcmp(url, u)) push_history();
+    if (offer.survive) offer.survive = 0; else offer.active = 0;
     strlcpy(url, u, sizeof url);
     strlcpy(addr, u, sizeof addr);
     addr_focus = 0;
     status[0] = 0;
     src_latin1 = 0;
+    restore_scroll = -1;
     if (ci_starts(u, "about:")) {
         if (ci_eq(u, "about:home") || ci_eq(u, "about:blank")) set_page(HOME, sizeof HOME - 1, 0);
         else error_page("Not found", "There's no such about: page.");
         loading = 0;
+        save_session();
         return;
     }
     if (ci_starts(u, "file://")) {
@@ -718,11 +928,38 @@ static void load(const char *u, int push_history)
         const char *dot = strrchr(u, '.');
         set_page(d, n, !(dot && (ci_eq(dot, ".html") || ci_eq(dot, ".htm"))));
         loading = 0;
+        save_session();
         return;
     }
     loading = 1;
+    if (www_busy() && loading_tab != active) {           /* another tab is still loading: queue it */
+        strlcpy(deferred, u, sizeof deferred);
+        deferred_tab = active;
+        ksnprintf(status, sizeof status, "Waiting for the other tab…");
+        return;
+    }
     ksnprintf(status, sizeof status, "Connecting…");
+    if (deferred_tab == active) { deferred_tab = -1; deferred[0] = 0; }
+    loading_tab = active;
+    www_set_referer(push && (ci_starts(from, "http://") || ci_starts(from, "https://")) ? from : "");
     www_request(u);
+}
+
+static void load_post(const char *action, const char *body, size_t len)
+{
+    if (www_busy()) { ksnprintf(status, sizeof status, "Still loading: try again in a moment"); return; }
+    char from[512];
+    strlcpy(from, url, sizeof from);
+    push_history();
+    if (offer.survive) offer.survive = 0; else offer.active = 0;   /* the bar outlives the reply page */
+    strlcpy(url, action, sizeof url);
+    strlcpy(addr, action, sizeof addr);
+    addr_focus = 0;
+    https_guess = 0;
+    loading = 1;
+    loading_tab = active;
+    ksnprintf(status, sizeof status, "Sending…");
+    www_post(action, body, len, from);
 }
 
 void browser_navigate(const char *u)
@@ -760,44 +997,204 @@ static void go_forward(void)
     load(fwd_hist[--nfwd], 0);
 }
 
+/* ── tabs ───────────────────────────────────────────────────────────── */
+static void cache_free(struct tab *t)
+{
+    if (t->cache) for (size_t i = 0; i < t->cache_pages; i++) pmm_free_page((uint64_t)(uintptr_t)t->cache + i * PAGE_SIZE);
+    t->cache = 0; t->cache_len = t->cache_pages = 0;
+}
+
+static void cache_put(struct tab *t, const char *data, size_t len, int plain, int latin1)
+{
+    cache_free(t);
+    if (!len || len > (2u << 20)) return;               /* big pages are fetched again */
+    size_t pages = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+    uint64_t pg = pmm_alloc_contig(pages);
+    if (!pg) return;
+    t->cache = (char *)(uintptr_t)pg;
+    memcpy(t->cache, data, len);
+    t->cache_len = len; t->cache_pages = pages; t->cache_plain = plain; t->cache_latin1 = latin1;
+}
+
+static void tab_save_state(int i)
+{
+    if (i < 0 || i >= ntabs) return;
+    struct tab *t = &tabs[i];
+    strlcpy(t->url, url, sizeof t->url);
+    if (title[0] || !loading) strlcpy(t->title, title, sizeof t->title);
+    memcpy(t->back, back_hist, sizeof back_hist); memcpy(t->fwd, fwd_hist, sizeof fwd_hist);
+    t->nback = nback; t->nfwd = nfwd; t->scroll = scroll;
+}
+
+static void activate(int i)
+{
+    if (i < 0 || i >= ntabs) return;
+    if (i != active && active < ntabs) {
+        tab_save_state(active);
+        if (!loading || loading_tab != active) cache_put(&tabs[active], src, srclen, src_plain, src_latin1);
+    }
+    active = i;
+    struct tab *t = &tabs[i];
+    strlcpy(url, t->url, sizeof url); strlcpy(addr, url, sizeof addr); strlcpy(title, t->title, sizeof title);
+    memcpy(back_hist, t->back, sizeof back_hist); memcpy(fwd_hist, t->fwd, sizeof fwd_hist);
+    nback = t->nback; nfwd = t->nfwd;
+    addr_focus = 0; field_focus = -1; status[0] = 0;
+    offer.active = 0;
+    if (loading_tab == i) { loading = 1; ksnprintf(status, sizeof status, "Loading…"); return; }
+    loading = 0;
+    if (t->cache) {
+        src_latin1 = t->cache_latin1;
+        set_page(t->cache, t->cache_len, t->cache_plain);
+        restore_scroll = t->scroll;
+        save_session();
+    } else load(url[0] ? url : "about:home", 0);
+}
+
+static int tab_new(const char *u, int focus)
+{
+    if (ntabs >= MAXTABS) { ksnprintf(status, sizeof status, "That's the most tabs there can be (%d)", MAXTABS); return -1; }
+    struct tab *t = &tabs[ntabs];
+    memset(t, 0, sizeof *t);
+    strlcpy(t->url, u, sizeof t->url);
+    strlcpy(t->title, u, sizeof t->title);
+    int n = ntabs++;
+    if (focus) activate(n); else save_session();
+    return n;
+}
+
+static void tab_close(int i)
+{
+    if (i < 0 || i >= ntabs) return;
+    if (ntabs == 1) { tab_new("about:home", 0); }       /* always one tab */
+    cache_free(&tabs[i]);
+    if (loading_tab == i) loading_tab = -2;              /* its reply is dropped when it comes */
+    else if (loading_tab > i) loading_tab--;
+    if (deferred_tab == i) { deferred_tab = -1; deferred[0] = 0; } else if (deferred_tab > i) deferred_tab--;
+    memmove(&tabs[i], &tabs[i + 1], sizeof tabs[0] * (size_t)(ntabs - i - 1));
+    ntabs--;
+    if (i == active) {
+        int next = i < ntabs ? i : ntabs - 1;
+        active = ntabs;                                  /* nothing to save from the closed tab */
+        activate(next);
+    } else {
+        if (active > i) active--;
+        save_session();
+    }
+}
+
+static void extract_title(const char *s, size_t n, char *out, size_t cap)
+{
+    out[0] = 0;
+    const char *t = ci_find(s, s + n, "<title");
+    if (!t) return;
+    while (t < s + n && *t != '>') t++;
+    const char *e = ci_find(t, s + n, "</title");
+    if (!e) return;
+    size_t k = decode(t + 1, e, out, cap - 1);
+    out[k] = 0;
+    char *p = out; while (*p == ' ' || *p == '\n') p++;
+    memmove(out, p, strlen(p) + 1);
+}
+
+static void restore_session(void)
+{
+    const char *d; size_t n;
+    int want = 0;
+    if (vfs_read(SESSION, &d, &n) == 0)
+        for (size_t i = 0; i < n && ntabs < MAXTABS; ) {
+            size_t e = i; while (e < n && d[e] != '\n') e++;
+            if (e - i > 7 && !memcmp(d + i, "active\t", 7)) want = katoi(d + i + 7);
+            else if (e - i > 4 && !memcmp(d + i, "tab\t", 4)) {
+                const char *u = d + i + 4, *tab2 = memchr(u, '\t', (size_t)(d + e - u));
+                struct tab *t = &tabs[ntabs];
+                memset(t, 0, sizeof *t);
+                size_t ul = (size_t)((tab2 ? tab2 : d + e) - u);
+                if (ul && ul < sizeof t->url) {
+                    memcpy(t->url, u, ul); t->url[ul] = 0;
+                    if (tab2) { size_t tl = (size_t)(d + e - tab2 - 1); if (tl >= sizeof t->title) tl = sizeof t->title - 1; memcpy(t->title, tab2 + 1, tl); t->title[tl] = 0; }
+                    ntabs++;
+                }
+            }
+            i = e + 1;
+        }
+    if (!ntabs) { memset(&tabs[0], 0, sizeof tabs[0]); strlcpy(tabs[0].url, "about:home", sizeof tabs[0].url); ntabs = 1; }
+    if (want < 0 || want >= ntabs) want = 0;
+    active = ntabs;                                      /* nothing to save yet */
+    activate(want);
+}
+
+/* a page finished loading for a tab that isn't showing: keep it for when it is */
+static void stash(int ti, struct http_result *r)
+{
+    struct tab *t = &tabs[ti];
+    if (r->status < 0 || !r->body) { strlcpy(t->title, "Can't open this page", sizeof t->title); cache_free(t); return; }
+    strlcpy(t->url, r->url, sizeof t->url);
+    const char *ct = r->content_type;
+    int plain = !(!ct[0] || ci_find(ct, ct + strlen(ct), "html") || ci_find(ct, ct + strlen(ct), "xml"));
+    cache_put(t, r->body, r->len, plain, ci_find(ct, ct + strlen(ct), "iso-8859") != 0);
+    extract_title(r->body, r->len, t->title, sizeof t->title);
+    if (!t->title[0]) strlcpy(t->title, t->url, sizeof t->title);
+}
+
 int browser_tick(void)
 {
-    if (!inited) { if (ensure_init() == 0) load("about:home", 0); return 1; }
+    if (!inited) { if (ensure_init() == 0) restore_session(); return 1; }
+    if (www.state == WWW_DONE && www.gen != (int)loaded_gen) {
+        loaded_gen = (uint32_t)www.gen;
+        int ti = loading_tab;
+        loading_tab = -1;
+        struct http_result *r = &www.res;
+        int redraw = 0;
+        if (ti != active) {                              /* for a tab in the background (or closed) */
+            if (ti >= 0 && ti < ntabs) stash(ti, r);
+            save_session();
+            redraw = 1;
+        } else if (loading) {
+            loading = 0;
+            if ((r->status < 0 || !r->body) && https_guess && ci_starts(url, "https://")) {
+                char plain[512];
+                ksnprintf(plain, sizeof plain, "http://%s", url + 8);   /* HTTPS didn't work: try HTTP, like other browsers */
+                https_guess = 0;
+                load(plain, 0);
+                return 1;
+            }
+            https_guess = 0;
+            status[0] = 0;
+            if (r->status < 0 || !r->body) error_page("Can't open this page", r->error[0] ? r->error : "unknown error");
+            else {
+                strlcpy(url, r->url, sizeof url);              /* after redirects */
+                strlcpy(addr, url, sizeof addr);
+                const char *ct = r->content_type;
+                src_latin1 = ci_find(ct, ct + strlen(ct), "iso-8859") || ci_find(ct, ct + strlen(ct), "windows-125");
+                if (!ct[0] || ci_find(ct, ct + strlen(ct), "html") || ci_find(ct, ct + strlen(ct), "xml")) set_page(r->body, r->len, 0);
+                else if (ci_starts(ct, "text/") || ci_find(ct, ct + strlen(ct), "json") || ci_find(ct, ct + strlen(ct), "javascript")) set_page(r->body, r->len, 1);
+                else {
+                    char m[160];
+                    ksnprintf(m, sizeof m, "This is a %s file (%lu bytes). The browser can only show web pages and text.", ct, (unsigned long)r->len);
+                    error_page("Can't show this file", m);
+                }
+                if (r->status >= 400) ksnprintf(status, sizeof status, "HTTP %d", r->status);
+                extract_title(src, srclen, title, sizeof title);
+            }
+            save_session();
+            redraw = 1;
+        }
+        if (deferred[0] && deferred_tab == active && !www_busy()) {   /* this tab was waiting its turn */
+            char u[512];
+            strlcpy(u, deferred, sizeof u);
+            deferred[0] = 0; deferred_tab = -1;
+            load(u, 0);
+        }
+        return redraw;
+    }
     if (!loading) {
         if (refresh_pending && layout_w > 0) { refresh_pending = 0; load(refresh_url, 0); return 1; }
         return 0;
     }
-    if (www.state == WWW_DONE && www.gen != (int)loaded_gen) {
-        loaded_gen = (uint32_t)www.gen;
-        loading = 0;
-        struct http_result *r = &www.res;
-        if ((r->status < 0 || !r->body) && https_guess && ci_starts(url, "https://")) {
-            char plain[512];
-            ksnprintf(plain, sizeof plain, "http://%s", url + 8);   /* HTTPS didn't work: try HTTP, like other browsers */
-            https_guess = 0;
-            load(plain, 0);
-            return 1;
-        }
-        https_guess = 0;
-        status[0] = 0;
-        if (r->status < 0 || !r->body) { error_page("Can't open this page", r->error[0] ? r->error : "unknown error"); return 1; }
-        strlcpy(url, r->url, sizeof url);              /* after redirects */
-        strlcpy(addr, url, sizeof addr);
-        const char *ct = r->content_type;
-        src_latin1 = ci_find(ct, ct + strlen(ct), "iso-8859") || ci_find(ct, ct + strlen(ct), "windows-125");
-        if (!ct[0] || ci_find(ct, ct + strlen(ct), "html") || ci_find(ct, ct + strlen(ct), "xml")) set_page(r->body, r->len, 0);
-        else if (ci_starts(ct, "text/") || ci_find(ct, ct + strlen(ct), "json") || ci_find(ct, ct + strlen(ct), "javascript")) set_page(r->body, r->len, 1);
-        else {
-            char m[160];
-            ksnprintf(m, sizeof m, "This is a %s file (%lu bytes). The browser can only show web pages and text.", ct, (unsigned long)r->len);
-            error_page("Can't show this file", m);
-        }
-        if (r->status >= 400) ksnprintf(status, sizeof status, "HTTP %d", r->status);
-        return 1;
-    }
+    if (loading_tab != active) return 0;                 /* waiting for another tab's load */
     char s[160];
     if (www.state == WWW_LOADING && www.bytes) ksnprintf(s, sizeof s, "Loading… %lu KB", (unsigned long)(www.bytes >> 10));
-    else ksnprintf(s, sizeof s, "Connecting…");
+    else ksnprintf(s, sizeof s, "%s", www.post ? "Sending…" : "Connecting…");
     if (strcmp(s, status)) { strlcpy(status, s, sizeof status); return 1; }
     return 0;
 }
@@ -837,14 +1234,16 @@ void browser_paint(const struct app_ctx *a)
 {
     struct canvas *c = a->c;
     const struct app_colors *k = a->col;
-    view_w = a->w; view_h = a->h - TOOLBAR - STATUSBAR;
+    int bar = offer.active ? LOGINBAR : 0;                     /* "Save password?" pushes the page down */
+    view_w = a->w; view_h = a->h - TOP - STATUSBAR - bar;
     if (!inited) { gfx_fill(c, a->x, a->y, a->w, a->h, k->bg); return; }
     if (layout_w != a->w - 12) layout(a->w - 12);
+    if (restore_scroll >= 0) { scroll = restore_scroll; restore_scroll = -1; }
     if (scroll > doc_h - view_h) scroll = doc_h - view_h;
     if (scroll < 0) scroll = 0;
 
     /* page */
-    int px = a->x, py = a->y + TOOLBAR;
+    int px = a->x, py = a->y + TOP + bar;
     gfx_fill(c, px, py, a->w, view_h, k->bg);
     gfx_clip(c, px, py, a->w, view_h);
     /* first visible item: binary search on y */
@@ -860,7 +1259,11 @@ void browser_paint(const struct app_ctx *a)
             struct field *f = &fields[-100 - it->link];
             int fh = 24, fy = y - 4;
             f->x = it->x; f->y = it->y - 4; f->w = it->w; f->h = fh;
-            if (f->type == FT_SUBMIT) {
+            if (f->type == FT_CHECK) {
+                gfx_round(c, x, fy + 3, 18, 18, 4, f->checked ? k->accent : k->field, 0);
+                gfx_round_frame(c, x, fy + 3, 18, 18, 4, f->checked ? k->accent : with_alpha(k->fg, 90));
+                if (f->checked) { gfx_line(c, x + 4, fy + 12, x + 8, fy + 16, 2, k->accent_fg); gfx_line(c, x + 8, fy + 16, x + 14, fy + 7, 2, k->accent_fg); }
+            } else if (f->type == FT_SUBMIT) {
                 gfx_round(c, x, fy, it->w, fh, 6, k->button, 0);
                 gfx_text(c, &font_ui, x + 12, fy + 4, f->value[0] ? f->value : "Submit", k->button_fg);
             } else {
@@ -893,6 +1296,20 @@ void browser_paint(const struct app_ctx *a)
         if ((it->flags & IT_UNDER) && it->link >= 0) gfx_fill(c, x, y + f->baseline + 2, it->w, 1, with_alpha(col, it->link == hover_link ? 255 : 110));
     }
     gfx_noclip(c);
+    if (offer.active) {                                         /* "Save password?" */
+        int by = a->y + TOP;
+        gfx_fill(c, px, by, a->w, LOGINBAR, k->field);
+        gfx_fill(c, px, by + LOGINBAR - 1, a->w, 1, with_alpha(k->fg, 40));
+        char m[200];
+        ksnprintf(m, sizeof m, "Save the password%s%s for %s?", offer.user[0] ? " for " : "", offer.user, offer.site);
+        gfx_text_fit(c, &font_ui, px + 14, by + 10, a->w - 300, m, k->fg);
+        gfx_round(c, px + a->w - 250, by + 6, 90, 26, 6, k->accent, 0);
+        gfx_text(c, &font_bold, px + a->w - 250 + (90 - gfx_text_width(&font_bold, "Save")) / 2, by + 10, "Save", k->accent_fg);
+        gfx_round(c, px + a->w - 150, by + 6, 90, 26, 6, k->button, 0);
+        gfx_text(c, &font_ui, px + a->w - 150 + (90 - gfx_text_width(&font_ui, "Never")) / 2, by + 10, "Never", k->button_fg);
+        gfx_line(c, px + a->w - 38, by + 13, px + a->w - 26, by + 25, 1.6f, k->dim);
+        gfx_line(c, px + a->w - 26, by + 13, px + a->w - 38, by + 25, 1.6f, k->dim);
+    }
     /* scrollbar */
     if (doc_h > view_h) {
         int th = view_h * view_h / doc_h; if (th < 24) th = 24;
@@ -900,8 +1317,29 @@ void browser_paint(const struct app_ctx *a)
         gfx_round(c, px + a->w - 8, ty, 5, th, 2, with_alpha(k->fg, 70), 0);
     }
 
+    /* tabs */
+    gfx_fill(c, a->x, a->y, a->w, TABBAR, gfx_mix(k->field, k->bg, 0.5f));
+    {
+        int avail = a->w - 48, tw = ntabs ? avail / ntabs : avail;
+        if (tw > 220) tw = 220;
+        for (int i = 0; i < ntabs; i++) {
+            int x0 = a->x + 6 + i * tw, act = i == active;
+            const char *tt = act ? (title[0] ? title : (url[0] ? url : "New tab")) : (tabs[i].title[0] ? tabs[i].title : tabs[i].url);
+            if (ci_starts(tt, "about:home")) tt = "Start";
+            if (act) gfx_round(c, x0, a->y + 4, tw - 4, TABBAR - 4, 7, k->field, 0);
+            else if (i + 1 < ntabs && i + 1 != active) gfx_fill(c, x0 + tw - 4, a->y + 10, 1, TABBAR - 18, with_alpha(k->fg, 50));
+            gfx_text_fit(c, act ? &font_bold : &font_ui, x0 + 12, a->y + 10, tw - 44, tt, act ? k->fg : k->dim);
+            if (i == loading_tab) gfx_fill(c, x0 + 10, a->y + TABBAR - 4, tw - 24, 2, k->accent);
+            int cx = x0 + tw - 22, cy = a->y + 17;                 /* close × */
+            gfx_line(c, cx - 4, cy - 4, cx + 4, cy + 4, 1.4f, k->dim);
+            gfx_line(c, cx + 4, cy - 4, cx - 4, cy + 4, 1.4f, k->dim);
+        }
+        int plx = a->x + 6 + ntabs * tw + 8, ply = a->y + 17;      /* new tab + */
+        if (ntabs < MAXTABS) { gfx_line(c, plx + 3, ply, plx + 15, ply, 1.8f, k->fg); gfx_line(c, plx + 9, ply - 6, plx + 9, ply + 6, 1.8f, k->fg); }
+    }
+
     /* toolbar */
-    int tx = a->x, ty = a->y;
+    int tx = a->x, ty = a->y + TABBAR;
     gfx_fill(c, tx, ty, a->w, TOOLBAR, k->field);
     gfx_fill(c, tx, ty + TOOLBAR - 1, a->w, 1, with_alpha(k->fg, 40));
     icon_back(c, tx + 6, ty + 8, nback ? k->fg : with_alpha(k->fg, 70), 0);
@@ -946,19 +1384,26 @@ void browser_paint(const struct app_ctx *a)
 }
 
 /* ── input ──────────────────────────────────────────────────────────── */
-static void submit(int form)
+static void submit(int form, int submitter)
 {
-    if (form < 0 || form >= nforms) form = 0;
     if (!nforms) return;
-    char q[1024] = "", enc[512];
+    if (form < 0 || form >= nforms) form = 0;
+    static char q[12288];
+    char enc[800], encn[160];
     size_t ql = 0;
     for (int i = 0; i < nfields; i++) {
         struct field *f = &fields[i];
-        if (f->form != form || !f->name[0] || f->type == FT_SUBMIT) continue;
+        if (f->form != form || !f->name[0]) continue;
+        if (f->type == FT_SUBMIT && i != submitter) continue;      /* only the button that was pressed */
+        if (f->type == FT_CHECK && !f->checked) continue;
+        url_encode(f->name, encn, sizeof encn);
         url_encode(f->value, enc, sizeof enc);
-        ql += (size_t)ksnprintf(q + ql, sizeof q - ql, "%s%s=%s", ql ? "&" : "", f->name, enc);
-        if (ql >= sizeof q) break;
+        int w = ksnprintf(q + ql, sizeof q - ql, "%s%s=%s", ql ? "&" : "", encn, enc);
+        if (w < 0 || ql + (size_t)w >= sizeof q) break;
+        ql += (size_t)w;
     }
+    offer_login(form);
+    if (forms[form].post) { load_post(forms[form].action, q, ql); return; }
     char target[1024];
     strlcpy(target, forms[form].action, sizeof target);
     char *qm = strchr(target, '?');
@@ -983,8 +1428,9 @@ static int item_at(int x, int y)
 
 int browser_hover(int x, int y)
 {
-    if (!inited || y < TOOLBAR || y >= TOOLBAR + view_h) { if (hover_link != -1) { hover_link = -1; return 1; } return 0; }
-    int i = item_at(x, y - TOOLBAR);
+    int bar = offer.active ? LOGINBAR : 0;
+    if (!inited || y < TOP + bar || y >= TOP + bar + view_h) { if (hover_link != -1) { hover_link = -1; return 1; } return 0; }
+    int i = item_at(x, y - TOP - bar);
     int l = i >= 0 && items[i].link >= 0 ? items[i].link : -1;
     if (l != hover_link) { hover_link = l; return 1; }
     return 0;
@@ -994,6 +1440,22 @@ int browser_click(int x, int y, int w, int h)
 {
     (void)h;
     if (!inited) return 0;
+    if (y < TABBAR) {                                   /* tabs */
+        field_focus = -1; addr_focus = 0;
+        int avail = w - 48, tw = ntabs ? avail / ntabs : avail;
+        if (tw > 220) tw = 220;
+        int i = (x - 6) / (tw > 0 ? tw : 1);
+        if (x >= 6 && i < ntabs) {
+            int x0 = 6 + i * tw;
+            if (x >= x0 + tw - 32) tab_close(i);
+            else if (i != active) activate(i);
+            return 1;
+        }
+        int plx = 6 + ntabs * tw + 8;
+        if (x >= plx - 4 && x < plx + 24 && tab_new("about:home", 1) >= 0) { addr_focus = 1; addr_all = 1; addr[0] = 0; addr_caret = 0; }
+        return 1;
+    }
+    y -= TABBAR;
     if (y < TOOLBAR) {
         field_focus = -1;
         if (x < 34) { go_back(); return 1; }
@@ -1009,24 +1471,35 @@ int browser_click(int x, int y, int w, int h)
         return 0;
     }
     addr_focus = 0;
-    if (y >= TOOLBAR + view_h) return 0;
-    int i = item_at(x, y - TOOLBAR);
+    int bar = offer.active ? LOGINBAR : 0;
+    if (y >= TOOLBAR + bar + view_h) return 0;
+    if (offer.active && y < TOOLBAR + LOGINBAR) {          /* the "Save password?" bar */
+        if (x >= w - 250 && x < w - 160) login_store(offer.site, offer.user, offer.pass, 0);
+        else if (x >= w - 150 && x < w - 60) login_store(offer.site, "", "", 1);
+        else if (x < w - 44) return 1;
+        offer.active = 0;
+        if (x < w - 44) ksnprintf(status, sizeof status, "%s", x < w - 160 ? "Password saved" : "Passwords won't be saved for this site");
+        return 1;
+    }
+    int i = item_at(x, y - TOOLBAR - bar);
     field_focus = -1;
     if (i < 0) return 1;
     const struct item *it = &items[i];
     if (it->link >= 0) {
         const char *target = arena + links[it->link];
+        if (input_ctrl()) { char t2[512]; strlcpy(t2, target, sizeof t2); tab_new(t2, 0); ksnprintf(status, sizeof status, "Opened in a new tab"); return 1; }
         if (!strcmp(target, url)) { scroll = 0; return 1; }
         load(target, 1);
         return 1;
     }
     if (it->link <= -100) {
         int fi = -100 - it->link;
-        if (fields[fi].type == FT_SUBMIT) submit(fields[fi].form);
+        if (fields[fi].type == FT_SUBMIT) submit(fields[fi].form, fi);
+        else if (fields[fi].type == FT_CHECK) fields[fi].checked = !fields[fi].checked;
         else { field_focus = fi; field_caret = (int)strlen(fields[fi].value); }
         return 1;
     }
-    if (it->link <= -2) { submit(-2 - it->link); return 1; }
+    if (it->link <= -2) { submit(-2 - it->link, -1); return 1; }
     return 1;
 }
 
@@ -1055,6 +1528,12 @@ int browser_key(int k)
     if (!inited) return 0;
     if (k == 0x0C) { addr_focus = 1; addr_all = 1; strlcpy(addr, url, sizeof addr); addr_caret = (int)strlen(addr); field_focus = -1; return 1; }
     if (k == 0x12) { load(url, 0); return 1; }                 /* Ctrl+R */
+    if (k == 0x14) {                                           /* Ctrl+T: new tab */
+        if (tab_new("about:home", 1) >= 0) { addr_focus = 1; addr_all = 1; addr[0] = 0; addr_caret = 0; field_focus = -1; }
+        return 1;
+    }
+    if (k == 0x17) { tab_close(active); return 1; }            /* Ctrl+W */
+    if (k == '\t' && input_ctrl()) { if (ntabs > 1) activate((active + (input_shift() ? ntabs - 1 : 1)) % ntabs); return 1; }
     if (addr_focus) {
         if (k == '\n') { addr_focus = 0; browser_navigate(addr); return 1; }
         if (k == 27) { addr_focus = 0; strlcpy(addr, url, sizeof addr); return 1; }
@@ -1064,7 +1543,7 @@ int browser_key(int k)
     }
     if (field_focus >= 0) {
         struct field *f = &fields[field_focus];
-        if (k == '\n') { submit(f->form); return 1; }
+        if (k == '\n') { submit(f->form, -1); return 1; }
         if (k == 27) { field_focus = -1; return 1; }
         if (k == '\t') {
             for (int i = field_focus + 1; i < nfields; i++) if (fields[i].type == FT_TEXT || fields[i].type == FT_PASSWORD) { field_focus = i; field_caret = (int)strlen(fields[i].value); return 1; }
@@ -1082,7 +1561,7 @@ int browser_key(int k)
     case KEY_END: scroll = doc_h; return 1;
     case '\b': go_back(); return 1;
     case '\t':
-        for (int i = 0; i < nfields; i++) if (fields[i].type == FT_TEXT) { field_focus = i; field_caret = (int)strlen(fields[i].value); return 1; }
+        for (int i = 0; i < nfields; i++) if (fields[i].type == FT_TEXT || fields[i].type == FT_PASSWORD) { field_focus = i; field_caret = (int)strlen(fields[i].value); return 1; }
         return 0;
     }
     return 0;

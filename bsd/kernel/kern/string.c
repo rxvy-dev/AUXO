@@ -28,6 +28,13 @@ void *memmove(void *d, const void *s, size_t n)
     return d;
 }
 
+void *memchr(const void *p, int c, size_t n)
+{
+    const unsigned char *s = p;
+    for (size_t i = 0; i < n; i++) if (s[i] == (unsigned char)c) return (void *)(s + i);
+    return 0;
+}
+
 int memcmp(const void *a, const void *b, size_t n)
 {
     const unsigned char *x = a, *y = b;
