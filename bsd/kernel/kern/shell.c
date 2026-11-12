@@ -141,6 +141,11 @@ static int cmd_help(int argc, char **argv)
         c_rgb(auxo_c1()); kprintf("  %-12s", c->name); c_reset();
         kprintf(" %s\n", c->help);
     }
+    if (vfs_exists("/usr/bin/pkg")) {
+        c_bold(); kprintf("software\n"); c_reset();
+        c_rgb(auxo_c1()); kprintf("  %-12s", "pkg"); c_reset();
+        kprintf(" install programs from Ubuntu 24.04: pkg update, pkg search WORD, pkg install NAME\n");
+    }
     c_dim(); kprintf("Tab completes, Up/Down for history, Ctrl-L clears.\n"); c_reset();
     return 0;
 }

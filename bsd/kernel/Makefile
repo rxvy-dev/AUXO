@@ -30,6 +30,12 @@ $(GUI_OBJS): include/gfx.h include/fonts.h include/chrono_themes.h include/chron
 
 SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c) $(wildcard net/*.c) $(wildcard disk/*.c) $(wildcard usb/*.c) $(wildcard third_party/bearssl/*.c)
 SRCS_S := $(wildcard arch/x86_64/*.S)
+# pkg (tools/pkg) goes in build/overlay.tar when the host can build it (see below)
+HOSTCC   ?= gcc
+ZSTD_LIB := $(firstword $(wildcard /usr/lib/x86_64-linux-gnu/libzstd.so.1 /usr/lib/x86_64-linux-gnu/libzstd.so))
+PKG_BEARSSL := $(patsubst third_party/bearssl/%.c,build/pkg/bearssl/%.o,$(wildcard third_party/bearssl/*.c))
+OVERLAY  := $(if $(ZSTD_LIB),$(if $(wildcard /usr/include/lzma.h),build/overlay.tar))
+
 OBJS := $(patsubst %.c,build/%.o,$(SRCS_C)) $(patsubst %.S,build/%.o,$(SRCS_S))
 -include $(OBJS:.o=.d)                 # header dependencies (-MMD): a changed struct rebuilds its users
 
@@ -48,7 +54,7 @@ endif
 # Auxo Linux palette, shared with the kernel (see tools/gen-accents.py)
 PALETTE := ../../packages/auxo-tools/files/lib/auxo_accents.py
 
-.PHONY: all rust check iso run run-text test test-install test-hw test-browser rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
+.PHONY: all rust check iso run run-text test test-install test-hw test-browser test-pkg pkg rootfs install-image accents accents-check chrono-themes chrono-themes-check fonts trust clean menuconfig
 
 all: build/auxobsd.elf
 
@@ -105,11 +111,33 @@ check: build/auxobsd.elf
 
 iso: build/auxobsd.iso
 
-build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg $(wildcard build/rootfs.tar) $(wildcard build/install.img)
+build/auxobsd.iso: build/auxobsd.elf iso/boot/grub/grub.cfg $(wildcard build/rootfs.tar) $(wildcard build/install.img) $(OVERLAY)
 >cp $< iso/boot/auxobsd.elf
+>if [ -f build/overlay.tar ]; then cp build/overlay.tar iso/boot/overlay.tar; else rm -f iso/boot/overlay.tar; fi
 >if [ -f build/rootfs.tar ]; then cp build/rootfs.tar iso/boot/rootfs.tar; else rm -f iso/boot/rootfs.tar; fi
 >if [ -f build/install.img ]; then cp build/install.img iso/boot/install.img; else rm -f iso/boot/install.img; fi
 >grub-mkrescue -o $@ iso
+
+# pkg, the package manager (tools/pkg): a Linux program built here, against the same Ubuntu
+# 24.04 libraries the root has (zlib, liblzma, libzstd), with its own BearSSL for HTTPS. It goes
+# in build/overlay.tar, a small module GRUB loads on top of the root filesystem.
+
+build/pkg/bearssl/%.o: third_party/bearssl/%.c
+>@mkdir -p $(dir $@)
+>$(HOSTCC) -O2 -Ithird_party/bearssl -DBR_AES_X86NI=0 -DBR_SSE2=0 -DBR_POWER8=0 -c $< -o $@
+
+build/pkg/libbearssl.a: $(PKG_BEARSSL)
+>rm -f $@ && ar rcs $@ $^
+
+build/pkg/pkg: tools/pkg/pkg.c build/pkg/libbearssl.a include/trust_anchors.h
+>$(HOSTCC) -O2 -Wall -Ithird_party/bearssl -Iinclude $< build/pkg/libbearssl.a -Wl,-Bstatic -lz -llzma -Wl,-Bdynamic $(ZSTD_LIB) -o $@
+
+pkg: build/pkg/pkg
+
+build/overlay.tar: build/pkg/pkg tools/pkg/sources
+>rm -rf build/overlay && mkdir -p build/overlay/usr/bin build/overlay/etc/pkg build/overlay/var/cache/pkg
+>cp build/pkg/pkg build/overlay/usr/bin/pkg && cp tools/pkg/sources build/overlay/etc/pkg/sources
+>tar --owner=0 --group=0 --format=ustar -C build/overlay -cf $@ .
 
 # the root filesystem: real Linux programs (GCC 13, binutils, make, BusyBox) from Ubuntu packages.
 # ROOTFS_SET=full adds Python 3, GTK 4 and Aether.
@@ -141,6 +169,10 @@ test-hw: iso
 # tabs, sign-in (POST, cookies), saved passwords, the session file
 test-browser: iso
 >$(PYTHON) -I tests/test-browser.py build/auxobsd.iso
+
+# pkg: real Ubuntu packages from a small local mirror, kept on an installed system's disk
+test-pkg: iso
+>$(PYTHON) -I tests/test-pkg.py build/auxobsd.iso
 
 menuconfig:
 >$(PYTHON) config/kconfig.py menuconfig

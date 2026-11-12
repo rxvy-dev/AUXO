@@ -30,3 +30,4 @@ __pycache__/
 *.swo
 *~
 lib/libauxo/tests/test_string
+/iso/boot/overlay.tar

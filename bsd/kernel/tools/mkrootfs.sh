@@ -41,6 +41,16 @@ echo "rootfs: $(wc -l < "$WORK/want2.txt") packages"
   xargs -n1 apt-get download -q < ../want2.txt 2>&1 | grep -i 'unable\|error' || true )
 for d in "$WORK"/debs/*.deb; do dpkg-deb -x "$d" "$ROOT"; done
 
+# for pkg (the package manager): what's in this image, and what it can do without
+mkdir -p "$ROOT/var/lib/pkg"
+for d in "$WORK"/debs/*.deb; do echo "$(dpkg-deb -f "$d" Package) $(dpkg-deb -f "$d" Version) base"; done > "$ROOT/var/lib/pkg/installed"
+{ grep -vxFf "$WORK/want2.txt" "$WORK/pkgs.txt" | grep -v "^lib" || true     # libraries get installed when needed
+  # needed only for maintainer scripts and services, which never run here (BusyBox has the tools)
+  printf '%s\n' adduser base-files base-passwd bash coreutils dash dbus dbus-session-bus default-dbus-session-bus \
+    debconf debconf-2.0 debianutils diffutils dpkg findutils grep gzip init-system-helpers install-info login lsb-base \
+    mount passwd perl-base sed sensible-utils systemd systemd-sysv tar tzdata ucf util-linux
+} | sort -u > "$ROOT/var/lib/pkg/assumed"
+
 # merged /usr, like Ubuntu: /bin, /lib, /lib64, /sbin are links into /usr
 for d in bin lib lib64 sbin; do
     if [ -d "$ROOT/$d" ] && [ ! -L "$ROOT/$d" ]; then cp -a "$ROOT/$d/." "$ROOT/usr/$d/" 2>/dev/null || true; rm -rf "${ROOT:?}/$d"; fi

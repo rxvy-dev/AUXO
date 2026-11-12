@@ -1,0 +1,6 @@
+# Where pkg gets packages: MIRROR SUITE COMPONENT...
+# AuxoBSD's root is built from Ubuntu 24.04 (noble), so these match it. Any Ubuntu mirror that
+# serves HTTPS works; plain http:// works too (downloads are still checked against the lists).
+https://archive.ubuntu.com/ubuntu noble main universe
+https://archive.ubuntu.com/ubuntu noble-updates main universe
+https://archive.ubuntu.com/ubuntu noble-security main universe

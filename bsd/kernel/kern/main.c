@@ -85,6 +85,7 @@ void kmain(uint32_t mbi)
     if (boot_module("rootfs", &img, &imglen) == 0) {
         int n = fs_mount_tar(img, imglen);
         ok("root"); kprintf("%d files from the root filesystem image (%lu MiB): Linux programs run\n", n, (unsigned long)(imglen >> 20));
+        if (boot_module("overlay", &img, &imglen) == 0) fs_mount_tar(img, imglen);   /* pkg, on top */
     } else { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
     vfs_init();
     pci_init();

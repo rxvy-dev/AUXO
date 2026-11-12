@@ -8,6 +8,7 @@
 #include "auxo.h"
 #include "unix.h"
 #include "inet.h"
+#include "install.h"
 #include "net.h"
 
 struct task *task_alloc(void);
@@ -1673,6 +1674,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 63: return sys_uname(t, a);
     case 72: return sys_fcntl(t, (long)a, (long)b, c);
     case 73: case 74: case 75: return 0;                       /* flock, fsync, fdatasync */
+    case 162: case 306: store_save(); return 0;               /* sync, syncfs: an installed system writes its disk now */
     case 76: { char p[1024]; struct node *n; long r = upath(t, a, p, sizeof p); if (r < 0) return r;
                if ((r = fs_lookup(t->cwd, p, 1, &n)) < 0) return r;
                return sys_truncate(n, (int64_t)b); }
@@ -1689,12 +1691,12 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 89: return sys_readlinkat(t, AT_FDCWD, a, b, c);
     case 90: { char p[1024]; struct node *n; long r = upath(t, a, p, sizeof p); if (r < 0) return r;
                if ((r = fs_lookup(t->cwd, p, 1, &n)) < 0) return r;
-               n->mode = (uint16_t)(b & 07777); return 0; }
-    case 91: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF; fl->node->mode = (uint16_t)(b & 07777); return 0; }
+               n->mode = (uint16_t)(b & 07777); fs_touch(n); return 0; }
+    case 91: { struct file *fl = getf(t, (long)a); if (!fl || !fl->node) return -EBADF; fl->node->mode = (uint16_t)(b & 07777); fs_touch(fl->node); return 0; }
     case 268: { char p[1024]; struct node *dir, *n; long r = upath(t, b, p, sizeof p); if (r < 0) return r;
                 if ((r = at_dir(t, (long)(int)a, p, &dir)) < 0) return r;
                 if ((r = fs_lookup(dir, p, 1, &n)) < 0) return r;
-                n->mode = (uint16_t)(c & 07777); return 0; }
+                n->mode = (uint16_t)(c & 07777); fs_touch(n); return 0; }
     case 92: case 93: case 94: case 260: return 0;             /* chown: everything is root's */
     case 95: { long o = t->umask; t->umask = (uint32_t)(a & 0777); return o; }
     case 96: { int64_t s, ns; now_ts(0, &s, &ns); int64_t tv[2] = { s, ns / 1000 }; return a ? copyout(t->mm, a, tv, 16) : 0; }

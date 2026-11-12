@@ -22,6 +22,8 @@ struct node {
     int      maps;                 /* shared mappings of its pages: they must never move */
     int      unlinked;
     void    *priv;                 /* pipes, sockets */
+    uint8_t  changed;              /* made or changed since boot (not from a boot image): kept on disk */
+    uint32_t wgen;                 /* generation of its last change */
 };
 
 void         fs_init(void);                   /* empty tree + /dev, /tmp, /home/root … */
@@ -48,5 +50,6 @@ void         fs_path(struct node *n, char *buf, size_t len);   /* absolute path 
 uint32_t     fs_now(void);
 void         fs_put(struct node *n);                            /* drop a reference */
 uint32_t     fs_generation(void);                              /* bumped on any change (for apps) */
+void         fs_touch(struct node *n);                          /* mark changed (chmod and the like) */
 
 #endif

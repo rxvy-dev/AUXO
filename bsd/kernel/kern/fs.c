@@ -8,6 +8,7 @@ size_t strspn_slash(const char *s);
 static struct node *root;
 static uint32_t next_ino = 1, generation;
 static volatile int lock_owner = -1, lock_depth;
+static int mounting;                       /* nodes from a boot image aren't "changed" */
 
 void fs_lock(void)
 {
@@ -30,6 +31,15 @@ void fs_unlock(void)
 }
 
 uint32_t fs_generation(void) { return generation; }
+
+void fs_touch(struct node *n) { fs_lock(); generation++; n->changed = 1; n->wgen = generation; fs_unlock(); }
+
+static void touch_tree(struct node *n)
+{
+    n->changed = 1;
+    n->wgen = generation;
+    if (n->type == N_DIR) for (struct node *c = n->child; c; c = c->next) touch_tree(c);
+}
 
 uint32_t fs_now(void)
 {
@@ -70,6 +80,8 @@ static struct node *new_node(struct node *dir, const char *name, size_t nlen, in
     n->parent = dir ? dir : n;
     if (dir) { n->next = dir->child; dir->child = n; }
     generation++;
+    n->changed = !mounting;
+    n->wgen = generation;
     return n;
 }
 
@@ -238,6 +250,7 @@ int fs_rename(struct node *odir, const char *oname, struct node *ndir, const cha
     n->next = ndir->child;
     ndir->child = n;
     generation++;
+    touch_tree(n);                         /* it lives somewhere new: keep it there */
     fs_unlock();
     return 0;
 }
@@ -300,6 +313,7 @@ long fs_write(struct node *n, uint64_t off, const void *buf, size_t len)
     if (end > n->size) n->size = end;
     n->mtime = fs_now();
     generation++;
+    n->changed = 1; n->wgen = generation;
     fs_unlock();
     return (long)len;
 }
@@ -316,6 +330,7 @@ int fs_truncate(struct node *n, uint64_t len)
     n->size = len;
     n->mtime = fs_now();
     generation++;
+    n->changed = 1; n->wgen = generation;
     fs_unlock();
     return 0;
 }
@@ -375,6 +390,7 @@ static struct node *mkdirs(const char *path, size_t len)
 int fs_mount_tar(const uint8_t *img, size_t len)
 {
     fs_lock();
+    mounting = 1;
     size_t off = 0;
     int count = 0;
     char longname[1024], longlink[1024];
@@ -441,6 +457,7 @@ int fs_mount_tar(const uint8_t *img, size_t len)
         }
         count++;
     }
+    mounting = 0;
     generation++;
     fs_unlock();
     return count;

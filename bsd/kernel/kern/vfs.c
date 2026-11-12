@@ -159,8 +159,11 @@ static const char README[] =
     "Welcome to AuxoBSD.\n\n"
     "This is your home folder, /home/root. Open files here in Aether (the code editor),\n"
     "or in the Terminal with `cat`. Aether's Preview button opens HTML files in the Browser.\n\n"
+    "More software: `pkg update`, then `pkg search WORD` and `pkg install NAME` in the Terminal.\n"
+    "pkg installs real Ubuntu 24.04 programs (AuxoBSD runs Linux programs as they are).\n\n"
     "Until AuxoBSD is installed (Install AuxoBSD in the app menu), files live in memory and are\n"
-    "gone after a restart. On an installed system they are saved to the disk.\n";
+    "gone after a restart. On an installed system they are saved to the disk, and so are the\n"
+    "programs you install and your changes to /etc.\n";
 
 static const char INDEX[] =
     "<!doctype html>\n<html>\n<head>\n  <title>My first page</title>\n</head>\n<body>\n"
