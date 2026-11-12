@@ -9,7 +9,8 @@ tests/sandbox-escape.c with the GCC inside AuxoBSD, and runs it:
   - in bubblewrap as the session's user (bwrap is set-user-ID, as WebKit uses it): no root inside;
   - seccomp on its own: errno and kill answers, stacking, inheritance across fork and exec.
 Then builds tests/syscalls.c and runs it: inotify, timerfd, POSIX timers, pidfd + waitid,
-sigtimedwait/sigqueue, sendfile, copy_file_range, preadv/pwritev, mknod, utimes, sched_*.
+sigtimedwait/sigqueue, sendfile, copy_file_range, preadv/pwritev, mknod, utimes, sched_*;
+and tests/users.c: file permissions, sticky /tmp, set-user-ID programs, dropping root.
 Then checks the host saw none of it (hostname, files) and that /proc tells the truth.
   python3 tests/test-sandbox.py build/auxobsd.iso
 """
@@ -39,6 +40,10 @@ echo "== host hostname: $(hostname)"
 wget -q -O /tmp/sct.c http://10.0.2.2:{port}/syscalls.c || exit 1
 gcc -O1 -o /tmp/sct /tmp/sct.c || exit 1
 echo "== system calls"; /tmp/sct
+wget -q -O /tmp/users.c http://10.0.2.2:{port}/users.c || exit 1
+gcc -O1 -o /tmp/users /tmp/users.c || exit 1
+echo "== users: root's powers (sudo)"; sudo /tmp/users root
+echo "== users: what the user may and may not do"; /tmp/users user
 """
 
 
@@ -49,6 +54,7 @@ def main():
     os.mkdir(www)
     shutil.copy(os.path.join(HERE, "sandbox-escape.c"), www)
     shutil.copy(os.path.join(HERE, "syscalls.c"), www)
+    shutil.copy(os.path.join(HERE, "users.c"), www)
     port = hw.serve(www)
     with open(os.path.join(www, "run.sh"), "w") as f:
         f.write(RUN.format(port=port))
@@ -78,6 +84,8 @@ def main():
                 hw.check(False, line[5:])
         hw.check(out.count("DONE all held") == 4, "all four runs finished", out[-2000:])
         hw.check(re.search(r"syscalls: \d+ passed, 0 failed", out), "the system-call program ran to the end", out[-2000:])
+        hw.check(re.search(r"users root: \d+ passed, 0 failed", out) and re.search(r"users user: \d+ passed, 0 failed", out),
+                 "the permission checks ran to the end, as root and as the user", out[-2000:])
         out = m.run("busybox ls /tmp/mine")
         hw.check("No such file" in out, "a file the sandbox made in its /tmp isn't in the host's", out)
         out = m.run("busybox wc -l /proc/self/mountinfo")

@@ -653,11 +653,9 @@ void session_user_init(void)
     for (unsigned i = 0; i < sizeof fix / sizeof fix[0]; i++) { struct node *n; if (fs_lookup(0, fix[i].p, 1, &n) == 0 && n->type == N_DIR) { n->mode = fix[i].m; n->uid = n->gid = 0; } }
     { struct node *fb; if (fs_lookup(0, "/dev/fb0", 1, &fb) == 0) { fb->mode = 0660; fb->gid = 44; } }   /* group video */
     if (!vfs_exists("/etc/passwd")) return;                    /* no root filesystem: stay root */
-    if (!vfs_exists("/etc/shadow")) {                          /* Debian's base leaves it to passwd's postinst */
-        rewrite("/etc/shadow", 0, 0, "root:*:19000:0:99999:7:::\n");
-        struct node *s;
-        if (fs_lookup(0, "/etc/shadow", 1, &s) == 0) { s->mode = 0640; struct account g; (void)g; s->gid = 42; }
-    }
+    if (!vfs_exists("/etc/shadow")) rewrite("/etc/shadow", 0, 0, "root:*:19000:0:99999:7:::\n");   /* (passwd's postinst makes it on Ubuntu) */
+    struct node *sh;
+    if (fs_lookup(0, "/etc/shadow", 1, &sh) == 0 && sh->uid == 0 && sh->gid == 0) { sh->mode = 0640; sh->gid = 42; }   /* root:shadow, as Ubuntu has it */
     struct account a;
     if (!each_line("/etc/passwd", first_user, &a)) {
         rewrite("/etc/passwd", 0, 0, "auxo:x:1000:1000:AuxoBSD:/home/auxo:/bin/sh\n");
