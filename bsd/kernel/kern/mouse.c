@@ -77,3 +77,16 @@ int mouse_poll(struct mouse_event *ev)
     qt = (qt + 1) % QN;
     return 1;
 }
+
+/* USB mice (usb/xhci.c), from a thread */
+void mouse_usb_attached(void) { present = 1; }
+void mouse_push(int dx, int dy, int wheel, int buttons)
+{
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    struct mouse_event e = { dx, dy, wheel, buttons };
+    int n = (qh + 1) % QN;
+    if (n != qt) { q[qh] = e; qh = n; }
+    present = 1;
+    __asm__ volatile("push %0; popfq" :: "r"(f) : "memory", "cc");
+}

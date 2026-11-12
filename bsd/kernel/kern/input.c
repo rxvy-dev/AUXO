@@ -93,13 +93,29 @@ int input_raw_key(void)
     return k;
 }
 
+static void scancode(uint8_t sc);
+
 void input_kbd_irq(void)
 {
     uint8_t st = inb(0x64);
     if (!(st & 1)) return;
     uint8_t sc = inb(0x60);
     if (st & 0x20) { mouse_byte(sc); return; } /* a mouse byte that raced in: hand it over */
+    scancode(sc);
+}
 
+/* USB keyboards (usb/xhci.c) translate to set-1 scancodes and come in here, from a thread:
+ * keep the PS/2 interrupt out while the shared state changes */
+void input_scancode(unsigned char sc)
+{
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    scancode(sc);
+    __asm__ volatile("push %0; popfq" :: "r"(f) : "memory", "cc");
+}
+
+static void scancode(uint8_t sc)
+{
     if (sc == 0xE0) { ext = 1; return; }
     int up = sc & 0x80;
     if (gui) {                                     /* raw keys for Wayland clients: Linux keycodes */

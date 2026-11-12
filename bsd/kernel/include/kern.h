@@ -72,6 +72,7 @@ void input_kbd_irq(void);
 /* fb.c: the linear framebuffer (graphics mode) */
 int  fb_init(void);                               /* 1 if a usable 24/32-bit RGB framebuffer is there */
 int  fb_width(void);
+uint64_t fb_phys(void);                         /* where the framebuffer is (0: none) */
 int  fb_height(void);
 void fb_present(const uint32_t *src, int stride, int x, int y, int w, int h);   /* XRGB → screen */
 

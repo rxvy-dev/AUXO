@@ -28,7 +28,7 @@ build/net/http.o: include/trust_anchors.h
 
 $(GUI_OBJS): include/gfx.h include/fonts.h include/chrono_themes.h include/chrono.h
 
-SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c) $(wildcard net/*.c) $(wildcard disk/*.c) $(wildcard third_party/bearssl/*.c)
+SRCS_C := $(wildcard kern/*.c) $(wildcard arch/x86_64/*.c) $(wildcard net/*.c) $(wildcard disk/*.c) $(wildcard usb/*.c) $(wildcard third_party/bearssl/*.c)
 SRCS_S := $(wildcard arch/x86_64/*.S)
 OBJS := $(patsubst %.c,build/%.o,$(SRCS_C)) $(patsubst %.S,build/%.o,$(SRCS_S))
 

@@ -7,10 +7,44 @@
 static volatile uint64_t ticks;
 uint64_t kernel_ticks(void) { return ticks; }
 
+/* The TSC, calibrated against PIT channel 2 (no interrupts needed), for delays on the boot
+ * path: kmain is the idle thread, which only runs when nothing else wants the CPU, so it can't
+ * sleep on timer ticks once other threads (the desktop) are busy. */
+static uint64_t tsc_per_ms;
+
+void tsc_calibrate(void)
+{
+    uint8_t g = inb(0x61);
+    outb(0x61, (uint8_t)((g & ~0x03) | 0x00));        /* gate off, speaker off */
+    outb(0x43, 0xB0);                                 /* channel 2, lo/hi, mode 0 */
+    outb(0x42, 11932 & 0xFF);                         /* 10 ms at 1.193182 MHz */
+    outb(0x42, 11932 >> 8);
+    outb(0x61, (uint8_t)((g & ~0x03) | 0x01));        /* gate on: count starts */
+    uint64_t t0 = rdtsc();
+    uint32_t i = 0;
+    while (!(inb(0x61) & 0x20) && ++i < 50000000u) { }
+    uint64_t t1 = rdtsc();
+    outb(0x61, g);
+    if (i < 50000000u && t1 > t0) tsc_per_ms = (t1 - t0) / 10;
+    if (!tsc_per_ms) {                                /* no PIT channel 2: ask the CPU */
+        uint32_t r[4];
+        cpuid(0, r);
+        if (r[0] >= 0x16) { cpuid(0x16, r); if (r[0]) tsc_per_ms = (uint64_t)(r[0] & 0xFFFF) * 1000; }
+    }
+    if (!tsc_per_ms) tsc_per_ms = 2000000;            /* assume 2 GHz rather than hang */
+}
+
 void kdelay_ms(uint32_t ms)
 {
-    uint64_t until = ticks + (ms + 1000 / AUXO_HZ - 1) / (1000 / AUXO_HZ) + 1;
-    while (ticks < until) __asm__ volatile("sti; hlt");
+    uint64_t f;
+    __asm__ volatile("pushfq; pop %0" : "=r"(f));
+    if (rs_current_pid() != 0 && (f & 0x200)) {       /* a thread: sleep, let others run */
+        rs_sleep((uint64_t)(ms * AUXO_HZ + 999) / 1000);
+        return;
+    }
+    if (!tsc_per_ms) tsc_calibrate();
+    uint64_t end = rdtsc() + tsc_per_ms * ms;
+    while (rdtsc() < end) __asm__ volatile("pause");
 }
 
 static const char *const exc_name[32] = {

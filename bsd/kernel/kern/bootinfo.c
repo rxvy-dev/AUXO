@@ -1,5 +1,6 @@
 /* Multiboot2 information: the command line (Auxo settings) and the loader's name. */
 #include "kern.h"
+#include "acpi.h"
 
 #define ALIGN8(x) (((x) + 7) & ~7u)
 
@@ -23,6 +24,7 @@ void bootinfo_init(uint32_t mbi_addr)
             strlcpy(mods[nmods].name, (const char *)p + 16, sizeof mods[nmods].name);
             nmods++;
         }
+        if ((type == 14 || type == 15) && size > 8) acpi_set_rsdp(p + 8, size - 8);   /* ACPI RSDP (v1/v2) */
         if (type == 1) strlcpy(cmdline, (const char *)p + 8, sizeof cmdline);   /* boot command line */
         if (type == 2) strlcpy(loader, (const char *)p + 8, sizeof loader);     /* boot loader name */
         if (type == 8 && size >= 31) {                                          /* framebuffer info */

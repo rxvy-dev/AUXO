@@ -2,6 +2,7 @@
  * a 32-bit XRGB back buffer; fb_present copies rectangles of it to the screen in whatever RGB
  * layout the mode has (32 or 24 bits per pixel). */
 #include "kern.h"
+#include "arch.h"
 
 static const struct fbinfo *fb;
 static uint8_t *mem;
@@ -11,12 +12,15 @@ int fb_init(void)
     fb = boot_framebuffer();
     if (!fb || fb->type != 1 || (fb->bpp != 32 && fb->bpp != 24) || fb->width < 640 || fb->height < 480)
         return 0;
-    if (fb->addr + (uint64_t)fb->pitch * fb->height > 0x100000000ULL)
-        return 0;                                    /* outside our 4 GiB identity map */
-    mem = (uint8_t *)(uintptr_t)fb->addr;
+    /* NVIDIA and AMD cards with Resizable BAR / above-4G decoding put the framebuffer far
+     * above 4 GiB; map it there, write-combining either way */
+    pat_init();
+    mem = vm_map_fb(fb->addr, (uint64_t)fb->pitch * fb->height);
+    if (!mem) { fb = 0; return 0; }
     return 1;
 }
 
+uint64_t fb_phys(void) { return fb ? fb->addr : 0; }
 int fb_width(void) { return fb ? (int)fb->width : 0; }
 int fb_height(void) { return fb ? (int)fb->height : 0; }
 

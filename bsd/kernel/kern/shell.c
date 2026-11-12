@@ -2,6 +2,7 @@
  * until there is a userland. Line editing: Backspace, Ctrl-C, Ctrl-U, Ctrl-L,
  * Up/Down history, Tab completes command names. */
 #include "kern.h"
+#include "usb.h"
 #include "arch.h"
 #include "rs.h"
 #include "auxo.h"
@@ -207,6 +208,16 @@ static int cmd_history(int argc, char **argv)
     (void)argc; (void)argv;
     int from = nhist > HIST ? nhist - HIST : 0;
     for (int i = from; i < nhist; i++) kprintf("%4d  %s\n", i + 1, hist[i % HIST]);
+    return 0;
+}
+
+static int cmd_lsusb(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    if (!usb_controllers()) { kprintf("no USB 3 (xHCI) controller found\n"); return 1; }
+    static char buf[4096];
+    if (!usb_list(buf, sizeof buf)) kprintf("no USB devices (yet: they show up a second after they're plugged in)\n");
+    else kprintf("%s", buf);
     return 0;
 }
 
@@ -544,6 +555,7 @@ static const struct cmd cmds[] = {
     { "install",     cmd_install,     "install AuxoBSD on a disk (or use the Install app)" },
     { "sync",        cmd_sync,        "save /home/root to the disk now (installed systems)" },
     { "lsblk",       cmd_lsblk,       "disks (IDE, SATA, NVMe)" },
+    { "lsusb",       cmd_lsusb,       "USB devices (keyboards, mice, hubs)" },
     { "disktest",    cmd_disktest,    "write and read back a test pattern on a disk" },
     { "lspci",       cmd_lspci,       "PCI devices and their drivers" },
     { "ifconfig",    cmd_ifconfig,    "network card, address, gateway, DNS" },
@@ -612,6 +624,7 @@ void shell_main(uintptr_t arg)
 {
     (void)arg;
     static char line[LINE_MAX];
+    usb_wait_settled(3000);           /* USB keyboards ready (and announced) before the prompt */
     if (auxo.motd) { char *a[] = { "auxo-motd", 0 }; cmd_auxo_motd(1, a); }
     else kprintf("\n");
     for (;;) {

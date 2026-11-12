@@ -48,10 +48,13 @@ void pic_eoi(int irq);
 void pit_init(uint32_t hz);
 void trap_dispatch(struct trapframe *tf);
 uint64_t kernel_ticks(void);
-void     kdelay_ms(uint32_t ms);          /* busy-waits on the PIT tick (interrupts must be on) */
+void     kdelay_ms(uint32_t ms);          /* threads sleep; the boot path busy-waits on the TSC */
+void     tsc_calibrate(void);
 
 /* vm.c: the boot page tables identity-map the low 4 GiB; devices above that get mapped on demand */
 void *vm_map_mmio(uint64_t phys, uint64_t len, int uncached);   /* NULL if it can't */
+void  pat_init(void);                                            /* PAT entry 1 = write-combining */
+void *vm_map_fb(uint64_t phys, uint64_t len);                    /* the framebuffer, write-combining */
 
 /* rust: give up the CPU to the next runnable thread */
 void rs_yield(void);

@@ -167,7 +167,7 @@ static void install_thread(uintptr_t arg)
         "set timeout=2\nset default=0\ninsmod all_video\n"
         "set menu_color_normal=light-gray/black\nset menu_color_highlight=black/light-magenta\n\n"
         "menuentry \"AuxoBSD " AUXO_VERSION "\" {\n"
-        "    set gfxpayload=1024x768x32,1280x800x32,auto\n"
+        "    set gfxpayload=1920x1080x32,1600x900x32,1366x768x32,1280x800x32,1024x768x32,auto\n"
         "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed\n"
         "    module2 /boot/rootfs.tar rootfs\n    boot\n}\n\n"
         "menuentry \"AuxoBSD " AUXO_VERSION " (text console)\" {\n"

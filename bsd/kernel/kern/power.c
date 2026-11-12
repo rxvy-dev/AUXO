@@ -1,12 +1,14 @@
-/* reboot / poweroff without ACPI: the 8042 reset line, then the emulators' shutdown ports. */
+/* reboot / poweroff: ACPI first (acpi.c), then the 8042 reset line and the emulators' ports. */
 #include "kern.h"
 #include "install.h"
 #include "arch.h"
+#include "acpi.h"
 
 void machine_reboot(void)
 {
     store_save();                             /* installed system: keep /home/root */
     cli();
+    acpi_reboot();                            /* FADT reset register, then the chipset's 0xCF9 */
     for (int i = 0; i < 100000 && (inb(0x64) & 2); i++)
         ;
     outb(0x64, 0xFE);                         /* pulse the CPU reset line */
@@ -19,6 +21,7 @@ void machine_poweroff(void)
 {
     store_save();
     cli();
+    acpi_poweroff();                          /* real hardware: PM1 control, SLP_TYP from \_S5 */
     outw(0x604, 0x2000);                      /* QEMU (q35 / i440fx with ACPI PM at 0x600) */
     outw(0xB004, 0x2000);                     /* Bochs, older QEMU */
     outw(0x4004, 0x3400);                     /* VirtualBox */

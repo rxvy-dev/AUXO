@@ -108,6 +108,15 @@ struct pci_dev *pci_find_class(int class, int subclass, int start)
 
 const struct pci_dev *pci_gpu(void)
 {
+    /* the card the screen is on: the one whose memory BAR holds the boot framebuffer. On a
+     * laptop with Intel or AMD graphics plus an NVIDIA chip, that's the integrated one. */
+    uint64_t fbp = fb_phys();
+    if (fbp)
+        for (int i = 0; i < ndev; i++)
+            if (devs[i].class == 0x03)
+                for (int b = 0; b < 6; b++)
+                    if (devs[i].bar[b] && devs[i].barsize[b] && fbp >= devs[i].bar[b] && fbp < devs[i].bar[b] + devs[i].barsize[b])
+                        return &devs[i];
     /* prefer a discrete card (NVIDIA/AMD) over the integrated one when both are there */
     const struct pci_dev *any = 0;
     for (int i = 0; i < ndev; i++)
@@ -193,6 +202,26 @@ static const struct idname known[] = {
     { 0x10DE, 0x1F02, "GeForce RTX 2070" },     { 0x10DE, 0x1F08, "GeForce RTX 2060" },
     { 0x10DE, 0x2184, "GeForce GTX 1660" },     { 0x10DE, 0x1B80, "GeForce GTX 1080" },
     { 0x10DE, 0x1B81, "GeForce GTX 1070" },     { 0x10DE, 0x1C82, "GeForce GTX 1050 Ti" },
+    /* AMD Radeon: RDNA 4, 3, 2 */
+    { 0x1002, 0x7550, "Radeon RX 9070 / 9070 XT" }, { 0x1002, 0x7590, "Radeon RX 9060 XT" },
+    { 0x1002, 0x744C, "Radeon RX 7900 XT/XTX" },    { 0x1002, 0x7448, "Radeon Pro W7900" },
+    { 0x1002, 0x747E, "Radeon RX 7800 XT / 7700 XT" }, { 0x1002, 0x7480, "Radeon RX 7600" },
+    { 0x1002, 0x73AF, "Radeon RX 6900 XT" },        { 0x1002, 0x73BF, "Radeon RX 6800 / 6900 XT" },
+    { 0x1002, 0x73DF, "Radeon RX 6700 XT" },        { 0x1002, 0x73FF, "Radeon RX 6600 / 6600 XT" },
+    { 0x1002, 0x731F, "Radeon RX 5700 / 5700 XT" }, { 0x1002, 0x67DF, "Radeon RX 470/480/570/580" },
+    { 0x1002, 0x164E, "Radeon Graphics (Ryzen 7000)" }, { 0x1002, 0x15BF, "Radeon 780M" },
+    { 0x1002, 0x1681, "Radeon 680M" },              { 0x1002, 0x1638, "Radeon Vega (Ryzen 5000)" },
+    { 0x1002, 0x150E, "Radeon 890M" },
+    /* Intel graphics: Arc, Xe, UHD */
+    { 0x8086, 0xE20B, "Arc B580" },                 { 0x8086, 0xE20C, "Arc B570" },
+    { 0x8086, 0x56A0, "Arc A770" },                 { 0x8086, 0x56A1, "Arc A750" },
+    { 0x8086, 0x56A5, "Arc A380" },                 { 0x8086, 0x7D55, "Arc Graphics (Core Ultra)" },
+    { 0x8086, 0x64A0, "Arc 140V" },                 { 0x8086, 0xA7A0, "Iris Xe Graphics" },
+    { 0x8086, 0x9A49, "Iris Xe Graphics" },         { 0x8086, 0x46A6, "Iris Xe Graphics" },
+    { 0x8086, 0xA780, "UHD Graphics 770" },         { 0x8086, 0x4680, "UHD Graphics 770" },
+    { 0x8086, 0x4692, "UHD Graphics 730" },         { 0x8086, 0x9BC5, "UHD Graphics 630" },
+    { 0x8086, 0x3E92, "UHD Graphics 630" },         { 0x8086, 0x3E9B, "UHD Graphics 630" },
+    { 0x8086, 0x5912, "HD Graphics 630" },          { 0x8086, 0x0412, "HD Graphics 4600" },
     /* virtual GPUs */
     { 0x1234, 0x1111, "Standard VGA (Bochs)" }, { 0x15AD, 0x0405, "SVGA II" },
     { 0x80EE, 0xBEEF, "VirtualBox Graphics" },  { 0x1B36, 0x0100, "QXL" },

@@ -1,4 +1,6 @@
 #include "kern.h"
+#include "acpi.h"
+#include "usb.h"
 #include "arch.h"
 #include "rs.h"
 #include "auxo.h"
@@ -46,6 +48,7 @@ void kmain(uint32_t mbi)
     gdt_init();  ok("gdt");  kprintf("kernel/user segments + TSS loaded\n");
     idt_init();  ok("idt");  kprintf("48 vectors + int 0x80 syscall gate\n");
     pic_init();
+    tsc_calibrate();
 
     pmm_init(mbi);
     ok("pmm");
@@ -57,6 +60,10 @@ void kmain(uint32_t mbi)
     if (!heap) panic("cannot allocate kernel heap");
     rs_init((uintptr_t)heap, HEAP_PAGES * PAGE_SIZE);
     ok("rust"); kprintf("heap + scheduler up (heap at %p)\n", (void *)heap);
+    pit_init(AUXO_HZ);                /* now, not at the end: drivers' delays count PIT ticks, and a
+                                         UEFI boot doesn't leave the PIT running the way a BIOS does */
+    acpi_init();
+    ok("acpi"); kprintf("%s\n", acpi_summary());
 
     input_init();
     int mouse = gui ? mouse_init() : 0;
@@ -64,8 +71,8 @@ void kmain(uint32_t mbi)
         ok("fb");
         kprintf("%dx%d framebuffer, PS/2 mouse %s\n", fb_width(), fb_height(), mouse ? "found" : "not found");
     }
-    ok("tty");  kprintf("%s%s, PS/2 keyboard\n", gui ? "Chrono Terminal" : "VGA text 80x25",
-                        console_serial_present() ? " + ttyS0 115200" : "");
+    ok("tty");  kprintf("%s%s, %s\n", gui ? "Chrono Terminal" : "VGA text 80x25",
+                        console_serial_present() ? " + ttyS0 115200" : "", inb(0x64) == 0xFF ? "no PS/2 controller" : "PS/2 keyboard");
     ok("auxo"); kprintf("accent %s, hostname %s\n", auxo_accent_name(), auxo.hostname);
 
     if (gui) {
@@ -84,7 +91,8 @@ void kmain(uint32_t mbi)
     const struct pci_dev *gpu = pci_gpu();
     char gname[64] = "none";
     if (gpu) pci_describe(gpu, gname, sizeof gname);
-    ok("pci"); kprintf("%d devices, display: %s\n", pci_count(), gname);
+    ok("pci"); kprintf("%d devices, display: %s%s\n", pci_count(), gname, gui ? " (firmware framebuffer)" : "");
+    if (usb_init()) { ok("usb"); kprintf("%d xHCI controller%s: USB keyboards, mice and hubs\n", usb_controllers(), usb_controllers() > 1 ? "s" : ""); }
     disk_init();
     if (disk_count()) {
         ok("disk");
@@ -97,7 +105,6 @@ void kmain(uint32_t mbi)
     }
     net_init();                       /* the net thread: Ethernet driver + DHCP, in the background */
     if (rs_spawn("auxsh", shell_main, 0) < 0) panic("cannot start the shell");
-    pit_init(AUXO_HZ);
     sti();
 
     for (;;) {                       /* pid 0: the idle thread */
