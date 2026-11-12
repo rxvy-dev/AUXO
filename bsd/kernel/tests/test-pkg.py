@@ -199,7 +199,7 @@ def main():
         if not up:
             return
         out = m.run("tree -L 1 /etc/pkg")
-        check("└── sources" in out, "tree, installed on the installed system, is still there", out)
+        check(re.search(r"(└──|`--) sources", out) is not None, "tree, installed on the installed system, is still there", out)   # ASCII without a UTF-8 locale
         out = m.run("pkg list")
         check("tree" in out and not re.search(r"^jq\s", out, re.M), "pkg list: tree yes, jq no", out)
         out = m.run("busybox sh -c 'command -v jq || echo no-jq'")
