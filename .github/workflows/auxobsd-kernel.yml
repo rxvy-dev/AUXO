@@ -83,3 +83,38 @@ jobs:
             bsd/kernel/build/auxobsd.elf
             bsd/kernel/build/qemu-*.log
           if-no-files-found: ignore
+
+  # The ISO for using it day to day: the same kernel with the full root image (GNOME Web for
+  # the whole web: HTML, CSS, JavaScript; D-Bus; Mesa). Bigger and slower to boot live
+  # (give the machine 4 GB); installed, it runs from the disk.
+  full-iso:
+    needs: kernel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: bsd/kernel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-x86 grub-pc-bin grub-efi-amd64-bin grub-common xorriso mtools zlib1g-dev liblzma-dev libzstd1 libcrypt-dev curl
+          rustup target add x86_64-unknown-none
+
+      - name: Full root filesystem (GNOME Web, D-Bus, Mesa, GCC, …)
+        run: ROOTFS_SET=full make rootfs
+
+      - name: Installer boot template
+        run: make install-image
+
+      - name: Build the ISO
+        run: make && make iso
+
+      - name: Upload the full ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: auxobsd-full-iso
+          path: bsd/kernel/build/auxobsd.iso
+          if-no-files-found: error

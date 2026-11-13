@@ -16,6 +16,7 @@
 #include "fs.h"
 #include "install.h"
 #include "cred.h"
+#include "auxofs.h"
 
 static int sys_save(struct disk *d, uint32_t start, uint32_t size, uint32_t *sig_out);
 static char *sdup(const char *s) { size_t n = strlen(s); char *r = rs_kmalloc(n + 1); if (r) memcpy(r, s, n + 1); return r; }
@@ -87,7 +88,7 @@ static void tar_entry(const char *name, const void *data, uint64_t size, int dir
         uint64_t c = size - o < (1 << 20) ? size - o : (1 << 20);
         put(d + o, c);
         *done += c;
-        install_pct = 10 + (int)(*done * 85 / (total ? total : 1));
+        install_pct = 2 + (int)(*done * 8 / (total ? total : 1));
     }
     if (size % 512) { uint8_t z[512] = { 0 }; put(z, 512 - size % 512); }
 }
@@ -122,27 +123,28 @@ static int write_home(struct disk *d, uint32_t start, uint32_t size)
     return d->write(d, start, 1, b);
 }
 
+static void copy_progress(int pct) { install_pct = 12 + pct * 86 / 100; }
+
 static void install_thread(uintptr_t arg)
 {
     (void)arg;
     failed = 0;
     dk = disk_get(req.disk);
     const uint8_t *tpl, *kern_elf, *root, *ov = 0;
-    size_t tpl_len, kern_len, root_len = 0, ov_len = 0;
+    size_t tpl_len, kern_len;
     if (!dk || dk->gone) { msg("That disk is gone."); install_state = 3; return; }
     if (boot_module("installer", &tpl, &tpl_len) < 0 || boot_module("kernel", &kern_elf, &kern_len) < 0) {
         msg("This boot of AuxoBSD has no install image (start it from the AuxoBSD ISO).");
         install_state = 3;
         return;
     }
-    boot_module("rootfs", &root, &root_len);
-    boot_module("overlay", &ov, &ov_len);           /* pkg and friends, on top of the root */
+    (void)root; (void)ov;                           /* (the root goes in as AuxoFS, from the live tree) */
     uint64_t pg = pmm_alloc_contig(IOSECT * 512 / PAGE_SIZE);
     if (!pg) { msg("Out of memory."); install_state = 3; return; }
     iobuf = (uint8_t *)(uintptr_t)pg;
 
     /* sizes: the tar needs headers + contents; leave room to grow */
-    uint64_t tar_bytes = 512 * 10 + 4096 + kern_len + root_len + ov_len + 2 * 512 + 512 * 6;
+    uint64_t tar_bytes = 512 * 10 + 4096 + kern_len + 2 * 512 + 512 * 6;
     uint32_t p2_start = 34816;
     uint32_t p2_size = (uint32_t)(((tar_bytes / 512 + 65536) + 2047) & ~2047ULL);   /* +32 MiB */
     uint32_t p3_start = p2_start + p2_size;
@@ -171,41 +173,39 @@ static void install_thread(uintptr_t arg)
         "menuentry \"AuxoBSD " AUXO_VERSION "\" {\n"
         "    set gfxpayload=1920x1080x32,1600x900x32,1366x768x32,1280x800x32,1024x768x32,auto\n"
         "    echo \"Loading AuxoBSD...\"\n"
-        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed\n"
-        "    module2 /boot/rootfs.tar rootfs\n    if [ -f /boot/overlay.tar ]; then module2 /boot/overlay.tar overlay; fi\n    boot\n}\n\n"
+        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed root=auxofs\n"
+        "    boot\n}\n\n"
         "menuentry \"AuxoBSD " AUXO_VERSION " (text console)\" {\n"
         "    if [ \"$grub_platform\" = \"efi\" ]; then set gfxpayload=keep; else set gfxpayload=text; fi\n"
         "    echo \"Loading AuxoBSD...\"\n"
-        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed text\n"
-        "    module2 /boot/rootfs.tar rootfs\n    if [ -f /boot/overlay.tar ]; then module2 /boot/overlay.tar overlay; fi\n    boot\n}\n\n"
+        "    multiboot2 /boot/auxobsd.elf accent=%s hostname=%s installed root=auxofs text\n"
+        "    boot\n}\n\n"
         "menuentry \"Reboot\" { reboot }\nmenuentry \"Power off\" { halt }\n",
         auxo_accents[req.accent].name, req.hostname, auxo_accents[req.accent].name, req.hostname);
     lba = p2_start;
     fill = 0;
-    uint64_t done = 0, total = kern_len + root_len + ov_len;
+    uint64_t done = 0, total = kern_len;
     tar_entry("boot/", 0, 0, 1, &done, total);
     tar_entry("boot/grub/", 0, 0, 1, &done, total);
     tar_entry("boot/grub/grub.cfg", cfg, (uint64_t)n, 0, &done, total);
     tar_entry("boot/auxobsd.elf", kern_elf, kern_len, 0, &done, total);
-    if (root_len) tar_entry("boot/rootfs.tar", root, root_len, 0, &done, total);
-    if (ov_len) tar_entry("boot/overlay.tar", ov, ov_len, 0, &done, total);
     { uint8_t z[1024] = { 0 }; put(z, sizeof z); }
     flush();
     if (failed) { msg("Writing to the disk failed."); install_state = 3; return; }
 
-    msg("Saving your account and files…");
-    install_pct = 96;
+    msg("Saving your account…");
+    install_pct = 11;
     if (req.user[0]) {                                     /* who'll use it: the live account, renamed */
         if (strcmp(req.user, session_user()) && account_rename(session_user(), req.user, req.fullname) == 0) session_set_user(req.user);
         else if (req.fullname[0]) account_rename(session_user(), session_user(), req.fullname);
         account_set_password(session_user(), req.password);
     }
     memset(req.password, 0, sizeof req.password);
-    if (write_home(dk, p3_start, p3_size / 2) < 0) { msg("Couldn't write to the disk."); install_state = 3; return; }
-    install_pct = 98;
-    {   /* your files, and what was installed or changed in this live session (pkg install …) */
-        uint32_t sig;
-        if (sys_save(dk, p3_start + p3_size / 2, p3_size - p3_size / 2, &sig) < 0) { msg("Couldn't copy your files and the system's changes to the disk."); install_state = 3; return; }
+    msg("Copying the system and your files to the disk…");
+    {   /* the root filesystem: AuxoFS, with the live system's whole tree (programs installed and
+           files made in this session included) */
+        int r = auxofs_format_copy(dk, p3_start, p3_size, copy_progress);
+        if (r < 0) { msg(r == -28 ? "That disk is too small for the system and your files." : "Writing to the disk failed."); install_state = 3; return; }
     }
     for (size_t i = 0; i < IOSECT * 512 / PAGE_SIZE; i++) pmm_free_page(pg + i * PAGE_SIZE);
     install_pct = 100;
@@ -455,6 +455,7 @@ static uint32_t saved_gen;
 
 int store_save(void)
 {
+    if (auxofs_mounted()) return auxofs_commit(0);
     if (!home_disk) return -1;
     uint32_t gen = vfs_dirty();
     int r = 0;
@@ -517,4 +518,4 @@ int store_init(void)
     return -1;
 }
 
-const char *store_where(void) { return home_disk ? home_disk->name : 0; }
+const char *store_where(void) { return auxofs_mounted() ? auxofs_disk() : home_disk ? home_disk->name : 0; }

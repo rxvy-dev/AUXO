@@ -10,6 +10,7 @@ void wl_frame_done(void);                           /* after a frame went to the
 void wl_paint_window(struct canvas *c, int x, int sx, int sy);   /* geometry origin at sx,sy */
 void wl_paint_popups(struct canvas *c);
 const char *wl_title(int x);
+const char *wl_app_id(int x);          /* xdg_toplevel.set_app_id: "org.gnome.Epiphany" … */
 void wl_geometry(int x, int *gx, int *gy, int *gw, int *gh);
 
 int  wl_popup_at(int sx, int sy, int *bx, int *by);

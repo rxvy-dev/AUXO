@@ -220,6 +220,35 @@ The version comes from `bsd/kernel/VERSION`.
 Not there yet: Wi-Fi (tether a phone over USB instead), GPU acceleration, sound input
 (microphones), HDMI audio, USB sound cards, the Realtek RTL8125 (2.5 Gbit).
 
+## The disk: AuxoFS
+
+An installed AuxoBSD runs from its disk. The installer formats the third partition as
+**AuxoFS** and copies the live system's whole tree into it (programs installed with `pkg` and
+your files included); GRUB then only loads the kernel, and the kernel mounts the disk as `/`.
+
+- Files are read from the disk the first time something needs them, and when memory runs short
+  the ones nobody has used for a while are dropped again (they come back from the disk), so the
+  system no longer has to fit in RAM: an installed system boots and compiles in 192 MB.
+- Changes go to the disk every 5 seconds, on `sync`, on `fsync` and at power off. A changed
+  file is written to new blocks; the record pointing at them goes to a log after the data; when
+  the log fills, the whole tree is written as a checkpoint and one of two superblocks is pointed
+  at it. Nothing the last saved state points at is ever overwritten, so a crash or a power cut
+  loses at most the last few seconds and never leaves a half-written disk (the test pulls the
+  plug and checks).
+- Owners, modes, links and hidden folders are kept. Systems installed by earlier versions (the
+  root image in memory, changes saved beside it) keep booting the way they did.
+
+## Files and the web
+
+- **Files** (in the menu): places on the left (home, its folders, the whole computer), folders
+  first, double-click or Enter to open: folders go in, web pages and pictures open in the
+  browser, programs run, everything else opens in Aether. New folder, F2 to rename, Delete,
+  Ctrl+C / Ctrl+X / Ctrl+V, hidden files on and off. It acts as you: what your account can't
+  touch, Files can't either.
+- **Browser** opens GNOME Web (WebKit: all of HTML, CSS and JavaScript, HTTPS) when the system
+  has it, which the *full* ISO does (CI builds it as `auxobsd-full-iso`; give the machine 4 GB to
+  run it live). The small ISO falls back to the built-in browser, which shows pages without CSS.
+
 ## Users and permissions
 
 AuxoBSD runs as a person's account, not as root. A live system makes **`auxo`** (uid 1000, no

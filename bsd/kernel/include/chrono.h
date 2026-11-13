@@ -6,7 +6,7 @@
 
 #define CHRONO_THEMES 43        /* checked against chrono_themes.h in kern/chrono.c */
 
-enum { APP_TERMINAL, APP_SETTINGS, APP_ABOUT, APP_BROWSER, APP_AETHER, APP_INSTALLER, APP_COUNT };
+enum { APP_TERMINAL, APP_SETTINGS, APP_ABOUT, APP_BROWSER, APP_AETHER, APP_INSTALLER, APP_FILES, APP_COUNT };
 
 void chrono_attach_console(void);     /* console output → the Terminal window's grid */
 int  chrono_start(void);              /* start the desktop thread */

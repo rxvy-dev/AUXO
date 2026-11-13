@@ -213,6 +213,7 @@ static long sys_read(struct task *t, long fd, uint64_t ubuf, uint64_t n)
         struct node *nd = f->node;
         if (f->pos >= nd->size) return 0;
         if (n > nd->size - f->pos) n = nd->size - f->pos;
+        if (fs_load(nd) < 0) return -EIO;
         if (copyout(t->mm, ubuf, nd->data + f->pos, n) < 0) return -EFAULT;
         f->pos += n;
         return (long)n;
@@ -2251,7 +2252,8 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 62: return sys_kill(t, (long)(int)a, (long)b);
     case 63: return sys_uname(t, a);
     case 72: return sys_fcntl(t, (long)a, (long)b, c);
-    case 73: case 74: case 75: return 0;                       /* flock, fsync, fdatasync */
+    case 73: return 0;                                         /* flock */
+    case 74: case 75: store_save(); return 0;                  /* fsync, fdatasync: on an installed system, to the disk now */
     case 162: case 306: store_save(); return 0;               /* sync, syncfs: an installed system writes its disk now */
     case 76: { char p[1024]; struct path pp; long r = upath(t, a, p, sizeof p); if (r < 0) return r;
                if ((r = vfs_walk(t, t->ns.cwd, p, 1, &pp)) < 0) return r;

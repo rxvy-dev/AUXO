@@ -6,6 +6,7 @@
   2. boot the disk alone with BIOS firmware (IDE): GRUB from the MBR, the hostname we chose,
      the account (the desktop starts locked; sudo wants the password), the file from step 1
      (now the new user's), then write a second file and `sync`;
+     then pull the plug (kill QEMU) and boot again: what was saved survives, intact;
   3. boot the same disk with UEFI firmware (OVMF, the disk on AHCI/SATA), if OVMF is installed:
      the second file is there.
 
@@ -160,7 +161,7 @@ def main():
         if up:
             check(f"hostname {HOST}" in m.text() and f"{USER}@{HOST}" in m.text(), f"the hostname is {HOST}, the user {USER}", m.text()[-600:])
             check(f"user: {USER} (uid 1000), home /home/{USER}" in m.text() and "no password" not in m.text(), "the account has a password (the desktop starts locked)", m.text()[-900:])
-            check("kept on sda" in m.text(), "files and changes are kept on the disk", m.text()[-600:])
+            check(re.search(r"root: AuxoFS on sda, \d+ files and folders", m.text()) is not None, "the root filesystem is AuxoFS on the disk (nothing loaded into memory first)", m.text()[-900:])
             out = m.run("cat note.txt")
             check(MARK in out, "a file made before installing is still there", out)
             out = m.run("busybox stat -c '%U %G %a' note.txt .config/browser/session")
@@ -177,6 +178,22 @@ def main():
             check("saved your files" in out, "sync saves them", out)
             out = m.run("gcc --version" if os.path.exists("build/rootfs.tar") else "uname -a")
             check("gcc" in out or "AuxoBSD" in out, "programs from the installed root run", out)
+            # a crash: what was saved (every 5 s) survives, the tree is never half written
+            m.run("busybox sh -c 'echo before-crash > $HOME/crash.txt; rm $HOME/two.txt; echo second-boot > $HOME/three.txt; busybox dd if=/dev/urandom of=$HOME/blob bs=1M count=8 2>/dev/null; busybox md5sum $HOME/blob > $HOME/blob.md5'", 60)
+            time.sleep(8)
+            m.run("busybox sh -c 'echo lost > $HOME/lost.txt'")
+        m.p.kill()                                                   # pull the plug
+        m.close()
+
+        print("▲ boot again after pulling the plug", flush=True)
+        m, up = boot(tmp, ["-drive", f"file={disk},format=raw,if=ide,index=0"], "after the crash")
+        if up:
+            out = m.run("busybox sh -c 'cat crash.txt; ls two.txt; busybox md5sum -c blob.md5'")
+            check("before-crash" in out and "No such file" in out and "blob: OK" in out,
+                  "what was saved before the crash is there, intact (and the deleted file stays deleted)", out)
+            out = m.run("busybox sh -c 'ls lost.txt'")
+            check("No such file" in out, "the change made just before it is gone, as it should be", out)
+            m.run("sync")
         m.close()
 
         if os.path.exists(OVMF_CODE) and os.path.exists(OVMF_VARS):
@@ -189,7 +206,7 @@ def main():
                                "-drive", f"file={disk},format=raw,if=none,id=d0",
                                "-device", "ahci,id=ahci", "-device", "ide-hd,drive=d0,bus=ahci.0"], "UEFI")
             if up:
-                out = m.run("cat two.txt")
+                out = m.run("cat three.txt")
                 check("second-boot" in out, "a file saved on the last boot is still there", out)
                 out = m.run("lsblk")
                 check("SATA" in out, "the disk is on AHCI", out)

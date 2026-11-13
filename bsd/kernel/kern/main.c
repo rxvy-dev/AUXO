@@ -14,6 +14,9 @@
 #include "install.h"
 #include "cred.h"
 #include "snd.h"
+#include "auxofs.h"
+
+static int strstr_k(const char *h, const char *n) { size_t l = strlen(n); for (; *h; h++) if (!strncmp(h, n, l)) return 1; return 0; }
 
 #define HEAP_PAGES 4096   /* at least 16 MiB of kernel heap, managed by Rust (thread stacks, fs nodes) */
 
@@ -99,11 +102,12 @@ void kmain(uint32_t mbi)
     }
     fs_init();
     const uint8_t *img; size_t imglen;
-    if (boot_module("rootfs", &img, &imglen) == 0) {
+    int image_root = boot_module("rootfs", &img, &imglen) == 0;
+    if (image_root) {
         int n = fs_mount_tar(img, imglen);
         ok("root"); kprintf("%d files from the root filesystem image (%lu MiB): Linux programs run\n", n, (unsigned long)(imglen >> 20));
         if (boot_module("overlay", &img, &imglen) == 0) fs_mount_tar(img, imglen);   /* pkg, on top */
-    } else { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
+    } else if (!strstr_k(boot_cmdline(), "root=auxofs")) { ok("root"); kprintf("no root filesystem image: built-in commands only\n"); }
     mount_init();                     /* the first mount namespace: / and /proc */
     pci_init();
     const struct pci_dev *gpu = pci_gpu();
@@ -120,8 +124,11 @@ void kmain(uint32_t mbi)
             kprintf("%s%s %s %lu GB", i ? ", " : "", d->name, d->bus, (unsigned long)(d->sectors * 512 / 1000000000));
         }
         kprintf("\n");
-        if (store_init() == 0) { ok("home"); kprintf("your files and the system's changes are kept on %s (saved every 10 s)\n", store_where()); }
-    }
+        if (!image_root) {                                   /* an installed system: / is on the disk */
+            ok("root");
+            if (auxofs_mount_root() < 0) kprintf("couldn't find or mount the root filesystem (AuxoFS) on any disk: built-in commands only\n");
+        } else if (store_init() == 0) { ok("home"); kprintf("your files and the system's changes are kept on %s (saved every 10 s)\n", store_where()); }
+    } else if (!image_root && strstr_k(boot_cmdline(), "root=auxofs")) { ok("root"); kprintf("no disks found: the root filesystem (AuxoFS) is on one\n"); }
     session_user_init();              /* who the desktop and the Terminal run as (/etc/passwd) */
     vfs_init();                       /* the starter files in their home folder */
     session_ready = 1;

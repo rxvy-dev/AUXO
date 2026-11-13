@@ -52,7 +52,7 @@ static int mx, my, buttons, menu_open, drag = -1, drag_dx, drag_dy, hover_item =
 static struct app_colors colors;
 static uint32_t term_gen, last_minute = 99, blink;
 
-static const char *const APP_TITLES[] = { "Terminal", "Settings", "About AuxoBSD", "Browser", "Aether", "Install AuxoBSD" };
+static const char *const APP_TITLES[] = { "Terminal", "Settings", "About AuxoBSD", "Browser", "Aether", "Install AuxoBSD", "Files" };
 
 /* ── requests from other threads (no floating point there) ──────────── */
 int  chrono_running(void) { return running; }
@@ -580,6 +580,7 @@ static void paint_window(struct canvas *c, int idx)
         struct app_ctx a = { c, client_x(wn), client_y(wn), wn->w, wn->h, &colors, wn == &wins[focus], blink };
         if (wn->app == APP_BROWSER) { browser_paint(&a); wn->title = browser_title(); }
         else if (wn->app == APP_AETHER) { aether_paint(&a); wn->title = aether_title(); }
+        else if (wn->app == APP_FILES) { files_paint(&a); wn->title = files_title(); }
         else installer_paint(&a);
     }
     gfx_noclip(c);
@@ -669,8 +670,8 @@ static void paint_panel(struct canvas *c)
     gfx_text(c, &font_ui, p.x + p.w - cw + 4, p.y + (p.h - 16) / 2, clk, fg);
 }
 
-enum { MI_TERMINAL, MI_BROWSER, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_LOCK, MI_REBOOT, MI_POWEROFF, MI_COUNT };
-static const char *const MENU[] = { "Terminal", "Browser", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Lock", "Restart", "Power off" };
+enum { MI_TERMINAL, MI_FILES, MI_BROWSER, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_LOCK, MI_REBOOT, MI_POWEROFF, MI_COUNT };
+static const char *const MENU[] = { "Terminal", "Files", "Browser", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Lock", "Restart", "Power off" };
 
 /* ── the lock screen: at start-up when the user has a password, and from Lock in the menu ── */
 static int locked = -1;                       /* -1: not decided yet (who the user is comes later) */
@@ -885,8 +886,28 @@ static int run_detached(const char *path, char *const argv[])
     return uproc_spawn_detached(path, argv, envp, session_home());
 }
 
+/* a Wayland window of a program, by its app id */
+static int find_wl_app(const char *id)
+{
+    for (int i = 0; i < MAXWIN; i++) if (wins[i].used && wins[i].app == APP_WAYLAND && !strcmp(wl_app_id(wins[i].wl), id)) return i;
+    return -1;
+}
+
+/* the web: GNOME Web (WebKit: all of HTML, CSS and JavaScript) when the system has it, the
+   built-in browser otherwise */
+static int web_browser(const char *url)
+{
+    if (!vfs_exists("/usr/bin/epiphany")) return 0;
+    int i = find_wl_app("org.gnome.Epiphany");
+    if (i >= 0 && !url) { raise(i); return 1; }
+    char *argv[] = { "epiphany", (char *)url, 0 };
+    run_detached("/usr/bin/epiphany", argv);      /* (a second start hands the URL to the first, over D-Bus) */
+    return 1;
+}
+
 static void open_app(int app)
 {
+    if (app == APP_BROWSER && web_browser(0)) return;
     if (app == APP_AETHER && vfs_exists("/usr/share/aether/bin/aether")) {
         /* the real Aether (github.com/rxvy-dev/aether): Python + GTK 4, through our Wayland server */
         for (int i = 0; i < MAXWIN; i++) if (wins[i].used && wins[i].app == APP_WAYLAND && !strncmp(wins[i].title ? wins[i].title : "", "Aether", 6)) { raise(i); return; }
@@ -906,7 +927,7 @@ static void open_app(int app)
         if (app == APP_TERMINAL) { w->w = TERM_COLS * 8 + 8; w->h = TERM_ROWS * 16 + 8; }
         else if (app == APP_SETTINGS) { w->w = 3 * (CARD_W + 10) + 16; w->h = 470; }
         else if (app == APP_ABOUT) { w->w = 470; w->h = 290; }
-        else if (app == APP_BROWSER || app == APP_AETHER) { w->w = W - 140 > 1100 ? 1100 : W - 140; w->h = H - 180 > 760 ? 760 : H - 180; }
+        else if (app == APP_BROWSER || app == APP_AETHER || app == APP_FILES) { w->w = W - 140 > 1100 ? 1100 : W - 140; w->h = H - 180 > 760 ? 760 : H - 180; }
         else { w->w = 640; w->h = 460; }
         int stagger = 28 * (i % 5);
         w->x = (W - outer_w(w)) / 2 - 60 + stagger;
@@ -1029,6 +1050,7 @@ static void menu_action(int item)
     switch (item) {
     case MI_TERMINAL: open_app(APP_TERMINAL); break;
     case MI_BROWSER:  open_app(APP_BROWSER); break;
+    case MI_FILES:    open_app(APP_FILES); break;
     case MI_AETHER:   open_app(APP_AETHER); break;
     case MI_INSTALL:  open_app(APP_INSTALLER); break;
     case MI_SETTINGS: open_app(APP_SETTINGS); break;
@@ -1086,6 +1108,7 @@ static int on_click(int x, int y)
     }
     if (w->app == APP_BROWSER) return browser_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     if (w->app == APP_AETHER) return aether_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
+    if (w->app == APP_FILES) return files_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     if (w->app == APP_INSTALLER) return installer_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     /* inside the client */
     int cx = x - client_x(w), cy = y - client_y(w);
@@ -1111,6 +1134,7 @@ static int on_wheel(int dz)
     int i = win_at(mx, my);
     if (i >= 0 && wins[i].app == APP_BROWSER) return browser_wheel(dz);
     if (i >= 0 && wins[i].app == APP_AETHER) return aether_wheel(dz);
+    if (i >= 0 && wins[i].app == APP_FILES) return files_wheel(dz);
     if (i < 0 || wins[i].app != APP_SETTINGS) return 0;
     struct win *w = &wins[i];
     int rows = (CHRONO_THEME_COUNT + settings_cols(w) - 1) / settings_cols(w), vis = (w->h - 76) / (CARD_H + 10);
@@ -1127,6 +1151,7 @@ static int on_key(int k)
     if (focus >= 0 && wins[focus].app == APP_BROWSER) return browser_key(k);
     if (focus >= 0 && wins[focus].app == APP_AETHER) return aether_key(k);
     if (focus >= 0 && wins[focus].app == APP_INSTALLER) return installer_key(k);
+    if (focus >= 0 && wins[focus].app == APP_FILES) return files_key(k);
     if (focus >= 0 && wins[focus].app == APP_TERMINAL) {
         static const char *const vt[] = { [KEY_UP - 0x80] = "\033[A", [KEY_DOWN - 0x80] = "\033[B", [KEY_RIGHT - 0x80] = "\033[C",
             [KEY_LEFT - 0x80] = "\033[D", [KEY_HOME - 0x80] = "\033[H", [KEY_END - 0x80] = "\033[F", [KEY_DEL - 0x80] = "\033[3~",
@@ -1280,8 +1305,16 @@ void chrono_attach_console(void) { console_attach_grid(term_cells, TERM_COLS, TE
 
 int chrono_start(void) { return rs_spawn("chrono", chrono_main, 0); }
 
+void chrono_run(const char *path)
+{
+    const char *b = strrchr(path, '/');
+    char *argv[] = { (char *)(b ? b + 1 : path), 0 };
+    run_detached(path, argv);
+}
+
 void chrono_open_url(const char *u)
 {
+    if (web_browser(u)) return;
     open_app(APP_BROWSER);
     browser_navigate(u);
 }

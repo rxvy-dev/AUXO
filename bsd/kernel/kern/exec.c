@@ -66,6 +66,7 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
     if (r < 0) return r;
     struct node *n = at.n;
     if (at.m && (at.m->flags & MNT_NOEXEC)) return -13;   /* a noexec mount (/proc, /dev …) */
+    if (fs_load(n) < 0) return -5;
     if (n->type == N_DIR) return -13;
     if (n->type != N_REG) return -13;
     if (!(n->mode & 0111)) return -13;                   /* EACCES */
@@ -117,6 +118,7 @@ int exec_load(struct task *t, const char *path, char *const kargv[], char *const
             uint64_t iend;
             if ((r = vfs_walk(t, t->ns.root, ip, 1, &ipath)) < 0) { mm_put(m); return r; }   /* in this task's namespace */
             struct node *in = ipath.n;
+            if (fs_load(in) < 0) { mm_put(m); return -5; }
             if ((r = check(in, &ie)) < 0) { mm_put(m); return r < 0 ? r : -8; }
             interp_base = INTERP_BASE - ((in->size + 0x200000) & ~0xFFFFFULL);
             if ((r = load_segments(m, in, &ie, interp_base, &iend)) < 0) { mm_put(m); return r; }

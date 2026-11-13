@@ -543,7 +543,7 @@ static int cmd_browse(int argc, char **argv)
 /* chrono: the desktop, from the shell. Only posts requests; the Chrono thread does the drawing. */
 static int cmd_chrono(int argc, char **argv)
 {
-    static const char *const apps[APP_COUNT] = { "terminal", "settings", "about", "browser", "aether", "installer" };
+    static const char *const apps[APP_COUNT] = { "terminal", "settings", "about", "browser", "aether", "installer", "files" };
     const char *sub = argc > 1 ? argv[1] : "status";
     if (!strcmp(sub, "themes")) {
         for (int i = 0; chrono_theme_id(i); i++) {

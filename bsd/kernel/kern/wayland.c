@@ -58,6 +58,7 @@ struct xsurf {
     uint32_t serial; int configured, mapped;
     int win;                                     /* Chrono window (toplevels) */
     char title[96];
+    char app_id[64];
     int maximized;
     /* popups */
     int parent; struct positioner pos; int px, py;   /* px,py: relative to the parent's geometry */
@@ -479,6 +480,7 @@ static void request(int c, uint32_t id, uint16_t op, struct args *a)
         switch (op) {
         case 0: x->role = 0; if (x->win >= 0) chrono_wl_close(x->win); x->win = -1; x->mapped = 0; delete_id(c, id); dirty = 1; break;
         case 2: strlcpy(x->title, a_str(a), sizeof x->title); if (x->win >= 0) chrono_wl_title(x->win, x->title); dirty = 1; break;
+        case 3: strlcpy(x->app_id, a_str(a), sizeof x->app_id); break;
         case 5: if (x->win >= 0) chrono_wl_move(x->win); break;
         case 6: { a_u32(a); a_u32(a); uint32_t edges = a_u32(a); if (x->win >= 0) chrono_wl_resize(x->win, (int)edges); break; }
         case 9: x->maximized = 1; if (x->win >= 0) chrono_wl_maximize(x->win, 1); send_configure(o->idx); break;
@@ -652,6 +654,7 @@ void wl_paint_popups(struct canvas *c)
         if (xss[i].used && xss[i].role == 2 && xss[i].mapped) blit(c, xss[i].surf, xss[i].ax - xss[i].gx, xss[i].ay - xss[i].gy);
 }
 
+const char *wl_app_id(int x) { return x >= 0 && x < MAXXS && xss[x].used ? xss[x].app_id : ""; }
 const char *wl_title(int x) { return x >= 0 && x < MAXXS && xss[x].used ? xss[x].title : ""; }
 
 /* ── input ──────────────────────────────────────────────────────────── */

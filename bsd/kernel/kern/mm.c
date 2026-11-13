@@ -255,6 +255,7 @@ static int mm_fault_l(struct mm *m, uint64_t addr, int write)
         return 0;
     }
     uint64_t rel = page - v->start;
+    if (v->file && fs_load(v->file) < 0) return -14;        /* its contents may still be on the disk */
     if (v->shared && v->file) {
         /* shared file mapping (memfd, framebuffer-style buffers): the file's own pages */
         struct node *f = v->file;

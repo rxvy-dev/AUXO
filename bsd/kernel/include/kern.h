@@ -116,6 +116,7 @@ int  input_gui_key(void);                         /* -1 when none; KEY_* or a by
 #define KEY_PGUP  0x89
 #define KEY_PGDN  0x8A
 #define KEY_SHIFT_TAB 0x8B
+#define KEY_F2    0x8C                            /* rename, in Files */
 int  input_raw_key(void);                         /* desktop: Linux keycode | 0x8000 on release, -1 none */
 int  input_shift(void);                           /* shift held (for selections) */
 int  input_ctrl(void);

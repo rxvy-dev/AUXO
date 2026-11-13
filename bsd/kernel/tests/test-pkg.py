@@ -185,7 +185,7 @@ def main():
         m, up = boot(tmp, drive, "disk")
         if not up:
             return
-        check("system changes:" in m.text(), "the system's changes are restored at boot", m.text()[-800:])
+        check("root: AuxoFS on sda" in m.text(), "the installed root filesystem is on the disk", m.text()[-800:])
         out = m.run("busybox sh -c 'echo [5,6] | jq add'")
         check(re.search(r"^11\s*$", out, re.M) is not None, "jq, installed from the live system, came along", out)
         out = m.run("sudo pkg install -y tree", 600)

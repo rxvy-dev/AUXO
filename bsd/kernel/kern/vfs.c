@@ -54,6 +54,7 @@ int vfs_read(const char *path, const char **data, size_t *len)
 {
     struct node *n;
     if (fs_lookup(0, path, 1, &n) < 0 || n->type != N_REG) return -1;
+    if (fs_load(n) < 0) return -1;
     *data = (const char *)n->data;
     *len = (size_t)n->size;
     if (!n->data) *data = "";

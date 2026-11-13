@@ -34,6 +34,26 @@ void fs_unlock(void)
 
 uint32_t fs_generation(void) { return generation; }
 
+int (*fs_loader)(struct node *n);
+void (*fs_on_delete)(struct node *n);
+void fs_set_mounting(int on) { mounting = on; }
+int fs_resident(struct node *n) { return n->type != N_REG || n->data || !n->size || !n->dblk; }
+
+int fs_load(struct node *n)
+{
+    if (!n) return 0;
+    n->atick = kernel_ticks();
+    if (fs_resident(n) || !fs_loader) return 0;
+    return fs_loader(n);
+}
+
+void fs_evict(struct node *n)
+{
+    if (n->type != N_REG || !n->data || !n->cap || n->maps || n->refs > 0 || n->ddirty || !n->dblk) return;
+    for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
+    n->data = 0; n->cap = 0;
+}
+
 void fs_touch(struct node *n) { fs_lock(); generation++; n->changed = 1; n->wgen = generation; if (n->parent && n->parent != n) inotify_event(n->parent, n, n->name, IN_ATTRIB, 0); fs_unlock(); }
 
 static void touch_tree(struct node *n)
@@ -193,6 +213,8 @@ int fs_lookup_parent(struct node *cwd, const char *path, struct node **dir, char
     return 0;
 }
 
+static void gone(struct node *n) { if (fs_on_delete && n->ino) fs_on_delete(n); }
+
 static void free_data(struct node *n)
 {
     if (n->cap && !n->maps) for (uint64_t o = 0; o < n->cap; o += PAGE_SIZE) pmm_free_page((uint64_t)(uintptr_t)n->data + o);
@@ -230,9 +252,11 @@ int fs_unlink(struct node *dir, const char *name, int rmdir)
     else if (!rmdir && n->type == N_DIR) r = -21;
     else if (rmdir && n->child) r = -39;                    /* ENOTEMPTY */
     else {
+        if (n->refs > 0 && !fs_resident(n)) fs_load(n);     /* still open: its contents can't stay on blocks about to go */
         detach(n);
         n->unlinked = 1;
         if (n->nlink) n->nlink--;
+        gone(n);
         generation++;
         inotify_event(dir, n, name, IN_DELETE, 0);
         if (n->nlink == 0) inotify_event(0, n, 0, IN_DELETE_SELF, 0);
@@ -255,9 +279,11 @@ int fs_rename(struct node *odir, const char *oname, struct node *ndir, const cha
     if (old == n) { fs_unlock(); return 0; }
     if (old) {
         if (old->type == N_DIR && old->child) { fs_unlock(); return -39; }
+        if (old->refs > 0 && !fs_resident(old)) fs_load(old);
         detach(old);
         old->unlinked = 1;
         if (old->nlink) old->nlink--;
+        gone(old);
         if (old->refs <= 0 && old->nlink == 0) { free_data(old); rs_kfree(old->name); rs_kfree(old); }
     }
     uint32_t cookie = inotify_cookie();
@@ -279,6 +305,7 @@ int fs_rename(struct node *odir, const char *oname, struct node *ndir, const cha
 int fs_link(struct node *target, struct node *dir, const char *name)
 {
     /* hard links: a new node sharing the contents (good enough: the rootfs uses a few) */
+    fs_load(target);
     fs_lock();
     if (fs_child(dir, name)) { fs_unlock(); return -17; }
     struct node *n = new_node(dir, name, strlen(name), target->type, target->mode);
@@ -296,6 +323,7 @@ int fs_link(struct node *target, struct node *dir, const char *name)
 
 int fs_reserve(struct node *n, uint64_t want)
 {
+    if (!fs_resident(n) && fs_load(n) < 0) return -5;
     if (n->cap >= want && n->cap) return 0;
     uint64_t cap = n->cap ? n->cap : PAGE_SIZE;
     while (cap < want) cap *= 2;
@@ -329,6 +357,7 @@ long fs_read(struct node *n, uint64_t off, void *buf, size_t len)
 {
     if (n->type == N_DIR) return -21;
     if (off >= n->size) return 0;
+    if (fs_load(n) < 0) return -5;
     if (len > n->size - off) len = n->size - off;
     memcpy(buf, n->data + off, len);
     return (long)len;
@@ -336,6 +365,7 @@ long fs_read(struct node *n, uint64_t off, void *buf, size_t len)
 
 long fs_write(struct node *n, uint64_t off, const void *buf, size_t len)
 {
+    if (fs_load(n) < 0) return -5;
     fs_lock();
     if (n->type == N_DIR) { fs_unlock(); return -21; }
     uint64_t end = off + len;
@@ -347,7 +377,7 @@ long fs_write(struct node *n, uint64_t off, const void *buf, size_t len)
     if (end > n->size) n->size = end;
     n->mtime = fs_now();
     generation++;
-    n->changed = 1; n->wgen = generation;
+    n->changed = 1; n->wgen = generation; n->ddirty = 1;
     if (n->parent != n) inotify_event(n->parent, n, n->name, IN_MODIFY, 0);
     fs_unlock();
     return (long)len;
@@ -355,7 +385,9 @@ long fs_write(struct node *n, uint64_t off, const void *buf, size_t len)
 
 int fs_truncate(struct node *n, uint64_t len)
 {
+    if (len && fs_load(n) < 0) return -5;
     fs_lock();
+    if (!len && !fs_resident(n)) { n->size = 0; }          /* nothing to load for an empty file */
     if (len > n->size) {
         if (fs_reserve(n, len) < 0) { fs_unlock(); return -28; }
         memset(n->data + n->size, 0, len - n->size);
@@ -365,9 +397,30 @@ int fs_truncate(struct node *n, uint64_t len)
     n->size = len;
     n->mtime = fs_now();
     generation++;
-    n->changed = 1; n->wgen = generation;
+    n->changed = 1; n->wgen = generation; n->ddirty = 1;
     fs_unlock();
     return 0;
+}
+
+/* for kern/auxofs.c, with fs_lock held */
+struct node *fs_mknode(struct node *dir, const char *name, int type, uint16_t mode)
+{
+    struct node *n = new_node(dir, name, strlen(name), type, mode);
+    if (n) n->mtime = fs_now();
+    return n;
+}
+
+void fs_ino_floor(uint32_t v) { if (next_ino < v) next_ino = v; }
+
+void fs_detach_node(struct node *n) { if (n->parent && n->parent != n) detach(n); n->parent = n; generation++; }
+
+void fs_attach_node(struct node *n, struct node *dir, const char *name)
+{
+    if (strcmp(n->name, name)) { char *nm = kstrdup(name, strlen(name)); if (nm) { rs_kfree(n->name); n->name = nm; } }
+    n->parent = dir;
+    n->next = dir->child;
+    dir->child = n;
+    generation++;
 }
 
 void fs_path(struct node *n, char *buf, size_t len)
@@ -504,7 +557,7 @@ void fs_init(void)
 {
     root = new_node(0, "", 0, N_DIR, 0755);
     root->parent = root;
-    static const char *const dirs[] = { "dev", "dev/shm", "dev/pts", "tmp", "home", "home/root", "proc", "run", "etc", "usr", "usr/bin", "var", "var/tmp",
+    static const char *const dirs[] = { "dev", "dev/shm", "dev/pts", "tmp", "home", "proc", "run", "etc", "usr", "usr/bin", "var", "var/tmp",
                                         "sys", "sys/block", "sys/bus", "sys/class", "sys/dev", "sys/dev/char", "sys/dev/block", "sys/devices", 0 };
     for (int i = 0; dirs[i]; i++) mkdirs(dirs[i], strlen(dirs[i]));
     struct node *dev = fs_child(root, "dev");

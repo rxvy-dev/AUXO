@@ -152,6 +152,7 @@ static void scancode(uint8_t sc)
     if (sc == 0x1D) { ctrl = !up; return; }
     if (up) return;
     if (sc == 0x3A) { caps = !caps; return; }
+    if (sc == 0x3C && gui) { kpush(KEY_F2); return; }
     if (sc >= sizeof keymap) return;
 
     if (sc == 0x0F && shift && gui) { kpush(KEY_SHIFT_TAB); return; }

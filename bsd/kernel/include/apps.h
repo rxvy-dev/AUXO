@@ -44,6 +44,14 @@ int         installer_click(int x, int y, int w, int h);
 int         installer_key(int k);
 int         installer_tick(void);
 
+/* Files (kern/files.c) */
+void        files_paint(const struct app_ctx *a);
+int         files_click(int x, int y, int w, int h);
+int         files_key(int k);
+int         files_wheel(int dz);
+const char *files_title(void);
+void        files_open(const char *path);
+
 /* chrono.c, for the apps */
 void chrono_open_url(const char *url);       /* raise the Browser and load url */
 void chrono_set_theme_by_id(const char *id);

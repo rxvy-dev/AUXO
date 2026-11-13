@@ -25,6 +25,13 @@ struct node {
     void    *priv;                 /* pipes, sockets */
     uint8_t  changed;              /* made or changed since boot (not from a boot image): kept on disk */
     uint32_t wgen;                 /* generation of its last change */
+    /* on an installed system (kern/auxofs.c): where the contents are on the disk. data == 0 with
+       size > 0 and dblk set means "not loaded": fs_load brings it in, memory pressure drops it */
+    uint64_t dblk;                 /* first 4 KiB block of its extent (0: none) */
+    uint32_t dnblk;                /* blocks */
+    uint8_t  ddirty;               /* contents changed since they were last written to the disk */
+    uint64_t dsize;                /* the size the extent on the disk holds */
+    uint64_t atick;                /* when it was last used (kernel ticks): the least recent go first */
 };
 
 void         fs_init(void);                   /* empty tree + /dev, /tmp, /home/root … */
@@ -54,5 +61,17 @@ uint32_t     fs_now(void);
 void         fs_put(struct node *n);                            /* drop a reference */
 uint32_t     fs_generation(void);                              /* bumped on any change (for apps) */
 void         fs_touch(struct node *n);                          /* mark changed (chmod and the like) */
+
+/* disk-backed contents (kern/auxofs.c sets the hooks) */
+int          fs_load(struct node *n);                           /* 0, or -EIO; no-op when it's in memory */
+int          fs_resident(struct node *n);                       /* contents in memory (or nothing to load) */
+extern int (*fs_loader)(struct node *n);
+extern void (*fs_on_delete)(struct node *n);                    /* a node leaves the tree for good (fs_lock held) */
+void         fs_evict(struct node *n);                          /* drop a clean, unused file's pages (fs_lock held) */
+void         fs_set_mounting(int on);                           /* nodes made now come from a disk: not "changed" */
+struct node *fs_mknode(struct node *dir, const char *name, int type, uint16_t mode);   /* (fs_lock held) */
+void         fs_detach_node(struct node *n);                    /* take it out of the tree (fs_lock held) */
+void         fs_attach_node(struct node *n, struct node *dir, const char *name);
+void         fs_ino_floor(uint32_t next);                       /* new nodes get inode numbers from here up */
 
 #endif
