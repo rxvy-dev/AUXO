@@ -11,6 +11,7 @@
 #include "fdobj.h"
 #include "cred.h"
 #include "snd.h"
+#include "pty.h"
 
 static struct task tasks[MAXTASK];
 static volatile int fg_pgid;
@@ -78,6 +79,7 @@ void file_put(struct file *f)
     if (f->kind == 10) nl_close(f->priv);
     if (f->kind == 11 || f->kind == 12) fdobj_close(f);
     if (f->node && f->node->type == N_CHR && f->node->dev == DEV_SND_PCM) snd_close(f);
+    if (pty_is(f)) pty_close(f);
     if (f->kind == 0 && f->node && f->node->type == N_REG && !f->node->unlinked && f->node->parent && f->node->parent != f->node) {
         fs_lock();                                         /* closed after writing: editors and file managers watch for this */
         inotify_event(f->node->parent, f->node, f->node->name, (f->flags & 3) ? IN_CLOSE_WRITE : IN_CLOSE_NOWRITE, 0);
@@ -237,6 +239,7 @@ long file_read(struct task *t, struct file *f, void *kbuf, size_t n)
     }
     struct node *nd = f->node;
     if (!nd) return -9;
+    if (pty_is(f)) return pty_read(t, f, kbuf, n);
     if (nd->type == N_CHR) {
         switch (nd->dev) {
         case DEV_NULL: return 0;
@@ -292,6 +295,7 @@ long file_write(struct task *t, struct file *f, const void *kbuf, size_t n)
     }
     struct node *nd = f->node;
     if (!nd) return -9;
+    if (pty_is(f)) return pty_write(t, f, kbuf, n);
     if (nd->type == N_CHR) {
         if (nd->dev == DEV_TTY) { console_write(kbuf, n); return (long)n; }
         if (nd->dev == DEV_FULL) return -28;                   /* ENOSPC: what /dev/full is for */

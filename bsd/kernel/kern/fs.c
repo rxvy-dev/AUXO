@@ -563,7 +563,7 @@ void fs_init(void)
     struct node *dev = fs_child(root, "dev");
     static const struct { const char *n; int d; } devs[] = {
         { "null", DEV_NULL }, { "zero", DEV_ZERO }, { "tty", DEV_TTY }, { "console", DEV_TTY }, { "tty0", DEV_TTY },
-        { "random", DEV_RANDOM }, { "urandom", DEV_RANDOM }, { "fb0", DEV_FB }, { "full", DEV_FULL }, { 0, 0 } };
+        { "random", DEV_RANDOM }, { "urandom", DEV_RANDOM }, { "fb0", DEV_FB }, { "full", DEV_FULL }, { "ptmx", DEV_PTMX }, { 0, 0 } };
     for (int i = 0; devs[i].n; i++) {
         struct node *n = new_node(dev, devs[i].n, strlen(devs[i].n), N_CHR, 0666);
         if (n) n->dev = (uint32_t)devs[i].d;

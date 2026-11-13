@@ -79,6 +79,7 @@ struct sigact { uint64_t handler, flags, restorer, mask; };
 
 struct task {
     int    used, pid, tgid, ppid, pgid;
+    int    sid, ctty;                  /* session (leader's global id), controlling pty (index + 1; 0: the console) */
     int    state;                  /* T_RUN, T_ZOMBIE */
     int    exit_status;            /* wait status (exit code << 8, or signal) */
     int    vfork_done;             /* set when a CLONE_VFORK child execs or exits */

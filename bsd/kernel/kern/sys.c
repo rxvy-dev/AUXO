@@ -14,6 +14,7 @@
 #include "fdobj.h"
 #include "cred.h"
 #include "snd.h"
+#include "pty.h"
 
 struct task *task_alloc(void);
 void task_free(struct task *t);
@@ -119,7 +120,7 @@ static void fill_stat(struct node *n, struct kstat *s)
     memset(s, 0, sizeof *s);
     s->dev = 0x801; s->ino = n->ino; s->nlink = n->type == N_DIR ? 2 : n->nlink; s->mode = mode_of(n);
     s->uid = n->uid; s->gid = n->gid;
-    s->rdev = n->type == N_CHR ? (n->dev == DEV_TTY ? 0x500 : n->dev == DEV_SND_CTL || n->dev == DEV_SND_PCM ? snd_rdev(n) : 0x100 + n->dev) : 0;
+    s->rdev = n->type == N_CHR ? (n->dev == DEV_TTY ? 0x500 : n->dev == DEV_SND_CTL || n->dev == DEV_SND_PCM ? snd_rdev(n) : n->dev == DEV_PTMX || n->dev == DEV_PTS ? pty_rdev(n) : 0x100 + n->dev) : 0;
     s->size = (int64_t)n->size; s->blksize = 4096; s->blocks = (int64_t)((n->size + 511) / 512);
     s->atime = s->mtime = s->ctime = n->mtime ? n->mtime : 1700000000;
 }
@@ -173,6 +174,7 @@ static long sys_openat(struct task *t, long dirfd, uint64_t up, long flags, long
         if (!procfile(p.n) || p.n->type == N_DIR) { long e = cred_perm(t, p.n, want); if (e < 0) return e; }
     }
     if (r < 0) return r;
+    if (p.n->type == N_CHR && p.n->dev == DEV_TTY && pty_ctty_node(t)) p.n = pty_ctty_node(t);   /* /dev/tty: our terminal */
     struct node *n = p.n;
     if ((flags & 0200000) && n->type != N_DIR) return -ENOTDIR;
     if (n->type == N_DIR && (flags & 3)) return -EISDIR;
@@ -184,6 +186,7 @@ static long sys_openat(struct task *t, long dirfd, uint64_t up, long flags, long
     struct file *f = file_new(0, n, (int)flags);
     if (!f) return -ENOMEM;
     if (n->type == N_CHR && n->dev == DEV_SND_PCM && (r = snd_open(f)) < 0) { file_put(f); return r; }
+    if (n->type == N_CHR && (n->dev == DEV_PTMX || n->dev == DEV_PTS) && (r = pty_open(t, f, (int)flags)) < 0) { fs_put(n); f->node = 0; file_put(f); return r; }
     f->mnt = p.m;
     vfs_pathname(t, p, f->path, sizeof f->path);
     int fd = alloc_fd(t, f, 0, (flags & 02000000) != 0);
@@ -617,6 +620,7 @@ static long sys_clone(struct task *t, uint64_t flags, uint64_t stack, uint64_t p
     int vm = (flags & 0x100) != 0, vfork = (flags & 0x4000) != 0, thread = (flags & 0x10000) != 0;
     c->ppid = thread ? t->ppid : t->tgid;
     c->pgid = t->pgid;
+    c->sid = t->sid; c->ctty = t->ctty;
     c->umask = t->umask;
     c->cwd = t->cwd;
     c->is_thread = thread;
@@ -879,6 +883,7 @@ static int fd_ready(struct task *t, int fd, int events)
     else if (f->kind == 2) { if (pipe_writable(f)) r |= 4; }
     else if (f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY) { if (tty_readable()) r |= 1; r |= 4; }
     else if (f->node && f->node->type == N_CHR && (f->node->dev == DEV_SND_PCM || f->node->dev == DEV_SND_CTL)) r |= snd_ready(f);
+    else if (pty_is(f)) r |= pty_ready(f);
     else r |= 5;
     return r & (events | 0x18);
 }
@@ -944,14 +949,40 @@ static void now_ts(int clk, int64_t *s, int64_t *ns)
     if (clk == 0 || clk == 5 || clk == 8 || clk == 11) *s += (int64_t)boot_epoch;   /* REALTIME (_COARSE, _ALARM), TAI */
 }
 
+/* a pending signal that would do something (a handler, or a default that isn't "ignore"):
+   that's what wakes a sleep with EINTR */
+static int sig_wakes(struct task *t)
+{
+    uint64_t m = t->pending & ~t->sigmask;
+    if (t->pending & (1ULL << 8)) return 1;
+    while (m) {
+        int sig = __builtin_ctzll(m) + 1;
+        m &= m - 1;
+        uint64_t h = t->sig ? t->sig[sig - 1].handler : 0;
+        if (h == 1) continue;                                      /* SIG_IGN */
+        if (h == 0 && (sig == 17 || sig == 28 || sig == 23 || sig == 18)) continue;   /* CHLD WINCH URG CONT */
+        return 1;
+    }
+    return 0;
+}
+
+/* sleep until a tick, waking for signals as they come */
+static long sleep_until(struct task *t, uint64_t until)
+{
+    while (kernel_ticks() < until) {
+        if (sig_wakes(t)) return -EINTR;
+        uint64_t left = until - kernel_ticks();
+        rs_sleep(left > 5 ? 5 : left);
+    }
+    return 0;
+}
+
 static long sys_nanosleep(struct task *t, uint64_t ureq)
 {
     int64_t ts[2];
     if (copyin(t->mm, ts, ureq, 16) < 0) return -EFAULT;
     uint64_t ticks = (uint64_t)ts[0] * AUXO_HZ + (uint64_t)(ts[1] + 9999999) / 10000000;
-    uint64_t until = kernel_ticks() + ticks;
-    while (kernel_ticks() < until) { if (t->pending & ~t->sigmask) return -EINTR; rs_sleep(until - kernel_ticks()); }
-    return 0;
+    return sleep_until(t, kernel_ticks() + ticks);
 }
 
 /* ── signals ────────────────────────────────────────────────────────── */
@@ -1418,6 +1449,21 @@ static long sys_ioctl(struct task *t, long fd, uint64_t req, uint64_t arg)
     int tty = f->node && f->node->type == N_CHR && f->node->dev == DEV_TTY;
     if (f->node && f->node->type == N_CHR && (f->node->dev == DEV_SND_CTL || f->node->dev == DEV_SND_PCM)) return snd_ioctl(t, f, req, arg);
     if (req == 0x5421) { if (arg) { int v; if (copyin(t->mm, &v, arg, 4) == 0) f->flags = v ? f->flags | 04000 : f->flags & ~04000; } return 0; }
+    if (pty_is(f)) {
+        if (req == 0x5441) {                                   /* TIOCGPTPEER: the slave, opened */
+            struct node *sn = pty_peer(f);
+            if (!sn) return -EINVAL;
+            struct file *s = file_new(0, sn, (int)arg & ~0100);
+            if (!s) return -ENOMEM;
+            long r = pty_open(t, s, (int)arg);
+            if (r < 0) { fs_put(sn); s->node = 0; file_put(s); return r; }
+            ksnprintf(s->path, sizeof s->path, "/dev/pts/%s", sn->name);
+            int fd2 = alloc_fd(t, s, 0, ((int)arg & 02000000) != 0);
+            if (fd2 < 0) file_put(s);
+            return fd2;
+        }
+        return pty_ioctl(t, f, req, arg);
+    }
     if ((f->kind == 5 || f->kind == 8 || f->kind == 10) && (req == 0x8933 || req == 0x8913)) {   /* SIOCGIFINDEX, SIOCGIFFLAGS */
         uint8_t ifr[40];
         if (copyin(t->mm, ifr, arg, 40) < 0) return -EFAULT;
@@ -2317,10 +2363,14 @@ static long syscall_body(struct task *t, struct trapframe *tf)
                 if (pp) return pid_vtgid(t, pp);
                 return t->ns.pid && t->ns.pid->level ? 0 : 1; }
     case 111: { struct task *l = task_by_pid(t->pgid); return l ? pid_vtgid(t, l) : t->pgid; }
-    case 112: t->pgid = t->tgid; return pid_vtgid(t, t);
+    case 112: t->pgid = t->tgid; t->sid = t->tgid; pty_setsid(t); return pid_vtgid(t, t);   /* setsid */
     case 121: { struct task *o = a ? task_by_pid(pid_global(t, (int)a, 1)) : t; if (!o) return -ESRCH;
                 struct task *l = task_by_pid(o->pgid); return l ? pid_vtgid(t, l) : o->pgid; }
-    case 124: return pid_vtgid(t, t);
+    case 124: {                                                /* getsid */
+        struct task *x = a ? task_by_pid(pid_global(t, (int)a, 1)) : t;
+        if (!x) return -ESRCH;
+        struct task *l = x->sid ? task_by_pid(x->sid) : 0;
+        return l ? pid_vtgid(t, l) : 1; }
     case 127: { uint64_t z = t->pending; return copyout(t->mm, a, &z, 8); }
     case 130: { uint64_t m; if (copyin(t->mm, &m, a, 8) < 0) return -EFAULT; uint64_t old = t->sigmask;
                 t->sigmask = m & ~((1ULL << 8) | (1ULL << 18));
@@ -2377,9 +2427,7 @@ static long syscall_body(struct task *t, struct trapframe *tf)
     case 229: { int64_t ts[2] = { 0, 10000000 }; return b ? copyout(t->mm, b, ts, 16) : 0; }
     case 230: { int64_t ts[2]; if (copyin(t->mm, ts, c, 16) < 0) return -EFAULT;
                 if (b & 1) { int64_t s, ns; now_ts((int)a, &s, &ns); ts[0] -= s; ts[1] -= ns; if (ts[1] < 0) { ts[0]--; ts[1] += 1000000000; } if (ts[0] < 0) return 0; }
-                uint64_t until = kernel_ticks() + (uint64_t)ts[0] * AUXO_HZ + (uint64_t)ts[1] / 10000000;
-                while (kernel_ticks() < until) { if (t->pending & ~t->sigmask) return -EINTR; rs_sleep(until - kernel_ticks()); }
-                return 0; }
+                return sleep_until(t, kernel_ticks() + (uint64_t)ts[0] * AUXO_HZ + (uint64_t)ts[1] / 10000000); }
     case 231: exit_group(t, (int)(a & 0xFF) << 8);
     case 234: return sys_tkill(t, (long)(int)a, (long)(int)b, (long)c);
     case 247: return sys_waitid(t, (long)a, (long)(int)b, c, (long)d);

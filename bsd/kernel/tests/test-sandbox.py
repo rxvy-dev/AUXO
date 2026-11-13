@@ -10,7 +10,8 @@ tests/sandbox-escape.c with the GCC inside AuxoBSD, and runs it:
   - seccomp on its own: errno and kill answers, stacking, inheritance across fork and exec.
 Then builds tests/syscalls.c and runs it: inotify, timerfd, POSIX timers, pidfd + waitid,
 sigtimedwait/sigqueue, sendfile, copy_file_range, preadv/pwritev, mknod, utimes, sched_*;
-and tests/users.c: file permissions, sticky /tmp, set-user-ID programs, dropping root.
+tests/users.c: file permissions, sticky /tmp, set-user-ID programs, dropping root; and
+tests/pty.c: a shell on a pseudo-terminal (echo, line editing, ^C, window size, raw mode, hang-up).
 Then checks the host saw none of it (hostname, files) and that /proc tells the truth.
   python3 tests/test-sandbox.py build/auxobsd.iso
 """
@@ -44,6 +45,9 @@ wget -q -O /tmp/users.c http://10.0.2.2:{port}/users.c || exit 1
 gcc -O1 -o /tmp/users /tmp/users.c || exit 1
 echo "== users: root's powers (sudo)"; sudo /tmp/users root
 echo "== users: what the user may and may not do"; /tmp/users user
+wget -q -O /tmp/pty.c http://10.0.2.2:{port}/pty.c || exit 1
+gcc -O1 -o /tmp/ptyt /tmp/pty.c || exit 1
+echo "== pseudo-terminals"; /tmp/ptyt
 """
 
 
@@ -55,6 +59,7 @@ def main():
     shutil.copy(os.path.join(HERE, "sandbox-escape.c"), www)
     shutil.copy(os.path.join(HERE, "syscalls.c"), www)
     shutil.copy(os.path.join(HERE, "users.c"), www)
+    shutil.copy(os.path.join(HERE, "pty.c"), www)
     port = hw.serve(www)
     with open(os.path.join(www, "run.sh"), "w") as f:
         f.write(RUN.format(port=port))
@@ -86,6 +91,7 @@ def main():
         hw.check(re.search(r"syscalls: \d+ passed, 0 failed", out), "the system-call program ran to the end", out[-2000:])
         hw.check(re.search(r"users root: \d+ passed, 0 failed", out) and re.search(r"users user: \d+ passed, 0 failed", out),
                  "the permission checks ran to the end, as root and as the user", out[-2000:])
+        hw.check(re.search(r"pty: \d+ passed, 0 failed", out), "the pseudo-terminal program ran to the end", out[-2000:])
         out = m.run("busybox ls /tmp/mine")
         hw.check("No such file" in out, "a file the sandbox made in its /tmp isn't in the host's", out)
         out = m.run("busybox wc -l /proc/self/mountinfo")

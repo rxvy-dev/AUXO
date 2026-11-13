@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 enum { N_DIR = 1, N_REG, N_LNK, N_CHR, N_FIFO, N_SOCK };
-enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB, DEV_FULL, DEV_SND_CTL, DEV_SND_PCM };
+enum { DEV_NULL = 1, DEV_ZERO, DEV_TTY, DEV_RANDOM, DEV_FB, DEV_FULL, DEV_SND_CTL, DEV_SND_PCM, DEV_PTMX, DEV_PTS };
 
 struct node {
     char    *name;

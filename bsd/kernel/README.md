@@ -285,6 +285,15 @@ alsa-lib's plug converter. `amixer` sets the master volume. One program plays at
 mixing daemon yet). `make test-sound` plays tones through QEMU's HD Audio into a WAV file and
 checks the pitch on each side.
 
+## Terminals
+
+`/dev/ptmx` and `/dev/pts/N` are Linux's pseudo-terminals, so terminal emulators (foot, GNOME
+Console, xterm), ssh, tmux, screen, script and IDE terminals work. The slave side behaves like a
+real terminal: line editing in canonical mode, echo, CR/NL translation, raw mode with VMIN/VTIME
+for editors, ^C/^\\/^Z to the foreground process group, window sizes (SIGWINCH), sessions and
+controlling terminals (`setsid`, `TIOCSCTTY`, `/dev/tty`, `tcsetpgrp`), and hang-up when the
+master closes. `tests/pty.c` runs an interactive shell on one (in `make test-sandbox`).
+
 ## Linux system calls
 
 Beyond files, memory, processes, sockets and signals, the calls desktop programs lean on are
