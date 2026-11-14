@@ -270,6 +270,20 @@ def main():
             check("…and the program runs", "Hello, world!" in out, out)
             out = sh.run("ls hello", timeout=10)
             check("the binary is in the filesystem", "hello" in out, out)
+
+            print("▲ CPU and memory accounting (System Monitor, /proc)")
+            out = sh.run("ps")
+            idle = re.search(r"^0\s+\S+\s+(\d+)\s+idle", out, re.M)
+            check("waiting for a key leaves the CPU idle (idle thread gets the time)", idle and int(idle.group(1)) > 50, out)
+            out = sh.run("busybox sh -c 'head -1 /proc/stat; busybox sleep 2; head -1 /proc/stat'", timeout=30)
+            cpu = [list(map(int, l.split()[1:5])) for l in out.splitlines() if l.startswith("cpu ")]
+            check("/proc/stat: idle time grows while nothing runs", len(cpu) == 2 and cpu[1][3] - cpu[0][3] >= 100, out)
+            out = sh.run("busybox sh -c 'i=0; while [ $i -lt 30000 ]; do i=$((i+1)); done; cat /proc/$$/stat'", timeout=120)
+            line = next((l for l in out.splitlines() if re.match(r"^\d+ \(", l)), "")
+            f = line.split(") ")[-1].split() if line else []
+            check("/proc/PID/stat: a busy program has CPU time and a resident set", len(f) > 22 and int(f[11]) > 0 and int(f[21]) > 0, out)
+            out = sh.run("chrono open sysmon")
+            check("chrono open sysmon (System Monitor)", "no app" not in out, out)
         else:
             print("▲ Linux programs: skipped (no build/rootfs.tar; run make rootfs)")
 

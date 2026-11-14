@@ -76,6 +76,22 @@ pub unsafe fn init() {
     CURRENT = 0;
 }
 
+/// One slot of the thread table, for System Monitor: its pid, CPU ticks so far, name and
+/// state (0 unused, 1 runnable, 2 running, 3 sleeping, 4 zombie).
+pub unsafe fn stat(i: usize, pid: *mut i32, ticks: *mut u64, name: *mut u8) -> i32 {
+    if i >= MAXPROC { return -1; }
+    let flags = irq::save();
+    let p = slot(i);
+    let st = match (*p).state {
+        State::Unused => 0, State::Runnable => 1, State::Running => 2, State::Sleeping => 3, State::Zombie => 4,
+    };
+    *pid = (*p).pid;
+    *ticks = (*p).ticks;
+    core::ptr::copy_nonoverlapping((*p).name.as_ptr(), name, 16);
+    irq::restore(flags);
+    st
+}
+
 pub unsafe fn current_pid() -> i32 {
     (*slot(CURRENT)).pid
 }

@@ -52,7 +52,7 @@ static int mx, my, buttons, menu_open, drag = -1, drag_dx, drag_dy, hover_item =
 static struct app_colors colors;
 static uint32_t term_gen, last_minute = 99, blink;
 
-static const char *const APP_TITLES[] = { "Terminal", "Settings", "About AuxoBSD", "Browser", "Aether", "Install AuxoBSD", "Files" };
+static const char *const APP_TITLES[] = { "Terminal", "Settings", "About AuxoBSD", "Browser", "Aether", "Install AuxoBSD", "Files", "System Monitor" };
 
 /* ── requests from other threads (no floating point there) ──────────── */
 int  chrono_running(void) { return running; }
@@ -581,6 +581,7 @@ static void paint_window(struct canvas *c, int idx)
         if (wn->app == APP_BROWSER) { browser_paint(&a); wn->title = browser_title(); }
         else if (wn->app == APP_AETHER) { aether_paint(&a); wn->title = aether_title(); }
         else if (wn->app == APP_FILES) { files_paint(&a); wn->title = files_title(); }
+        else if (wn->app == APP_SYSMON) { sysmon_paint(&a); wn->title = sysmon_title(); }
         else installer_paint(&a);
     }
     gfx_noclip(c);
@@ -670,8 +671,8 @@ static void paint_panel(struct canvas *c)
     gfx_text(c, &font_ui, p.x + p.w - cw + 4, p.y + (p.h - 16) / 2, clk, fg);
 }
 
-enum { MI_TERMINAL, MI_FILES, MI_BROWSER, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_LOCK, MI_REBOOT, MI_POWEROFF, MI_COUNT };
-static const char *const MENU[] = { "Terminal", "Files", "Browser", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Lock", "Restart", "Power off" };
+enum { MI_TERMINAL, MI_FILES, MI_BROWSER, MI_SYSMON, MI_AETHER, MI_SETTINGS, MI_ABOUT, MI_INSTALL, MI_SEP, MI_LOCK, MI_REBOOT, MI_POWEROFF, MI_COUNT };
+static const char *const MENU[] = { "Terminal", "Files", "Browser", "System Monitor", "Aether", "Settings", "About AuxoBSD", "Install AuxoBSD…", "", "Lock", "Restart", "Power off" };
 
 /* ── the lock screen: at start-up when the user has a password, and from Lock in the menu ── */
 static int locked = -1;                       /* -1: not decided yet (who the user is comes later) */
@@ -927,6 +928,7 @@ static void open_app(int app)
         if (app == APP_TERMINAL) { w->w = TERM_COLS * 8 + 8; w->h = TERM_ROWS * 16 + 8; }
         else if (app == APP_SETTINGS) { w->w = 3 * (CARD_W + 10) + 16; w->h = 470; }
         else if (app == APP_ABOUT) { w->w = 470; w->h = 290; }
+        else if (app == APP_SYSMON) { w->w = W - 140 > 980 ? 980 : W - 140; w->h = H - 180 > 680 ? 680 : H - 180; }
         else if (app == APP_BROWSER || app == APP_AETHER || app == APP_FILES) { w->w = W - 140 > 1100 ? 1100 : W - 140; w->h = H - 180 > 760 ? 760 : H - 180; }
         else { w->w = 640; w->h = 460; }
         int stagger = 28 * (i % 5);
@@ -1051,6 +1053,7 @@ static void menu_action(int item)
     case MI_TERMINAL: open_app(APP_TERMINAL); break;
     case MI_BROWSER:  open_app(APP_BROWSER); break;
     case MI_FILES:    open_app(APP_FILES); break;
+    case MI_SYSMON:   open_app(APP_SYSMON); break;
     case MI_AETHER:   open_app(APP_AETHER); break;
     case MI_INSTALL:  open_app(APP_INSTALLER); break;
     case MI_SETTINGS: open_app(APP_SETTINGS); break;
@@ -1109,6 +1112,7 @@ static int on_click(int x, int y)
     if (w->app == APP_BROWSER) return browser_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     if (w->app == APP_AETHER) return aether_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     if (w->app == APP_FILES) return files_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
+    if (w->app == APP_SYSMON) return sysmon_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     if (w->app == APP_INSTALLER) return installer_click(x - client_x(w), y - client_y(w), w->w, w->h) | 1;
     /* inside the client */
     int cx = x - client_x(w), cy = y - client_y(w);
@@ -1135,6 +1139,7 @@ static int on_wheel(int dz)
     if (i >= 0 && wins[i].app == APP_BROWSER) return browser_wheel(dz);
     if (i >= 0 && wins[i].app == APP_AETHER) return aether_wheel(dz);
     if (i >= 0 && wins[i].app == APP_FILES) return files_wheel(dz);
+    if (i >= 0 && wins[i].app == APP_SYSMON) return sysmon_wheel(dz);
     if (i < 0 || wins[i].app != APP_SETTINGS) return 0;
     struct win *w = &wins[i];
     int rows = (CHRONO_THEME_COUNT + settings_cols(w) - 1) / settings_cols(w), vis = (w->h - 76) / (CARD_H + 10);
@@ -1152,6 +1157,7 @@ static int on_key(int k)
     if (focus >= 0 && wins[focus].app == APP_AETHER) return aether_key(k);
     if (focus >= 0 && wins[focus].app == APP_INSTALLER) return installer_key(k);
     if (focus >= 0 && wins[focus].app == APP_FILES) return files_key(k);
+    if (focus >= 0 && wins[focus].app == APP_SYSMON) return sysmon_key(k);
     if (focus >= 0 && wins[focus].app == APP_TERMINAL) {
         static const char *const vt[] = { [KEY_UP - 0x80] = "\033[A", [KEY_DOWN - 0x80] = "\033[B", [KEY_RIGHT - 0x80] = "\033[C",
             [KEY_LEFT - 0x80] = "\033[D", [KEY_HOME - 0x80] = "\033[H", [KEY_END - 0x80] = "\033[F", [KEY_DEL - 0x80] = "\033[3~",
@@ -1284,13 +1290,14 @@ void chrono_main(uintptr_t arg)
             if (!wins[i].used) continue;
             if (wins[i].app == APP_BROWSER) dirty |= browser_tick();
             if (wins[i].app == APP_INSTALLER) dirty |= installer_tick();
+            if (wins[i].app == APP_SYSMON && !wins[i].minimized) dirty |= sysmon_tick();
         }
         int gw, gh, cxp, cyp;
         uint32_t gen;
         console_grid_info(&gw, &gh, &cxp, &cyp, &gen);
         if (gen != term_gen) { term_gen = gen; dirty = 1; }
         uint32_t tick = (uint32_t)(kernel_ticks() / (AUXO_HZ / 2));
-        if (tick != blink) { blink = tick; for (int i = 0; i < MAXWIN; i++) if (wins[i].used && i == focus && wins[i].app != APP_SETTINGS && wins[i].app != APP_ABOUT) dirty = 1; }
+        if (tick != blink) { blink = tick; for (int i = 0; i < MAXWIN; i++) if (wins[i].used && i == focus && wins[i].app != APP_SETTINGS && wins[i].app != APP_ABOUT && wins[i].app != APP_SYSMON) dirty = 1; }
         struct rtc_time t;
         if ((blink & 15) == 0) { rtc_read(&t); if ((uint32_t)t.minute != last_minute) { last_minute = (uint32_t)t.minute; dirty = 1; } }
         if (dirty) compose();

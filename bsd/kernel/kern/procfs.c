@@ -165,6 +165,18 @@ static uint32_t ns_inum(struct task *x, int i)
 /* ── file contents ──────────────────────────────────────────────────── */
 static char gen[32768];
 
+/* CPU ticks a thread has run (pid -1: the idle thread) */
+static uint64_t thread_ticks(int pid)
+{
+    for (size_t i = 0;; i++) {
+        int p; uint64_t t; char nm[16];
+        int st = rs_thread_stat(i, &p, &t, nm);
+        if (st < 0) return 0;
+        if (pid < 0) return i == 0 ? t : 0;
+        if (st && p == pid) return t;
+    }
+}
+
 static int text_pid(struct task *t, struct pidns *ns, struct task *x, const char *what, char *b, size_t cap)
 {
     int n = 0;
@@ -172,8 +184,14 @@ static int text_pid(struct task *t, struct pidns *ns, struct task *x, const char
     struct task *par = x->ppid > 0 ? task_by_pid(x->ppid) : 0;
     int vpp = par ? pid_in(ns, par, 1) : 0;
     if (!strcmp(what, "stat")) {
-        n = ksnprintf(b, cap, "%d (%s) %c %d %d %d 0 -1 4194560 0 0 0 0 0 0 0 0 20 0 1 0 %lu 0 0 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0\n",
-                      vt, x->name, x->state == 2 ? 'Z' : 'S', vpp, vp, vp, (unsigned long)x->start_tick);
+        uint64_t ut = 0, rss = 0;
+        for (int i = 0; i < MAXTASK; i++) { struct task *o = task_slot(i); if (o->used && (o == x || (!x->is_thread && o->tgid == x->tgid))) ut += thread_ticks(o->pid); }
+        uint64_t f;
+        __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+        rss = mm_rss(x->mm);
+        if (f & 0x200) __asm__ volatile("sti");
+        n = ksnprintf(b, cap, "%d (%s) %c %d %d %d 0 -1 4194560 0 0 0 0 %lu 0 0 0 20 %d %d 0 %lu 0 %lu 18446744073709551615 0 0 0 0 0 0 0 0 0 0 0 0 17 0 0 0 0 0 0\n",
+                      vt, x->name, x->state == 2 ? 'Z' : 'S', vpp, vp, vp, (unsigned long)ut, x->nice, 1, (unsigned long)x->start_tick, (unsigned long)rss);
     } else if (!strcmp(what, "status")) {
         int threads = 0;
         for (int i = 0; i < MAXTASK; i++) { struct task *o = task_slot(i); if (o->used && o->tgid == x->tgid) threads++; }
@@ -251,8 +269,11 @@ static int text_static(struct task *t, const char *path, char *b, size_t cap)
     if (!strcmp(path, "filesystems")) return ksnprintf(b, cap, "nodev\ttmpfs\nnodev\tproc\nnodev\tdevpts\nnodev\tmqueue\nnodev\tsysfs\n");
     if (!strcmp(path, "uptime")) { uint64_t s = kernel_ticks() / AUXO_HZ; return ksnprintf(b, cap, "%lu.%02lu %lu.00\n", (unsigned long)s, (unsigned long)(kernel_ticks() % AUXO_HZ), (unsigned long)s); }
     if (!strcmp(path, "loadavg")) return ksnprintf(b, cap, "0.00 0.00 0.00 1/%d 1\n", uproc_count());
-    if (!strcmp(path, "stat")) return ksnprintf(b, cap, "cpu  %lu 0 0 0 0 0 0 0 0 0\ncpu0 %lu 0 0 0 0 0 0 0 0 0\nbtime 1700000000\nprocesses %d\n",
-                                                (unsigned long)kernel_ticks(), (unsigned long)kernel_ticks(), uproc_count());
+    if (!strcmp(path, "stat")) {
+        uint64_t idle = thread_ticks(-1), all = kernel_ticks(), busy = all > idle ? all - idle : 0;
+        return ksnprintf(b, cap, "cpu  %lu 0 0 %lu 0 0 0 0 0 0\ncpu0 %lu 0 0 %lu 0 0 0 0 0 0\nbtime 1700000000\nprocesses %d\n",
+                         (unsigned long)busy, (unsigned long)idle, (unsigned long)busy, (unsigned long)idle, uproc_count());
+    }
     if (!strcmp(path, "cmdline")) return ksnprintf(b, cap, "%s\n", boot_cmdline());
     if (!strcmp(path, "swaps")) return ksnprintf(b, cap, "Filename\t\t\t\tType\t\tSize\t\tUsed\t\tPriority\n");
     if (!strcmp(path, "devices")) return ksnprintf(b, cap, "Character devices:\n  1 mem\n  4 tty\n  5 /dev/tty\n\nBlock devices:\n");

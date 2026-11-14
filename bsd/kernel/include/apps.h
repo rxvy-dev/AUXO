@@ -52,6 +52,14 @@ int         files_wheel(int dz);
 const char *files_title(void);
 void        files_open(const char *path);
 
+/* System Monitor (kern/sysmon.c) */
+void        sysmon_paint(const struct app_ctx *a);
+int         sysmon_click(int x, int y, int w, int h);
+int         sysmon_key(int k);
+int         sysmon_wheel(int dz);
+int         sysmon_tick(void);
+const char *sysmon_title(void);
+
 /* chrono.c, for the apps */
 void chrono_open_url(const char *url);       /* raise the Browser and load url */
 void chrono_set_theme_by_id(const char *id);

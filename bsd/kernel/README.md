@@ -249,6 +249,25 @@ your files included); GRUB then only loads the kernel, and the kernel mounts the
   has it, which the *full* ISO does (CI builds it as `auxobsd-full-iso`; give the machine 4 GB to
   run it live). The small ISO falls back to the built-in browser, which shows pages without CSS.
 
+## System Monitor
+
+In the menu (or `chrono open sysmon`). Three tabs:
+
+- **Processes**: every program with its user, PID, CPU and memory, plus the Chrono desktop and
+  the rest of the kernel as their own rows. Click a column to sort; pick a program and press
+  *End process* (SIGTERM) or *Kill* (SIGKILL). You can end your own programs; root's need
+  `sudo kill` in a terminal.
+- **Resources**: CPU, memory, network and disk over the last two minutes. Memory is split into
+  programs, the kernel, files and free.
+- **System**: the hardware. Processor (model, speed, threads, features such as AVX2), memory,
+  graphics card and screen mode, disks, network card and addresses, sound card, and every PCI
+  device with the driver that took it.
+
+CPU time comes from the scheduler: each thread's ticks, with the idle thread's share counted as
+free time. A program's memory is its resident set, counted from its page tables. The same
+numbers feed `/proc/stat` and `/proc/PID/stat`, so `top` and `ps` in BusyBox show them too.
+AuxoBSD runs on one CPU core for now, and System Monitor says so.
+
 ## Users and permissions
 
 AuxoBSD runs as a person's account, not as root. A live system makes **`auxo`** (uid 1000, no

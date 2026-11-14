@@ -15,7 +15,7 @@ LDFLAGS := -n -nostdlib --no-warn-rwx-segments -z max-page-size=0x1000 -T linker
 # The Chrono desktop (kern/chrono.c) and its drawing library (kern/gfx.c) use SSE floating point.
 # They only run on the "chrono" thread, the one thread that touches XMM registers, so nothing
 # else has to save them. Thread stacks are only 8-byte aligned on entry; GCC realigns.
-GUI_OBJS   := build/kern/gfx.o build/kern/chrono.o build/kern/browser.o build/kern/aether.o build/kern/installer.o
+GUI_OBJS   := build/kern/gfx.o build/kern/chrono.o build/kern/browser.o build/kern/aether.o build/kern/installer.o build/kern/sysmon.o
 GUI_CFLAGS := $(filter-out -mgeneral-regs-only,$(CFLAGS)) -msse2 -mfpmath=sse -mincoming-stack-boundary=3 -fno-math-errno
 $(GUI_OBJS): CFLAGS := $(GUI_CFLAGS)
 # BearSSL (third_party/bearssl, MIT): TLS for HTTPS. Integer-only; no OS hooks, we seed it ourselves.

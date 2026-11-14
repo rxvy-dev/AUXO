@@ -29,6 +29,7 @@ void net_init(void);                 /* find a card, start the net thread (DHCP)
 int  net_present(void);              /* a card was found */
 int  net_ready(void);                /* we have an address */
 const struct nic *net_nic(void);
+extern volatile uint64_t net_rx_bytes, net_tx_bytes, net_rx_packets, net_tx_packets;
 const char *net_status(void);        /* one line: "10.0.2.15 via e1000 (Intel 82540EM)" or why not */
 uint32_t net_ip(void), net_mask(void), net_gateway(void), net_dns(void);   /* host byte order */
 void ip_fmt(uint32_t ip, char *buf, size_t n);

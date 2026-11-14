@@ -82,6 +82,8 @@ struct arp {
 #define NARP 16
 static struct { uint32_t ip; uint8_t mac[6]; uint32_t when; } arpc[NARP];
 
+volatile uint64_t net_rx_bytes, net_tx_bytes, net_rx_packets, net_tx_packets;   /* for System Monitor */
+
 static int eth_send(const uint8_t *dst, uint16_t type, const void *payload, size_t len)
 {
     if (len + sizeof(struct eth) > sizeof out_buf) return -1;
@@ -90,7 +92,9 @@ static int eth_send(const uint8_t *dst, uint16_t type, const void *payload, size
     memcpy(e->src, nic.mac, 6);
     e->type = htons(type);
     memcpy(out_buf + sizeof *e, payload, len);
-    return nic.send(&nic, out_buf, sizeof *e + len);
+    int r = nic.send(&nic, out_buf, sizeof *e + len);
+    if (r == 0) { net_tx_bytes += sizeof *e + len; net_tx_packets++; }
+    return r;
 }
 
 static void arp_learn(uint32_t ip, const uint8_t *mac)
@@ -838,6 +842,7 @@ static void poll_locked(void)
     if (!have_nic) return;
     for (int n = 0; n < 64; n++) {
         int len = nic.recv(&nic, frame_buf, sizeof frame_buf);
+        if (len > 0) { net_rx_bytes += (uint64_t)len; net_rx_packets++; }
         if (len <= 0) break;
         if ((size_t)len < sizeof(struct eth)) continue;
         const struct eth *e = (const struct eth *)frame_buf;

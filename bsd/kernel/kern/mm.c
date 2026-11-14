@@ -344,6 +344,31 @@ static void free_tables(uint64_t *t, int lvl)
     if (lvl < 4) pmm_free_page((uint64_t)(uintptr_t)t);
 }
 
+/* pages of RAM mapped in m (its resident set), for System Monitor and /proc. Walks the page
+ * tables with interrupts off, so they can't change under us (one CPU). */
+static uint64_t rss_walk(uint64_t *t, int lvl)
+{
+    uint64_t n = 0;
+    for (int i = 0; i < 512; i++) {
+        if (!(t[i] & P)) continue;
+        if (lvl == 1) n++;
+        else if (t[i] & 0x80) n += lvl == 2 ? 512 : 512 * 512;
+        else n += rss_walk(table(t[i]), lvl - 1);
+    }
+    return n;
+}
+
+uint64_t mm_rss(struct mm *m)
+{
+    if (!m) return 0;
+    uint64_t f, n = 0;
+    __asm__ volatile("pushfq; pop %0; cli" : "=r"(f) :: "memory");
+    uint64_t *pml4 = (uint64_t *)(uintptr_t)m->pml4;
+    for (int i = 0; i < 256; i++) if (pml4[i] & P) n += rss_walk(table(pml4[i]), 3);
+    if (f & 0x200) __asm__ volatile("sti");
+    return n;
+}
+
 void mm_put(struct mm *m)
 {
     if (!m || --m->refs > 0) return;

@@ -231,7 +231,7 @@ static int cmd_demo(int argc, char **argv)
 {
     (void)argc; (void)argv;
     demo_start();
-    for (uint64_t until = kernel_ticks() + 150; kernel_ticks() < until; ) __asm__ volatile("sti; hlt");
+    for (uint64_t until = kernel_ticks() + 150; kernel_ticks() < until; ) wait_tick();
     return 0;
 }
 
@@ -543,7 +543,7 @@ static int cmd_browse(int argc, char **argv)
 /* chrono: the desktop, from the shell. Only posts requests; the Chrono thread does the drawing. */
 static int cmd_chrono(int argc, char **argv)
 {
-    static const char *const apps[APP_COUNT] = { "terminal", "settings", "about", "browser", "aether", "installer", "files" };
+    static const char *const apps[APP_COUNT] = { "terminal", "settings", "about", "browser", "aether", "installer", "files", "sysmon" };
     const char *sub = argc > 1 ? argv[1] : "status";
     if (!strcmp(sub, "themes")) {
         for (int i = 0; chrono_theme_id(i); i++) {
@@ -559,7 +559,7 @@ static int cmd_chrono(int argc, char **argv)
         kprintf("usage: chrono [status]           desktop and theme\n"
                 "       chrono themes             list the Chrono themes\n"
                 "       chrono theme NAME         switch theme\n"
-                "       chrono open APP           terminal, settings, about, browser, aether, installer\n");
+                "       chrono open APP           terminal, settings, about, browser, aether, installer, files, sysmon\n");
         return 0;
     }
     if (!chrono_running()) {
@@ -581,7 +581,7 @@ static int cmd_chrono(int argc, char **argv)
     if (!strcmp(sub, "open") && argc > 2) {
         for (int a = 0; a < APP_COUNT; a++)
             if (!strcmp(argv[2], apps[a])) { chrono_request_open(a); return 0; }
-        kprintf("chrono: no app '%s' (terminal, settings, about, browser, aether, installer)\n", argv[2]);
+        kprintf("chrono: no app '%s' (terminal, settings, about, browser, aether, installer, files, sysmon)\n", argv[2]);
         return 1;
     }
     kprintf("chrono: try chrono help\n");

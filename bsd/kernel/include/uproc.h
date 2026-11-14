@@ -49,6 +49,7 @@ int        mm_protect(struct mm *m, uint64_t start, uint64_t len, uint32_t prot)
 uint64_t   mm_find_free(struct mm *m, uint64_t len, uint64_t below);
 int        mm_fault(struct mm *m, uint64_t addr, int write);          /* 0 = handled */
 struct vma *mm_vma_at(struct mm *m, uint64_t addr);
+uint64_t   mm_rss(struct mm *m);                                      /* pages mapped (resident set) */
 
 /* copying to and from user memory; they fault pages in as needed. 0 = ok, -14 = EFAULT */
 int  copyin(struct mm *m, void *dst, uint64_t usrc, size_t n);

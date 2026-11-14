@@ -71,6 +71,12 @@ pub unsafe extern "C" fn rs_ps() {
     rprintln!("heap: {} KiB used of {} KiB", u / 1024, t / 1024);
 }
 
+/// Slot `i` of the thread table (0 = idle): state, or -1 past the end. `name` gets 16 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_thread_stat(i: usize, pid: *mut i32, ticks: *mut u64, name: *mut u8) -> i32 {
+    proc::stat(i, pid, ticks, name)
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn rs_proc_count() -> usize { proc::count() }
 

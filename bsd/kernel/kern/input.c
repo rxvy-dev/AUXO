@@ -2,6 +2,7 @@
  * feeding one byte queue. Keys without a byte (arrows, Home, End, Delete) are queued as
  * the VT100 sequences a serial terminal sends, so the shell only has to read one format. */
 #include "kern.h"
+#include "rs.h"
 #include "arch.h"
 
 #define COM1 0x3F8
@@ -54,7 +55,9 @@ int input_poll(void)
 int input_getc(void)
 {
     int c;
-    while ((c = input_poll()) < 0) __asm__ volatile("sti; hlt");
+    /* sleep, not hlt: a halted thread still holds the CPU until its time slice ends (100 ms),
+     * and the time would be counted as its own instead of idle */
+    while ((c = input_poll()) < 0) { if (rs_current_pid() > 0) rs_sleep(0); else __asm__ volatile("sti; hlt"); }
     return c;
 }
 

@@ -14,6 +14,7 @@ void    rs_reap(void);
 void    rs_ps(void);
 void    rs_heap_stats(size_t *total, size_t *used);
 size_t  rs_proc_count(void);
+int     rs_thread_stat(size_t i, int *pid, uint64_t *ticks, char name[16]);   /* state 0..4, -1 past the end */
 void    rs_sleep(uint64_t ticks);         /* 0 = until the next timer tick */
 int     rs_current_pid(void);
 void    rs_set_ucr3(uint64_t cr3);        /* user page tables of the calling thread */
