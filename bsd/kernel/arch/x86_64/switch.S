@@ -6,9 +6,10 @@
 gdt_flush:
         lgdt (%rdi)
         movw $0x10, %ax
-        movw %ax, %ds
-        movw %ax, %es
         movw %ax, %ss
+        movw $0x1b, %ax                  /* user data in DS/ES: 64-bit code ignores them, 32-bit */
+        movw %ax, %ds                    /* programs need them (iretq doesn't load them) */
+        movw %ax, %es
         xorl %eax, %eax
         movw %ax, %fs
         movw %ax, %gs

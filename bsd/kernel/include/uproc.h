@@ -16,6 +16,7 @@ struct node;
 #define VM_SHARED 8
 #define USER_TOP  0x00007FFFFFFFF000ULL
 #define MMAP_TOP  0x00007F0000000000ULL
+#define MMAP_TOP32 0x00000000F7000000ULL       /* 32-bit programs: mmap below their stack */
 
 struct vma {
     uint64_t start, end;           /* page aligned, end exclusive */
@@ -32,6 +33,7 @@ struct mm {
     int nv, cap;
     uint64_t brk_start, brk;
     int refs;
+    int compat;                    /* a 32-bit (i386) program: everything stays below 4 GB */
     volatile int lock_owner, lock_depth;   /* threads share an mm: one changes it at a time */
 };
 
@@ -102,6 +104,8 @@ struct task {
     int8_t   si_code[64];          /* per pending signal: who sent it (SI_TIMER …), for sigwaitinfo */
     uint64_t si_value[64];
     int      si_timer[64];
+    int      si_pid[64];           /* kill / tkill: who sent it (as the receiver numbers it) and their uid */
+    uint32_t si_uid[64];
     int      nice, sched_policy, sched_prio;
     uint64_t saved_sigmask; int mask_saved;   /* rt_sigsuspend: the mask to put back once a signal is handled */
 };

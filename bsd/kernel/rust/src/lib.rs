@@ -11,6 +11,7 @@ pub mod ffi {
         pub fn ctx_switch(old_rsp: *mut u64, new_rsp: u64);
         pub fn thread_trampoline();
         pub fn arch_switch_to(ucr3: u64, kstack_top: u64);
+        pub fn arch_tls_switch(tls: *const u64, gs: u16);
     }
 }
 
@@ -70,6 +71,13 @@ pub unsafe extern "C" fn rs_ps() {
     let (t, u) = heap::stats();
     rprintln!("heap: {} KiB used of {} KiB", u / 1024, t / 1024);
 }
+
+/// The running thread's three TLS descriptors (32-bit programs).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_tls(out: *mut u64) { proc::tls(out) }
+/// Set them (and %gs, unless `gs` < 0: keep the current one) and load them now.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_tls(v: *const u64, gs: i32) { proc::set_tls(v, gs) }
 
 /// Slot `i` of the thread table (0 = idle): state, or -1 past the end. `name` gets 16 bytes.
 #[no_mangle]

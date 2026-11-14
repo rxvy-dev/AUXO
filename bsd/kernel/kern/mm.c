@@ -231,7 +231,7 @@ static int mm_protect_l(struct mm *m, uint64_t s, uint64_t len, uint32_t prot)
 uint64_t mm_find_free(struct mm *m, uint64_t len, uint64_t below)
 {
     len = (len + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
-    uint64_t top = below ? below : MMAP_TOP;
+    uint64_t top = below ? below : m->compat ? MMAP_TOP32 : MMAP_TOP;
     for (int i = m->nv - 1; i >= -1; i--) {
         uint64_t gap_end = top, gap_start = i >= 0 ? m->v[i].end : 0x10000;
         if (i + 1 < m->nv && m->v[i + 1].start < gap_end) gap_end = m->v[i + 1].start;
@@ -316,6 +316,7 @@ struct mm *mm_clone_l(struct mm *src)
     struct mm *m = mm_new();
     if (!m) return 0;
     m->brk_start = src->brk_start; m->brk = src->brk;
+    m->compat = src->compat;
     for (int i = 0; i < src->nv; i++) {
         struct vma *v = &src->v[i];
         if (vma_insert(m, v) < 0) { mm_put(m); return 0; }

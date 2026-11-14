@@ -14,7 +14,7 @@ struct tss {
 struct gdtr { uint16_t limit; uint64_t base; } __attribute__((packed));
 
 /* in the entry section: the CPU reads these while a user program's page tables are loaded */
-static uint64_t   gdt[7] __attribute__((section(".entry.data"), aligned(16)));
+static uint64_t   gdt[11] __attribute__((section(".entry.data"), aligned(16)));
 static struct tss tss __attribute__((section(".entry.data"), aligned(16)));
 extern char entry_stack_top[];
 extern char syscall_entry[];
@@ -39,6 +39,8 @@ void gdt_init(void)
     gdt[5] = (limit & 0xFFFF) | ((base & 0xFFFFFF) << 16) | (0x89ULL << 40) |
              (((limit >> 16) & 0xF) << 48) | (((base >> 24) & 0xFF) << 56);
     gdt[6] = base >> 32;              /* 0x28 TSS (16 bytes) */
+    gdt[7] = 0x00CFFA000000FFFFULL;   /* 0x38 user code, 32-bit (i386 programs run here: CS 0x3b) */
+    gdt[8] = gdt[9] = gdt[10] = 0;    /* 0x40-0x50 the running thread's TLS (set_thread_area) */
 
     struct gdtr g = { sizeof gdt - 1, (uint64_t)(uintptr_t)gdt };
     gdt_flush(&g);
@@ -60,3 +62,17 @@ void arch_switch_to(uint64_t ucr3, uint64_t kstack_top)
     cur_user_cr3 = ucr3 ? ucr3 : kernel_cr3;
     cur_kstack_top = kstack_top;
 }
+
+/* the TLS descriptors of the thread about to run, and its %gs. A selector whose descriptor isn't
+ * there any more (the program cleared it) would fault here in the kernel: load 0 instead. */
+void arch_tls_switch(const uint64_t *tls, uint16_t gs)
+{
+    gdt[8] = tls[0]; gdt[9] = tls[1]; gdt[10] = tls[2];
+    uint16_t idx = gs >> 3;
+    int ok = gs == 0 || ((gs & 4) == 0 && idx < 11 && idx != 5 && idx != 6 && (gdt[idx] & (1ULL << 47)) &&
+                         ((gdt[idx] >> 45) & 3) == 3 && (gs & 3) == 3);
+    if (!ok) gs = 0;
+    __asm__ volatile("movw %0, %%gs" :: "r"(gs));
+}
+
+uint64_t *arch_gdt_tls(void) { return &gdt[8]; }

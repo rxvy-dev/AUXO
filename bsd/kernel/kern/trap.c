@@ -96,6 +96,8 @@ static void exception(struct trapframe *tf)
 
 void uproc_irq_return(struct trapframe *tf);
 
+void compat_syscall(struct trapframe *tf);
+
 void trap_dispatch(struct trapframe *tf)
 {
     int user = (tf->cs & 3) != 0;
@@ -111,6 +113,8 @@ void trap_dispatch(struct trapframe *tf)
         pic_eoi(irq);                 /* EOI first: the scheduler may not return here */
         if (irq == 0) { ticks++; tick_tsc = rdtsc(); uproc_tick(ticks); rs_tick(); }
         if (user) uproc_irq_return(tf);
+    } else if (tf->vector == 0x80 && tf->cs == 0x3b) {
+        compat_syscall(tf);                        /* a 32-bit Linux program (kern/compat32.c) */
     } else if (tf->vector == 0x80) {
         /* BSD-style: number in rax, args in rdi/rsi/rdx, result in rax (<0 = -errno) */
         tf->rax = (uint64_t)rs_syscall(tf->rax, tf->rdi, tf->rsi, tf->rdx);

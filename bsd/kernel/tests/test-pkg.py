@@ -7,8 +7,9 @@ real ones from archive.ubuntu.com cut down to the packages this test uses, and i
 are the real ones, fetched from archive.ubuntu.com (with curl, so a proxy is honoured) and
 cached in build/test-mirror. Then:
 
-  1. from the ISO: pkg update, search, install jq (it needs two libraries), run it; install
-     AuxoBSD onto a blank disk;
+  1. from the ISO: pkg update, search, install jq (it needs two libraries), run it; with i386
+     added, install libjq1:i386 (its 32-bit library comes along, libc6:i386 is in the base)
+     and see jq:i386 refused (it would overwrite jq); install AuxoBSD onto a blank disk;
   2. the installed system: jq came along; pkg install tree; sync; pkg remove jq; sync;
   3. after a restart: tree is still there, jq is gone.
 
@@ -56,13 +57,13 @@ def curl(url, dest):
 
 
 def build_lists():
-    """the real package lists, cut down to WANT"""
-    for suite, comp in LISTS:
-        d = os.path.join(CACHE, "ubuntu", "dists", suite, comp, "binary-amd64")
+    """the real package lists (amd64 and i386), cut down to WANT"""
+    for (suite, comp), arch in [(l, a) for l in LISTS for a in ("amd64", "i386")]:
+        d = os.path.join(CACHE, "ubuntu", "dists", suite, comp, f"binary-{arch}")
         os.makedirs(d, exist_ok=True)
-        full = os.path.join(CACHE, f"full-{suite}-{comp}.gz")
-        if not os.path.exists(full) and not curl(f"{ARCHIVE}/dists/{suite}/{comp}/binary-amd64/Packages.gz", full):
-            sys.exit(f"can't download the {suite}/{comp} list from {ARCHIVE}")
+        full = os.path.join(CACHE, f"full-{suite}-{comp}{'' if arch == 'amd64' else '-' + arch}.gz")
+        if not os.path.exists(full) and not curl(f"{ARCHIVE}/dists/{suite}/{comp}/binary-{arch}/Packages.gz", full):
+            sys.exit(f"can't download the {suite}/{comp} {arch} list from {ARCHIVE}")
         keep = []
         for stanza in gzip.decompress(open(full, "rb").read()).decode("utf-8", "replace").split("\n\n"):
             m = re.match(r"Package: (\S+)", stanza)
@@ -168,7 +169,8 @@ def main():
         check("needs root" in out and "sudo pkg update" in out, "pkg update without sudo says it needs root", out)
         m.run(f"sudo busybox sh -c \"printf '{sources}\\n' > /etc/pkg/sources\"")
         out = m.run("sudo pkg update", 300)
-        check(re.search(r"\b[4-9] packages available", out) is not None, "pkg update reads the lists", out)
+        n1 = re.search(r"\b([4-9]) packages available", out)
+        check(n1 is not None, "pkg update reads the lists", out)
         out = m.run("pkg search json")
         check("jq" in out and "JSON" in out, "pkg search finds jq", out)
         out = m.run("sudo pkg install -y jq", 600)
@@ -177,6 +179,20 @@ def main():
         check("Done." in out and "libc6" not in out.split("Done.")[0].split("To install")[-1], "…downloads, checks and unpacks them", out)
         out = m.run("busybox sh -c 'echo {\\\"a\\\":[1,2,3]} | jq .a[2]'")
         check(re.search(r"^3\s*$", out, re.M) is not None, "jq runs", out)
+        out = m.run("sudo pkg install -y libjq1:i386")
+        check("32-bit packages are off" in out, "NAME:i386 before i386 is added says how to add it", out)
+        m.run("sudo pkg arch add i386")
+        out = m.run("sudo pkg update", 300)
+        n2 = re.search(r"\b(\d+) packages available", out)
+        check(n2 and n1 and int(n2.group(1)) > int(n1.group(1)) and "pkg:" not in out, "pkg update reads the i386 lists too", out)
+        out = m.run("sudo pkg install -y libjq1:i386", 600)
+        flat = out.replace("\n", " ")
+        check("libjq1:i386" in flat and "libonig5:i386" in flat and "Done." in out and "libc6:i386" not in flat.split("Done.")[0].split("To install")[-1],
+              "pkg install libjq1:i386: its i386 library comes along, libc6:i386 is the base system's", out)
+        out = m.run("busybox sh -c 'busybox hexdump -n 5 -C /usr/lib/i386-linux-gnu/libjq.so.1; ls /usr/lib/x86_64-linux-gnu/libjq.so.1'")
+        check("7f 45 4c 46 01" in out and "No such file" not in out, "the 32-bit library is next to the 64-bit one", out)
+        out = m.run("sudo pkg install -y jq:i386", 300)
+        check("would overwrite jq" in out, "jq:i386 is refused: it would overwrite jq's files", out)
         out = m.run("sudo install sda pkgtest --yes", 900)
         check("is installed on sda" in out, "install AuxoBSD onto the disk", out)
         m.close()

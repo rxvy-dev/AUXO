@@ -14,7 +14,7 @@ OUT=${1:-build}
 SET=${ROOTFS_SET:-dev}
 WORK=$OUT/rootfs-work
 ROOT=$OUT/rootfs
-rm -rf "$ROOT" "$WORK/debs"            # start clean: nothing left over from another set
+rm -rf "$ROOT" "$WORK/debs" "$WORK/debs32"            # start clean: nothing left over from another set
 mkdir -p "$WORK/debs" "$ROOT"
 
 PKGS="gcc cpp binutils libc6-dev make busybox-static bubblewrap alsa-utils"
@@ -27,7 +27,7 @@ fi
 echo "rootfs: resolving $SET packages"
 # shellcheck disable=SC2086
 apt-cache depends --recurse --no-recommends --no-suggests --no-conflicts --no-breaks --no-replaces \
-    --no-enhances $PKGS 2>/dev/null | grep -v '^ ' | grep -v '^<' | sort -u > "$WORK/pkgs.txt"
+    --no-enhances $PKGS 2>/dev/null | grep -v '^ ' | grep -v '^<' | grep -v ':i386$' | sort -u > "$WORK/pkgs.txt"   # (amd64 only here)
 # things a package needs only for its maintainer scripts (we never run those)
 grep -vxE 'debconf|perl-base|dpkg|install-info|sensible-utils|ucf|tzdata|base-files|mount|util-linux|login|passwd|adduser|init-system-helpers|systemd|systemd-.*|dbus|dbus-.*|lsb-base|coreutils|bash|dash|debianutils|diffutils|findutils|grep|gzip|sed|tar|hostname|ncurses-bin|ncurses-base|gpgv' \
     "$WORK/pkgs.txt" > "$WORK/want.txt" || true
@@ -44,10 +44,21 @@ echo "rootfs: $(wc -l < "$WORK/want2.txt") packages"
 ( cd "$WORK/debs" && xargs apt-get download -q < ../want2.txt >/dev/null 2>&1 || \
   xargs -n1 apt-get download -q < ../want2.txt 2>&1 | grep -i 'unable\|error' || true )
 for d in "$WORK"/debs/*.deb; do dpkg-deb -x "$d" "$ROOT"; done
+# the i386 C library, so 32-bit programs run (the kernel's compat layer; Steam's client is
+# 32-bit). Needs the host to know the i386 architecture: dpkg --add-architecture i386.
+mkdir -p "$WORK/debs32"
+if apt-cache show libc6:i386 >/dev/null 2>&1; then
+    ( cd "$WORK/debs32" && apt-get download -q libc6:i386 libgcc-s1:i386 libstdc++6:i386 gcc-14-base:i386 >/dev/null 2>&1 || true )
+    for d in "$WORK"/debs32/*.deb; do [ -e "$d" ] && dpkg-deb -x "$d" "$ROOT"; done
+    echo "rootfs: + the i386 C library ($(ls "$WORK"/debs32/*.deb 2>/dev/null | wc -l) packages)"
+else
+    echo "rootfs: no i386 packages here (dpkg --add-architecture i386; apt-get update): 32-bit programs must be static"
+fi
 
 # for pkg (the package manager): what's in this image, and what it can do without
 mkdir -p "$ROOT/var/lib/pkg"
 for d in "$WORK"/debs/*.deb; do echo "$(dpkg-deb -f "$d" Package) $(dpkg-deb -f "$d" Version) base"; done > "$ROOT/var/lib/pkg/installed"
+for d in "$WORK"/debs32/*.deb; do [ -e "$d" ] && echo "$(dpkg-deb -f "$d" Package):i386 $(dpkg-deb -f "$d" Version) base"; done >> "$ROOT/var/lib/pkg/installed"
 { grep -vxFf "$WORK/want2.txt" "$WORK/pkgs.txt" | grep -v "^lib" || true     # libraries get installed when needed
   # needed only for maintainer scripts and services, which never run here (BusyBox has the tools)
   printf '%s\n' adduser base-files base-passwd bash coreutils dash dbus dbus-session-bus default-dbus-session-bus \

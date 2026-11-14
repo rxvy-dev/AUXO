@@ -538,7 +538,7 @@ static long sys_mmap(struct task *t, uint64_t addr, uint64_t len, long prot, lon
         at = addr;
     } else {
         at = 0;
-        if (addr && !(addr & 0xFFF) && addr + len <= USER_TOP) {
+        if (addr && !(addr & 0xFFF) && addr + len <= (t->mm->compat ? 0xFFFFE000ULL : USER_TOP)) {
             int free = 1;
             for (int i = 0; i < t->mm->nv; i++) if (t->mm->v[i].start < addr + len && t->mm->v[i].end > addr) { free = 0; break; }
             if (free) at = addr;
@@ -592,7 +592,7 @@ static long sys_mremap(struct task *t, uint64_t old, uint64_t olen, uint64_t nle
 }
 
 /* ── processes ──────────────────────────────────────────────────────── */
-struct child_start { struct task *t; struct trapframe tf; uint64_t fs; volatile int go; };
+struct child_start { struct task *t; struct trapframe tf; uint64_t fs; uint64_t tls[3]; uint16_t gs; volatile int go; };
 
 static void child_entry(uintptr_t arg)
 {
@@ -609,9 +609,12 @@ static void child_entry(uintptr_t arg)
     t->start_tick = kernel_ticks();
     rs_set_ucr3(t->mm->pml4);
     wrmsr(0xC0000100, cs->fs);
+    rs_set_tls(cs->tls, cs->gs);
     rs_kfree(cs);
     user_return(&tf);
 }
+
+long compat_tls_desc(struct task *t, uint64_t uinfo, uint64_t tls[3]);
 
 static long sys_clone(struct task *t, uint64_t flags, uint64_t stack, uint64_t ptid, uint64_t ctid, uint64_t tls)
 {
@@ -654,7 +657,13 @@ static long sys_clone(struct task *t, uint64_t flags, uint64_t stack, uint64_t p
     cs->tf = *t->tf;
     cs->tf.rax = 0;
     if (stack) cs->tf.rsp = stack;
-    cs->fs = (flags & 0x80000) ? tls : rdmsr(0xC0000100);
+    cs->fs = (flags & 0x80000) && !t->mm->compat ? tls : rdmsr(0xC0000100);
+    rs_get_tls(cs->tls);
+    __asm__ volatile("movw %%gs, %0" : "=r"(cs->gs));
+    if ((flags & 0x80000) && t->mm->compat) {               /* i386: tls is a struct user_desc */
+        long e = compat_tls_desc(t, tls, cs->tls);
+        if (e < 0) { rs_kfree(cs); task_free(c); return e; }
+    }
     if (flags & 0x00200000) c->clear_child_tid = ctid;                     /* CLONE_CHILD_CLEARTID */
     int pid = rs_spawn(c->name, child_entry, (uintptr_t)cs);
     if (pid < 0) { rs_kfree(cs); task_free(c); return -EAGAIN; }
@@ -774,9 +783,10 @@ static long sys_execve_k(struct task *t, const char *path, uint64_t uargv, uint6
         uint64_t base = pass ? uenvp : uargv;
         char **out = pass ? vec + na + 1 : vec;
         int k = 0;
+        size_t ws = t->mm && t->mm->compat ? 4 : 8;      /* a 32-bit program's arrays hold 4-byte pointers */
         for (; base; k++) {
-            uint64_t p;
-            if (k >= 2048 || copyin(t->mm, &p, base + (uint64_t)k * 8, 8) < 0) { r = -E2BIG; goto out; }
+            uint64_t p = 0;
+            if (k >= 2048 || copyin(t->mm, &p, base + (uint64_t)k * ws, ws) < 0) { r = -E2BIG; goto out; }
             if (!p) break;
             long l = copyin_str(t->mm, space + used, p, 256 * 1024 - used);
             if (l < 0) { r = l == -36 ? -E2BIG : l; goto out; }
@@ -1322,6 +1332,10 @@ void uproc_where(int pid)
 }
 
 /* called on every return to user mode: deliver what's pending (handlers, or the default action) */
+int compat_signal(struct task *t, struct trapframe *tf, int sig, struct sigact *a, uint64_t frame_mask);
+
+void compat_exit(struct task *t, int sig) { exit_group(t, sig); }
+
 void uproc_signals(struct task *t, struct trapframe *tf)
 {
     uint64_t deliverable = t->pending & ~t->sigmask;
@@ -1342,6 +1356,10 @@ void uproc_signals(struct task *t, struct trapframe *tf)
         exit_group(t, sig);
     }
     if (a->handler == 1) return;                              /* SIG_IGN */
+    if (tf->cs == 0x3b) {                                     /* a 32-bit program: its own frame layout */
+        if (compat_signal(t, tf, sig, a, frame_mask) < 0) exit_group(t, 11);
+        return;
+    }
     /* build an rt_sigframe: return address (sa_restorer), ucontext, siginfo */
     uint64_t sp = (tf->rsp - 128 - 1024) & ~15ULL;            /* below the red zone */
     uint8_t uc[944];
@@ -1359,6 +1377,7 @@ void uproc_signals(struct task *t, struct trapframe *tf)
     memcpy(info + 8, &code, 4);
     if (code == -2) { memcpy(info + 16, &t->si_timer[sig - 1], 4); memcpy(info + 24, &t->si_value[sig - 1], 8); }   /* SI_TIMER */
     else if (code == -1) memcpy(info + 24, &t->si_value[sig - 1], 8);     /* SI_QUEUE */
+    else if (code == 0 || code == -6) { memcpy(info + 16, &t->si_pid[sig - 1], 4); memcpy(info + 20, &t->si_uid[sig - 1], 4); }
     t->si_code[sig - 1] = 0;
     sp -= sizeof info;
     uint64_t uinfo = sp;
@@ -1411,7 +1430,10 @@ static long sys_kill(struct task *t, long pid, long sig)
         if (!match) continue;
         if (!cred_kill(t, o, (int)sig)) { if (!found) found = -1; continue; }
         found = 1;
-        if (sig && !init_protected(t, o, sig)) o->pending |= 1ULL << (sig - 1);
+        if (sig && !init_protected(t, o, sig)) {
+            o->pending |= 1ULL << (sig - 1);
+            o->si_code[sig - 1] = 0; o->si_pid[sig - 1] = pid_vtgid(o, t); o->si_uid[sig - 1] = t->ns.cred.uid;   /* SI_USER */
+        }
     }
     return found > 0 ? 0 : found < 0 ? -EPERM : -ESRCH;
 }
@@ -1424,7 +1446,10 @@ static long sys_tkill(struct task *t, long tgid, long tid, long sig)
     struct task *o = g ? task_by_pid(g) : 0;
     if (!o || o->state == 2 || (tgid > 0 && pid_vtgid(t, o) != tgid)) return -ESRCH;
     if (!cred_kill(t, o, (int)sig)) return -EPERM;
-    if (sig && !init_protected(t, o, sig)) o->pending |= 1ULL << (sig - 1);
+    if (sig && !init_protected(t, o, sig)) {
+        o->pending |= 1ULL << (sig - 1);
+        o->si_code[sig - 1] = -6; o->si_pid[sig - 1] = pid_vtgid(o, t); o->si_uid[sig - 1] = t->ns.cred.uid;   /* SI_TKILL */
+    }
     return 0;
 }
 
@@ -2210,10 +2235,10 @@ static long sys_eventfd(struct task *t, uint64_t init, long flags)
 }
 
 /* ── the table ──────────────────────────────────────────────────────── */
-static long syscall_body(struct task *t, struct trapframe *tf)
+/* a system call by its x86_64 number. tf is the caller's real frame (clone, execve and
+ * sigreturn work on it); the arguments come separately, so compat32.c can pass translated ones */
+long syscall_call(struct task *t, struct trapframe *tf, long nr, uint64_t a, uint64_t b, uint64_t c, uint64_t d, uint64_t e, uint64_t f)
 {
-    uint64_t a = tf->rdi, b = tf->rsi, c = tf->rdx, d = tf->r10, e = tf->r8, f = tf->r9;
-    long nr = (long)tf->rax;
     switch (nr) {
     case 0: return sys_read(t, (long)a, b, c);
     case 1: return sys_write(t, (long)a, b, c);
@@ -2569,7 +2594,7 @@ void syscall_dispatch(struct trapframe *tf)
     }
     static uint64_t gc_at;
     if (kernel_ticks() - gc_at > 2 * AUXO_HZ) { gc_at = kernel_ticks(); procfs_gc(); }
-    if (run) r = syscall_body(t, tf);
+    if (run) r = syscall_call(t, tf, (long)tf->rax, tf->rdi, tf->rsi, tf->rdx, tf->r10, tf->r8, tf->r9);
     if (sys_trace && (!sys_trace_name[0] || !strncmp(t->name, sys_trace_name, strlen(sys_trace_name))) &&
         (sys_trace == 1 || (r < 0 && r != -EAGAIN && nr != 61 && nr != 202))) kprintf("[%d %s] %lu(%lx, %lx, %lx%s%s%s) = %ld\n", t->pid, t->name, nr, a0, a1, a2, s0[0] ? ", \"" : "", s0, s0[0] ? "\"" : "", r);
     tf->rax = (uint64_t)r;

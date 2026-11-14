@@ -31,6 +31,8 @@ pub struct Proc {
     name: [u8; 16],
     ucr3: u64,        // page tables of the user program this thread runs (0 = kernel only)
     fs_base: u64,     // user TLS pointer (FS base MSR)
+    tls: [u64; 3],    // 32-bit programs: their TLS descriptors (GDT 8-10) and %gs
+    gs: u16,
     sleep_until: u64,
     fpu: Fpu,
 }
@@ -45,6 +47,8 @@ const EMPTY: Proc = Proc {
     name: [0; 16],
     ucr3: 0,
     fs_base: 0,
+    tls: [0; 3],
+    gs: 0,
     sleep_until: 0,
     fpu: Fpu([0; 512]),
 };
@@ -92,6 +96,22 @@ pub unsafe fn stat(i: usize, pid: *mut i32, ticks: *mut u64, name: *mut u8) -> i
     st
 }
 
+/// The running thread's TLS descriptors (32-bit programs); `set` also loads them.
+pub unsafe fn tls(out: *mut u64) {
+    let p = slot(CURRENT);
+    core::ptr::copy_nonoverlapping((*p).tls.as_ptr(), out, 3);
+}
+pub unsafe fn set_tls(v: *const u64, gs: i32) {
+    let flags = irq::save();
+    let p = slot(CURRENT);
+    core::ptr::copy_nonoverlapping(v, (*p).tls.as_mut_ptr(), 3);
+    let cur: u16;
+    core::arch::asm!("mov {0:x}, gs", out(reg) cur);
+    (*p).gs = if gs >= 0 { gs as u16 } else { cur };
+    ffi::arch_tls_switch((*p).tls.as_ptr(), (*p).gs);
+    irq::restore(flags);
+}
+
 pub unsafe fn current_pid() -> i32 {
     (*slot(CURRENT)).pid
 }
@@ -137,6 +157,8 @@ pub unsafe fn spawn(name: *const u8, entry: extern "C" fn(usize), arg: usize) ->
     (*p).ticks = 0;
     (*p).ucr3 = 0;
     (*p).fs_base = 0;
+    (*p).tls = [0; 3];
+    (*p).gs = 0;
     (*p).sleep_until = 0;
     set_name(p, name);
     let pid = (*p).pid;
@@ -175,6 +197,12 @@ pub unsafe fn yield_cpu() {
         core::arch::asm!("fxsave64 [{}]", in(reg) (*c).fpu.0.as_mut_ptr());
         (*c).fs_base = rdmsr(0xC000_0100);
         wrmsr(0xC000_0100, (*n).fs_base);
+        let gs: u16;
+        core::arch::asm!("mov {0:x}, gs", out(reg) gs);
+        (*c).gs = gs;
+        if (*c).gs != 0 || (*n).gs != 0 || (*c).tls != [0; 3] || (*n).tls != [0; 3] {
+            ffi::arch_tls_switch((*n).tls.as_ptr(), (*n).gs);
+        }
         let ktop = if (*n).stack.is_null() { 0 } else { ((*n).stack as usize + KSTACK) & !15 };
         ffi::arch_switch_to((*n).ucr3, ktop as u64);
         CURRENT = next;

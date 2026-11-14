@@ -14,11 +14,18 @@
  *   pkg upgrade [-y]            newer versions of what pkg installed
  *   pkg list [--all]            what's installed (--all: the base system too)
  *   pkg clean                   empty the download cache
+ *   pkg arch [add|remove] i386  32-bit packages too (then NAME:i386 installs one)
  *
  * Maintainer scripts aren't run (there's no dpkg here); the common things they do are:
  * update-alternatives links and compiled GSettings schemas.
  *
- * Files: /etc/pkg/sources, /var/lib/pkg/{index,installed,assumed,files/NAME.list}, /var/cache/pkg.
+ * Multiarch, like dpkg: with i386 added, the i386 lists are read too and their packages are
+ * named NAME:i386. A 32-bit package's dependencies are 32-bit too, except ones that are
+ * Architecture: all or Multi-Arch: foreign (tools, data), which the amd64 package satisfies.
+ * Only Multi-Arch: same packages (libraries, in /usr/lib/i386-linux-gnu) install next to their
+ * amd64 twin; anything else would overwrite its files, so pkg refuses.
+ *
+ * Files: /etc/pkg/{sources,arches}, /var/lib/pkg/{index,installed,assumed,files/NAME.list}, /var/cache/pkg.
  * PKG_ROOT=dir works on another root (for building images, and testing on a Linux host). */
 #define _GNU_SOURCE
 #include <ctype.h>
@@ -531,8 +538,10 @@ static int dec_finish(struct dec *d)
 }
 
 /* ── the package index ─────────────────────────────────────────────────── */
+enum { MA_NO, MA_SAME, MA_FOREIGN, MA_ALLOWED };
 struct pkg {
-    char *name, *version, *filename, *sha256, *depends, *predepends, *provides, *desc, *section;
+    char *name, *version, *filename, *sha256, *depends, *predepends, *provides, *desc, *section, *arch;
+    int ma;                        /* Multi-Arch */
     uint64_t size, isize;
     int src;                       /* which source (mirror) it came from */
     struct pkg *hnext;
@@ -597,15 +606,16 @@ static int index_load(int need)
             mirrors = xrealloc(mirrors, (size_t)(nmirrors + 1) * sizeof *mirrors);
             mirrors[nmirrors++] = line + 7;
         } else {
-            char *f[12];
+            char *f[14];
             int k = 0;
             f[k++] = line;
-            for (char *p = line; *p && k < 12; p++) if (*p == '\t') { *p = 0; f[k++] = p + 1; }
-            if (k == 12) {
+            for (char *p = line; *p && k < 14; p++) if (*p == '\t') { *p = 0; f[k++] = p + 1; }
+            if (k >= 12) {
                 struct pkg p = { 0 };
                 p.name = f[0]; p.version = f[1]; p.src = atoi(f[2]); p.filename = f[3]; p.size = strtoull(f[4], 0, 10);
                 p.sha256 = f[5]; p.isize = strtoull(f[6], 0, 10); p.depends = f[7]; p.predepends = f[8]; p.provides = f[9];
                 p.section = f[10]; p.desc = f[11];
+                p.arch = k >= 14 ? f[12] : "amd64"; p.ma = k >= 14 ? atoi(f[13]) : MA_NO;
                 add_pkg(&p);
             }
         }
@@ -690,9 +700,31 @@ struct stanza_parser {
     char *buf; size_t n, cap;            /* the current line(s) */
     struct pkg cur;
     char *fields[11];
-    int src;
+    int src, i386;                       /* reading an i386 list */
     size_t count;
 };
+
+static int is_i386(const char *name) { size_t l = strlen(name); return l > 5 && !strcmp(name + l - 5, ":i386"); }
+
+/* "a (= 1), b" → "a:i386 (= 1), b:i386": what an i386 package provides is i386 too */
+static char *suffix_names(const char *list)
+{
+    size_t n = strlen(list), cap = n * 2 + 16, o = 0;
+    char *r = xmalloc(cap);
+    for (const char *s = list; *s; ) {
+        while (*s == ' ' || *s == ',') { if (*s == ',') r[o++] = ','; else r[o++] = ' '; s++; }
+        const char *e = s;
+        while (*e && *e != ',' && *e != ' ' && *e != '(') e++;
+        if (e > s) { memcpy(r + o, s, (size_t)(e - s)); o += (size_t)(e - s); memcpy(r + o, ":i386", 5); o += 5; }
+        const char *t = e;
+        while (*t && *t != ',') t++;
+        memcpy(r + o, e, (size_t)(t - e)); o += (size_t)(t - e);
+        s = t;
+        if (o + 64 > cap) { cap *= 2; r = xrealloc(r, cap); }
+    }
+    r[o] = 0;
+    return r;
+}
 
 static char *field_dup(const char *v) { while (*v == ' ') v++; return xstrdup(v); }
 
@@ -705,7 +737,15 @@ static void stanza_end(struct stanza_parser *sp)
         if (!c->provides) c->provides = xstrdup("");
         if (!c->desc) c->desc = xstrdup("");
         if (!c->section) c->section = xstrdup("");
+        if (!c->arch) c->arch = xstrdup("amd64");
         c->src = sp->src;
+        if (sp->i386) {
+            if (!strcmp(c->arch, "all")) { memset(c, 0, sizeof *c); return; }    /* it's in the amd64 list already */
+            char *nm = xmalloc(strlen(c->name) + 6);
+            sprintf(nm, "%s:i386", c->name);
+            c->name = nm;
+            if (c->ma != MA_FOREIGN) c->provides = suffix_names(c->provides);
+        }
         add_pkg(c);
         sp->count++;
     }
@@ -733,6 +773,11 @@ static void stanza_line(struct stanza_parser *sp, char *l)
     else if (!strcmp(l, "Provides")) c->provides = field_dup(v);
     else if (!strcmp(l, "Description")) c->desc = field_dup(v);
     else if (!strcmp(l, "Section")) c->section = field_dup(v);
+    else if (!strcmp(l, "Architecture")) c->arch = field_dup(v);
+    else if (!strcmp(l, "Multi-Arch")) {
+        while (*v == ' ') v++;
+        c->ma = !strncmp(v, "same", 4) ? MA_SAME : !strncmp(v, "foreign", 7) ? MA_FOREIGN : !strncmp(v, "allowed", 7) ? MA_ALLOWED : MA_NO;
+    }
 }
 
 static int stanza_feed(void *arg, const void *data, size_t n)
@@ -765,6 +810,30 @@ static void default_sources(void)
     if (stat(path("/etc/pkg/sources"), &st) < 0) write_file(path("/etc/pkg/sources"), def, sizeof def - 1);
 }
 
+/* is i386 on? /etc/pkg/arches lists the extra architectures */
+static int want_i386(void)
+{
+    char *d;
+    if (read_file(path("/etc/pkg/arches"), &d, 0) < 0) return 0;
+    int r = strstr(d, "i386") != 0;
+    free(d);
+    return r;
+}
+
+static int cmd_arch(int argc, char **argv)
+{
+    if (argc == 0) { printf("amd64%s\n", want_i386() ? " i386" : ""); return 0; }
+    if (argc < 2 || strcmp(argv[1], "i386")) die("usage: pkg arch [add|remove] i386");
+    if (!strcmp(argv[0], "add")) {
+        if (write_file(path("/etc/pkg/arches"), "i386\n", 5) < 0) die("can't write /etc/pkg/arches: %s", strerror(errno));
+        printf("i386 added: `pkg update` reads its lists, then `pkg install NAME:i386`.\n");
+    } else if (!strcmp(argv[0], "remove")) {
+        unlink(path("/etc/pkg/arches"));
+        printf("i386 removed (installed i386 packages stay; `pkg update` to drop their lists).\n");
+    } else die("usage: pkg arch [add|remove] i386");
+    return 0;
+}
+
 static int cmd_update(void)
 {
     default_sources();
@@ -782,12 +851,15 @@ static int cmd_update(void)
         int src = -1;
         for (int i = 0; i < nm; i++) if (!strcmp(mirror_list[i], mirror)) src = i;
         if (src < 0 && nm < 32) { mirror_list[nm] = mirror; src = nm++; }
-        for (char *comp; (comp = strtok_r(0, " \t", &save)); ) {
+        int i386 = want_i386();
+        for (char *comp; (comp = strtok_r(0, " \t", &save)); )
+          for (int arch = 0; arch <= i386; arch++) {
             char url[2048], label[128], err[512];
-            snprintf(url, sizeof url, "%s/dists/%s/%s/binary-amd64/Packages.gz", mirror, suite, comp);
-            snprintf(label, sizeof label, "%s/%s", suite, comp);
+            snprintf(url, sizeof url, "%s/dists/%s/%s/binary-%s/Packages.gz", mirror, suite, comp, arch ? "i386" : "amd64");
+            snprintf(label, sizeof label, "%s/%s%s", suite, comp, arch ? " (i386)" : "");
             struct stanza_parser sp = { 0 };
             sp.src = src;
+            sp.i386 = arch;
             struct dec d;
             dec_init(&d, C_GZ, stanza_feed, &sp);
             int r = http_get(url, dec_feed, &d, label, err, sizeof err);
@@ -806,11 +878,11 @@ static int cmd_update(void)
     for (size_t i = 0; i < npkg; i++) {
         struct pkg *p = plist[i];
         size_t need = strlen(p->name) + strlen(p->version) + strlen(p->filename) + strlen(p->sha256) + strlen(p->depends) +
-                      strlen(p->predepends) + strlen(p->provides) + strlen(p->section) + strlen(p->desc) + 80;
+                      strlen(p->predepends) + strlen(p->provides) + strlen(p->section) + strlen(p->desc) + strlen(p->arch) + 96;
         if (n + need >= cap) { cap = cap * 2 + need; b = xrealloc(b, cap); }
-        n += (size_t)snprintf(b + n, cap - n, "%s\t%s\t%d\t%s\t%llu\t%s\t%llu\t%s\t%s\t%s\t%s\t%s\n", p->name, p->version, p->src,
+        n += (size_t)snprintf(b + n, cap - n, "%s\t%s\t%d\t%s\t%llu\t%s\t%llu\t%s\t%s\t%s\t%s\t%s\t%s\t%d\n", p->name, p->version, p->src,
                               p->filename, (unsigned long long)p->size, p->sha256, (unsigned long long)p->isize, p->depends,
-                              p->predepends, p->provides, p->section, p->desc);
+                              p->predepends, p->provides, p->section, p->desc, p->arch, p->ma);
     }
     if (write_file(path("/var/lib/pkg/index"), b, n) < 0) die("can't write the package list: %s", strerror(errno));
     printf("%zu packages available%s\n", npkg, failures ? " (some lists failed: see above)" : "");
@@ -864,16 +936,37 @@ static struct pkg *provider(const char *name)
 
 static int plan_add(struct plan *pl, struct pkg *p, int depth);
 
+/* which package a dependency means. For an amd64 package: the name. For an i386 one: NAME:i386,
+ * unless the amd64 package serves every architecture (Architecture: all, Multi-Arch: foreign)
+ * or the dependency says :any / :native. */
+static const char *dep_target(const char *a, const char *qual, int i386, char *buf, size_t bn)
+{
+    struct pkg *nat = find(a);
+    if (!i386 && !nat && !provider(a) && !inst_find(a) && !is_assumed(a)) {
+        /* only an i386 package by that name: fine if it serves every architecture (steam-libs-i386) */
+        snprintf(buf, bn, "%s:i386", a);
+        struct pkg *f = find(buf);
+        if (f && f->ma == MA_FOREIGN) return buf;
+    }
+    if (!i386 || !strcmp(qual, "native")) return a;
+    if (!strcmp(qual, "any") && nat) return a;
+    if (nat && (nat->ma == MA_FOREIGN || !strcmp(nat->arch, "all"))) return a;
+    snprintf(buf, bn, "%s:i386", a);
+    if (find(buf) || inst_find(buf) || provider(buf)) return buf;
+    return nat || provider(a) || is_assumed(a) ? a : buf;
+}
+
 /* "a (>= 1), b | c:any, d [amd64]" */
 static int resolve_list(struct plan *pl, const char *deps, const char *who, int depth)
 {
+    int i386 = is_i386(who);
     int ok = 1;
     char *copy = xstrdup(deps);
     for (char *grp = copy; grp && *grp; ) {
         char *comma = strchr(grp, ',');
         if (comma) *comma = 0;
         /* alternatives */
-        char *alts[16];
+        char *alts[16], names[16][300];
         int na = 0;
         for (char *a = grp; a && na < 16; ) {
             char *bar = strchr(a, '|');
@@ -881,8 +974,15 @@ static int resolve_list(struct plan *pl, const char *deps, const char *who, int 
             while (*a == ' ') a++;
             char *e = a;
             while (*e && *e != ' ' && *e != '(' && *e != '[' && *e != ':') e++;
+            char qual[16] = "";
+            if (*e == ':') { size_t q = strcspn(e + 1, " ([,"); snprintf(qual, sizeof qual, "%.*s", (int)q, e + 1); }
             *e = 0;
-            if (*a) alts[na++] = a;
+            if (*a) {
+                const char *t = dep_target(a, qual, i386, names[na], sizeof names[na]);
+                if (t != names[na]) snprintf(names[na], sizeof names[na], "%s", t);
+                alts[na] = names[na];
+                na++;
+            }
             a = bar ? bar + 1 : 0;
         }
         int done = 0;
@@ -903,6 +1003,14 @@ static int plan_add(struct plan *pl, struct pkg *p, int depth)
 {
     if (in_plan(pl, p->name)) return 0;
     if (depth > 64) return -1;
+    if (is_i386(p->name) && p->ma != MA_SAME) {               /* its files are where the amd64 one's are */
+        char base[256];
+        snprintf(base, sizeof base, "%.*s", (int)(strlen(p->name) - 5), p->name);
+        if (inst_find(base) || in_plan(pl, base)) {
+            warn("%s would overwrite %s (they aren't Multi-Arch: same): skipping it", p->name, base);
+            return -1;
+        }
+    }
     if (pl->n == pl->cap) { pl->cap = pl->cap ? pl->cap * 2 : 64; pl->p = xrealloc(pl->p, (size_t)pl->cap * sizeof *pl->p); }
     pl->p[pl->n++] = p;
     resolve_list(pl, p->predepends, p->name, depth);
@@ -1345,6 +1453,8 @@ static int cmd_install(int argc, char **argv)
         if (al > 4 && !strcmp(a + al - 4, ".deb")) {                /* a local file */
             char name[256], ver[256], deps[8192], pre[4096];
             if (deb_field(a, "Package", name, sizeof name) < 0) die("%s: not a .deb I can read", a);
+            char arch[32];
+            if (deb_field(a, "Architecture", arch, sizeof arch) == 0 && !strcmp(arch, "i386")) strncat(name, ":i386", sizeof name - strlen(name) - 1);
             deb_field(a, "Version", ver, sizeof ver);
             deb_field(a, "Depends", deps, sizeof deps);
             deb_field(a, "Pre-Depends", pre, sizeof pre);
@@ -1353,6 +1463,7 @@ static int cmd_install(int argc, char **argv)
             continue;
         }
         index_load(1);
+        if (is_i386(a) && !want_i386()) { warn("%s: 32-bit packages are off (`sudo pkg arch add i386`, then `sudo pkg update`)", a); continue; }
         struct pkg *p = find(a);
         if (!p) {
             struct pkg *v = provider(a);
@@ -1439,7 +1550,9 @@ static int cmd_search(int argc, char **argv)
     int shown = 0;
     for (size_t i = 0; i < npkg; i++) {
         struct pkg *p = plist[i];
-        int all = 1;
+        int all = 1, ask32 = 0;
+        for (int k = 0; k < argc; k++) if (strstr(argv[k], "i386")) ask32 = 1;
+        if (is_i386(p->name) && !ask32) continue;               /* the 32-bit twins only when asked */
         for (int k = 0; k < argc && all; k++) if (!strcasestr(p->name, argv[k]) && !strcasestr(p->desc, argv[k])) all = 0;
         if (!all) continue;
         printf("%s%s %s\n    %s\n", p->name, inst_find(p->name) ? " [installed]" : "", p->version, p->desc);
@@ -1522,7 +1635,8 @@ static void usage(void)
            "  pkg remove NAME...          remove what pkg installed\n"
            "  pkg upgrade [-y]            newer versions of what pkg installed\n"
            "  pkg list [--all]            what's installed\n"
-           "  pkg clean                   delete downloaded .deb files\n\n"
+           "  pkg clean                   delete downloaded .deb files\n"
+           "  pkg arch [add|remove] i386  32-bit packages too (NAME:i386)\n\n"
            "Sources: /etc/pkg/sources. Maintainer scripts aren't run.\n");
 }
 
@@ -1557,6 +1671,10 @@ int main(int argc, char **argv)
     if (!strcmp(cmd, "upgrade")) return cmd_upgrade();
     if (!strcmp(cmd, "list")) return cmd_list(a < argc && !strcmp(argv[a], "--all"));
     if (!strcmp(cmd, "clean")) return cmd_clean();
+    if (!strcmp(cmd, "arch")) {
+        if (a < argc && geteuid() != 0 && !getenv("PKG_ROOT")) { fprintf(stderr, "pkg: arch changes the system, so it needs root: sudo pkg arch ...\n"); return 1; }
+        return cmd_arch(argc - a, argv + a);
+    }
     if (!strcmp(cmd, "help")) { usage(); return 0; }
     usage();
     return 1;

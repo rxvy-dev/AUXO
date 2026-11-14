@@ -215,17 +215,27 @@ long sys_seccomp(struct task *t, long op, long flags, uint64_t uargs)
 }
 
 /* 1: go ahead with the call; 0: don't, *ret is its result; 2: kill the process; 3: kill the thread */
+int seccomp_check_arch(struct task *t, long nr, const uint64_t args[6], uint64_t ip, long *ret, int compat);
+
 int seccomp_check(struct task *t, long nr, const uint64_t args[6], uint64_t ip, long *ret)
 {
+    return seccomp_check_arch(t, nr, args, ip, ret, 0);
+}
+
+/* compat: an i386 system call (its own numbers, AUDIT_ARCH_I386), so a filter written for
+ * x86_64 sees a foreign architecture, as on Linux, rather than misreading the numbers */
+int seccomp_check_arch(struct task *t, long nr, const uint64_t args[6], uint64_t ip, long *ret, int compat)
+{
     if (t->ns.seccomp_mode == 1) {                            /* strict: read, write, exit, sigreturn */
-        if (nr == 0 || nr == 1 || nr == 60 || nr == 15) return 1;
+        if (!compat && (nr == 0 || nr == 1 || nr == 60 || nr == 15)) return 1;
+        if (compat && (nr == 3 || nr == 4 || nr == 1 || nr == 119 || nr == 173)) return 1;
         return 2;
     }
     struct seccomp_filter *f = t->ns.filter;
     if (!f) return 1;
     uint8_t data[64];
     int32_t n32 = (int32_t)nr;
-    uint32_t arch = AUDIT_ARCH_X86_64;
+    uint32_t arch = compat ? 0x40000003u : AUDIT_ARCH_X86_64;
     memcpy(data, &n32, 4); memcpy(data + 4, &arch, 4); memcpy(data + 8, &ip, 8);
     memcpy(data + 16, args, 48);
     uint32_t r = RET_ALLOW;

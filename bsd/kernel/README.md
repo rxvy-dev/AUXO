@@ -322,6 +322,41 @@ there: `inotify` (file managers, editors watching their files), `timerfd` and PO
 `mknod` for FIFOs, `sched_*` and priorities, `execveat`, `openat2`. `tests/syscalls.c` checks
 them (in `make test-sandbox`).
 
+## 32-bit programs
+
+AuxoBSD runs i386 Linux programs next to x86_64 ones, the way a 64-bit Linux kernel does
+(Steam's client is still 32-bit, and so are many older games and tools):
+
+- The loader takes 32-bit ELF files (static, or dynamic through `/lib/ld-linux.so.2`) and starts
+  them in compatibility mode, with their memory below 4 GB.
+- `int $0x80` system calls go through `kern/compat32.c`. Most are the x86_64 call under another
+  number. Where the two ABIs lay out a structure differently (stat64, iovec, msghdr and its
+  control messages, sigaction, timespec with a 32-bit time_t, rusage, siginfo …) it's converted.
+- Thread-local storage works the i386 way: `set_thread_area` fills a GDT descriptor and `%gs`
+  points at it. Each thread has three, and the scheduler swaps them in.
+- Signal handlers get i386 frames (`sigreturn` and `rt_sigreturn`).
+- A 32-bit program inside a seccomp sandbox is checked as `AUDIT_ARCH_I386`, so a filter
+  written for x86_64 sees a foreign architecture (WebKit's kills it) instead of misreading the
+  numbers.
+
+The root filesystem carries Ubuntu's i386 C library and C++ runtime (`libc6:i386`,
+`libstdc++6:i386`), so ordinary 32-bit programs run as they are. Ubuntu's own i386 `bash`,
+`ls`, `sort` and `date` do. `tests/compat32.c` covers files, mmap, threads, fork and exec
+(both ways), pipes, select, signals and passing file descriptors. `make test-sandbox` builds
+it with `gcc -m32`, static and dynamic, and runs both.
+
+`pkg` does multiarch the way dpkg does. Turn it on with `sudo pkg arch add i386` and run
+`sudo pkg update`; after that, `sudo pkg install NAME:i386` installs a 32-bit package. Its
+dependencies are 32-bit too, except tools and data (`Architecture: all`, `Multi-Arch:
+foreign`), where the amd64 package covers both. Only `Multi-Arch: same` packages (libraries)
+install next to their amd64 twin; for anything else pkg refuses rather than overwrite files.
+`sudo pkg install steam-installer` resolves and unpacks all of it (about 220 packages, half of
+them i386 libraries).
+
+Steam still won't open a window, though. It is an X11 program, and AuxoBSD has no X server yet
+(XWayland is next). Its games would also need OpenGL, which means Mesa's software renderer,
+since there's no GPU driver.
+
 ## Sandboxing and the web browser
 
 The kernel has what Linux sandboxes are built from, with Linux's system calls and semantics:

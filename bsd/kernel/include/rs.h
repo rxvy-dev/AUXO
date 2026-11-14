@@ -14,6 +14,8 @@ void    rs_reap(void);
 void    rs_ps(void);
 void    rs_heap_stats(size_t *total, size_t *used);
 size_t  rs_proc_count(void);
+void    rs_get_tls(uint64_t out[3]);
+void    rs_set_tls(const uint64_t v[3], int gs);     /* gs < 0: keep %gs */
 int     rs_thread_stat(size_t i, int *pid, uint64_t *ticks, char name[16]);   /* state 0..4, -1 past the end */
 void    rs_sleep(uint64_t ticks);         /* 0 = until the next timer tick */
 int     rs_current_pid(void);

@@ -19,6 +19,7 @@ import importlib.util
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -48,6 +49,18 @@ echo "== users: what the user may and may not do"; /tmp/users user
 wget -q -O /tmp/pty.c http://10.0.2.2:{port}/pty.c || exit 1
 gcc -O1 -o /tmp/ptyt /tmp/pty.c || exit 1
 echo "== pseudo-terminals"; /tmp/ptyt
+if wget -q -O /tmp/esc/c32s http://10.0.2.2:{port}/c32s; then
+  chmod +x /tmp/esc/c32s
+  echo "== 32-bit programs (static)"; /tmp/esc/c32s
+  if [ -e /lib/ld-linux.so.2 ] && wget -q -O /tmp/c32d http://10.0.2.2:{port}/c32d; then
+    chmod +x /tmp/c32d
+    echo "== 32-bit programs (dynamic, the i386 C library)"; /tmp/c32d
+  else echo "== 32-bit dynamic: no i386 C library in this image"; fi
+  echo "== 32-bit system calls under an x86_64 seccomp filter"
+  sudo $B --seccomp 9 /esc/c32s 9< /tmp/filter.bpf > /dev/null 2>&1
+  st=$?
+  if [ $st = 159 ]; then echo "ok a 32-bit program in the WebKit sandbox is killed (SIGSYS), not let through"; else echo "FAIL a 32-bit program in the WebKit sandbox exited with $st, not SIGSYS"; fi
+else echo "== 32-bit programs: not built (no gcc -m32 on the host)"; fi
 """
 
 
@@ -60,6 +73,12 @@ def main():
     shutil.copy(os.path.join(HERE, "syscalls.c"), www)
     shutil.copy(os.path.join(HERE, "users.c"), www)
     shutil.copy(os.path.join(HERE, "pty.c"), www)
+    # 32-bit test programs, built here (the guest's GCC has no i386 libraries)
+    cc32 = os.environ.get("CC32", "gcc -m32").split()
+    src = os.path.join(HERE, "compat32.c")
+    built32 = subprocess.run(cc32 + ["-O1", "-static", "-pthread", "-w", src, "-o", os.path.join(www, "c32s")]).returncode == 0
+    if built32:
+        subprocess.run(cc32 + ["-O1", "-pthread", "-w", src, "-o", os.path.join(www, "c32d")])
     port = hw.serve(www)
     with open(os.path.join(www, "run.sh"), "w") as f:
         f.write(RUN.format(port=port))
@@ -92,6 +111,8 @@ def main():
         hw.check(re.search(r"users root: \d+ passed, 0 failed", out) and re.search(r"users user: \d+ passed, 0 failed", out),
                  "the permission checks ran to the end, as root and as the user", out[-2000:])
         hw.check(re.search(r"pty: \d+ passed, 0 failed", out), "the pseudo-terminal program ran to the end", out[-2000:])
+        if built32:
+            hw.check(re.search(r"compat32: \d+ ok, 0 failed", out), "the 32-bit program ran to the end", out[-2000:])
         out = m.run("busybox ls /tmp/mine")
         hw.check("No such file" in out, "a file the sandbox made in its /tmp isn't in the host's", out)
         out = m.run("busybox wc -l /proc/self/mountinfo")
