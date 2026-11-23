@@ -1249,8 +1249,9 @@ TWEAK = [
  ("auxo-tweak info", "Show your current Auxo settings."),
  ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the login screen, prompt, terminals and bars. With no name, lists the colours."),
  ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code>, <code>chrono</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
- ("auxo-tweak rice NAME", "Re-apply the Auxo rice: <code>hyprland</code>, <code>sway</code> or <code>i3</code> dotfiles (existing files are kept as <code>*.auxo-bak</code>), <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code> or <code>chrono</code>. <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
+ ("auxo-tweak rice NAME", "Re-apply the Auxo rice: <code>hyprland</code>, <code>sway</code> or <code>i3</code> dotfiles (existing files are kept as <code>*.auxo-bak</code>), <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code> or <code>chrono</code>. <code>hyprland-mac</code> is Hyprland with a Mac-style menu bar, dock and Spotlight-style search. <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
  ("auxo-tweak mode dark|light", "Light or dark, on every desktop."),
+ ("auxo-tweak monitors [set NAME …]", "Resolution, refresh rate, scale, rotation, VRR, position and workspaces per screen, for Hyprland, Sway and i3: <code>monitors set DP-1 mode=2560x1440@144 scale=1.25 workspaces=1-5</code>. With no arguments, lists your screens and their modes. Same as Auxo Settings → Displays."),
  ("auxo-tweak doctor [--fix]", "Check the login screen, services, network, accounts, sudo, disk space and config updates. <code>--fix</code> repairs what it can. Start here if something's wrong."),
  ("auxo-tweak ai on|off|status", "Auxo AI, a free assistant that runs on your PC. <code>--model small|standard|large</code> (1.3, 2 or 5 GB). <code>off --purge</code> removes it."),
  ("auxo-tweak look [show|set|reset]", "Your own rice: <code>look set gaps=4 rounding=0 bar=bottom</code>. Settings: <code>mode</code>, <code>wallpaper</code>, <code>ui_font</code>, <code>mono_font</code>, <code>font_size</code>, <code>gaps</code>, <code>rounding</code>, <code>border</code>, <code>blur</code>, <code>transparency</code>, <code>animations</code>, <code>bar</code>. <code>look preset NAME</code> (auxo, glass, minimal, cozy, retro, lite), <code>look export</code> / <code>look import FILE</code> to share a rice. No password needed."),
@@ -1309,7 +1310,8 @@ docs = head("Auxo Linux documentation",
 <ul class="dl">
 <li><b>Look</b>: accent colour, light or dark, wallpaper (the Auxo ones, your <code>~/Pictures/Wallpapers</code>, or any image), interface and terminal fonts, animations.</li>
 <li><b>Windows &amp; bar</b>: gaps, rounded corners, borders, blur, transparency and the bar at the top or bottom, with a live preview. Each setting says which desktops it reaches.</li>
-<li><b>Desktop</b>: every desktop with a preview. Switch with one click, or re-apply the Auxo rice to the one you're using.</li>
+<li><b>Displays</b>: drag your screens into place; pick resolution, refresh rate, scale, rotation, VRR and which workspaces open on each (Hyprland, Sway, i3).</li>
+<li><b>Desktop</b>: every desktop with a preview, and a style picker for Hyprland (Auxo or Mac-style). Switch with one click, or re-apply the Auxo rice to the one you're using.</li>
 <li><b>System</b>: kernel, shell, power profile, DNS, NVIDIA, snapshots (take, list, roll back), firewall, zram, gaming mode, services (Bluetooth, printing, SSH), maintenance, app bundles and updates.</li>
 <li><b>Health</b>: checks for the problems that most often break an install, with a <b>Fix everything</b> button.</li>
 <li><b>Ask Auxo</b>: Auxo AI, the assistant that runs on your PC (see below).</li>
@@ -1481,12 +1483,12 @@ def mini_screen(k):
     lay = {d[0]: d[5] for d in DESKS}[k]
     return f'<div class="screen mini" aria-hidden="true">{RIDGE}<div class="L" style="display:block">{lay}</div></div>'
 
-KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"), ("Super+I", "Auxo Settings"),
+KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"), ("Super+I", "Auxo Settings"), ("Super+/", "All shortcuts"),
              ("Super+Q", "Close window"), ("Super+F", "Fullscreen"), ("Super+V", "Toggle floating"), ("Super+L", "Lock screen"),
              ("Super+1…9", "Switch workspace"), ("Print", "Screenshot a region"), ("Super+Print", "Screenshot to clipboard"), ("Super+Shift+E", "Exit Hyprland")]
-KEYS_SWAY = [("Super+Enter", "Terminal (foot)"), ("Super+D", "App launcher (wofi)"), ("Super+I", "Auxo Settings"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+KEYS_SWAY = [("Super+Enter", "Terminal (foot)"), ("Super+D", "App launcher (wofi)"), ("Super+I", "Auxo Settings"), ("Super+/", "All shortcuts"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
              ("Super+L", "Lock screen"), ("Print", "Screenshot a region"), ("Super+Shift+E", "Exit Sway")]
-KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (rofi)"), ("Super+I", "Auxo Settings"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (rofi)"), ("Super+I", "Auxo Settings"), ("Super+/", "All shortcuts"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
            ("Super+L", "Lock screen"), ("Print", "Screenshot a region to the clipboard"), ("Super+Shift+E", "Exit i3")]
 
 DPAGE = [

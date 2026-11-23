@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""auxo-keys — every keyboard shortcut of your desktop, in plain words (Super+/ on Hyprland, Sway, i3).
+
+  auxo-keys            show them in a searchable list (wofi or rofi), or print them in a terminal
+  auxo-keys --print    print them
+  auxo-keys --wm sway  for another window manager's config
+Reads your own config, so shortcuts you add show up too.
+"""
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
+CONF = {"hyprland": ".config/hypr/hyprland.conf", "sway": ".config/sway/config", "i3": ".config/i3/config"}
+
+WORDS = {
+    "killactive": "Close window", "exit": "Log out", "fullscreen": "Full screen", "togglefloating": "Float / tile window",
+    "pseudo": "Pseudo-tile window", "togglesplit": "Flip split direction", "cyclenext": "Next window",
+    "bringactivetotop": "", "kill": "Close window", "floating toggle": "Float / tile window", "fullscreen toggle":
+    "Full screen", "reload": "Reload config", "restart": "Restart i3", "layout toggle split": "Flip split direction",
+    "focus mode_toggle": "Switch focus tiled / floating", "sticky toggle": "Pin window on every workspace",
+    "scratchpad show": "Show scratchpad", "move scratchpad": "Send window to scratchpad",
+}
+DIRS = {"l": "left", "r": "right", "u": "up", "d": "down", "left": "left", "right": "right", "up": "up", "down": "down"}
+APPS = [("i3-nagbar", "Log out (asks first)"), ("auxo-settings", "Auxo Settings"), ("auxo-keys", "This list of shortcuts"), ("auxo-tweak", "auxo-tweak menu"),
+        ("hyprlock", "Lock screen"), ("swaylock", "Lock screen"), ("i3lock", "Lock screen"),
+        ("--show drun", "App launcher"), ("-show drun", "App launcher"), ("grim -g", "Screenshot of an area"),
+        ("maim -s", "Screenshot of an area"), ("grim", "Screenshot"), ("maim", "Screenshot"),
+        ("wpctl set-volume -l 1", "Volume up"), ("set-volume @DEFAULT_AUDIO_SINK@ 5%-", "Volume down"),
+        ("set-mute", "Mute"), ("brightnessctl s 5%+", "Brightness up"), ("brightnessctl s 5%-", "Brightness down"),
+        ("play-pause", "Play / pause"), ("playerctl next", "Next track"), ("playerctl previous", "Previous track"),
+        ("thunar", "Files"), ("nautilus", "Files"), ("dolphin", "Files"), ("firefox", "Firefox")]
+
+
+def detect_wm():
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return "hyprland"
+    if os.environ.get("SWAYSOCK"):
+        return "sway"
+    if os.environ.get("I3SOCK") or "i3" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower():
+        return "i3"
+    for wm, rel in CONF.items():
+        if os.path.exists(os.path.join(HOME, rel)):
+            return wm
+    return None
+
+
+def read_conf(path, seen=None):
+    """Config lines, following source/include of files in your home."""
+    seen = seen or set()
+    path = os.path.expanduser(path)
+    if path in seen or not os.path.isfile(path):
+        return []
+    seen.add(path)
+    out = []
+    for line in open(path, errors="replace"):
+        s = line.split("#", 1)[0].strip()
+        m = re.match(r"^(?:source\s*=|include)\s*(\S+)", s)
+        if m and "*" not in m.group(1):
+            out += read_conf(m.group(1).replace("~", HOME, 1), seen)
+        elif s:
+            out.append(s)
+    return out
+
+
+def nice_keys(mods, key):
+    mods = [m for m in re.split(r"[\s+_]+", mods) if m]
+    names = {"$mod": "Super", "SUPER": "Super", "Mod4": "Super", "Mod1": "Alt", "ALT": "Alt", "SHIFT": "Shift",
+             "Shift": "Shift", "CTRL": "Ctrl", "Control": "Ctrl", "Ctrl": "Ctrl"}
+    keys = {"Return": "Enter", "slash": "/", "comma": ",", "period": ".", "space": "Space", "Space": "Space",
+            "mouse_down": "Scroll down", "mouse_up": "Scroll up", "mouse:272": "Left drag", "mouse:273": "Right drag",
+            "Print": "Print Screen", "left": "←", "right": "→", "up": "↑", "down": "↓", "Left": "←", "Right": "→",
+            "Up": "↑", "Down": "↓", "Tab": "Tab"}
+    k = keys.get(key, key if not key.startswith("XF86") else key[4:].replace("Audio", "").replace("MonBrightness", "Brightness "))
+    return "+".join([names.get(m, m) for m in mods] + [k[:1].upper() + k[1:] if len(k) == 1 else k])
+
+
+def describe(action, variables):
+    a = action.strip()
+    for var, val in variables.items():
+        a = a.replace(var, val)
+    low = a.lower()
+    if low.startswith("exec"):
+        cmd = re.sub(r"^exec(?:_always)?\s*(?:,\s*)?(?:--no-startup-id\s+)?", "", a, flags=re.I)
+        for needle, name in APPS:
+            if needle in cmd:
+                return name
+        first = os.path.basename(cmd.split()[0]) if cmd.split() else cmd
+        return {"kitty": "Terminal", "foot": "Terminal", "alacritty": "Terminal", "wofi": "App launcher",
+                "rofi": "App launcher"}.get(first, f"Open {first}")
+    m = re.match(r"^(workspace|movetoworkspace|movetoworkspacesilent)\s*,\s*(.+)$", a)
+    if m:
+        what, ws = m.groups()
+        if ws.startswith("e"):
+            return "Next workspace" if "+" in ws else "Previous workspace"
+        if ws.startswith("special"):
+            return "Hide window (minimise)" if ":minimized" in ws else "Send window to scratchpad"
+        return ("Go to workspace " if what == "workspace" else "Move window to workspace ") + ws
+    m = re.match(r"^(?:move\s+container\s+to\s+)?workspace\s+(?:number\s+)?(\S+)$", a)
+    if m:
+        return ("Move window to workspace " if a.startswith("move") else "Go to workspace ") + m.group(1)
+    m = re.match(r"^togglespecialworkspace\s*,?\s*(\S*)", a)
+    if m:
+        return "Show hidden windows" if m.group(1) == "minimized" else "Show scratchpad"
+    m = re.match(r"^(movefocus|movewindow|focus|move)\s*,?\s*(\w+)$", a)
+    if m and m.group(2) in DIRS:
+        return ("Focus " if m.group(1) in ("movefocus", "focus") else "Move window ") + DIRS[m.group(2)]
+    if low.startswith("resizewindow") or low.startswith("mode") and "resize" in low:
+        return "Resize window"
+    if low.startswith("movewindow"):
+        return "Move window"
+    head = a.split(",")[0].strip()
+    return WORDS.get(a, WORDS.get(head, a))
+
+
+def shortcuts(wm):
+    lines = read_conf(os.path.join(HOME, CONF[wm]))
+    variables = {}
+    out = []
+    for s in lines:
+        m = re.match(r"^(\$\w+)\s*=\s*(.+)$", s) if wm == "hyprland" else re.match(r"^set\s+(\$\w+)\s+(.+)$", s)
+        if m:
+            variables[m.group(1)] = m.group(2).strip()
+            continue
+        if wm == "hyprland":
+            m = re.match(r"^bind\w*\s*=\s*([^,]*),\s*([^,]+),\s*(.+)$", s)
+            if m:
+                mods = m.group(1).replace("$mod", variables.get("$mod", "SUPER"))
+                out.append((nice_keys(mods, m.group(2).strip()), describe(m.group(3), variables)))
+        else:
+            m = re.match(r"^bindsym\s+(?:--\S+\s+)*(\S+)\s+(.+)$", s)
+            if m:
+                combo = m.group(1).replace("$mod", variables.get("$mod", "Mod4"))
+                parts = combo.split("+")
+                out.append((nice_keys(" ".join(parts[:-1]), parts[-1]), describe(m.group(2), variables)))
+    # one line for "Super+1 … Super+9", not nine
+    grouped, seen = [], set()
+    for keys, what in out:
+        if not what or (keys, what) in seen:
+            continue
+        seen.add((keys, what))
+        m = re.match(r"^(.*?)(\d)$", keys)
+        w = re.match(r"^(.*workspace )(\d)$", what)
+        if m and w:
+            label = (m.group(1) + "1…9", w.group(1) + "1–9")
+            if label not in grouped:
+                grouped.append(label)
+            continue
+        grouped.append((keys, what))
+    return grouped
+
+
+def main():
+    args = sys.argv[1:]
+    if "-h" in args or "--help" in args:
+        print(__doc__.strip())
+        return 0
+    wm = args[args.index("--wm") + 1] if "--wm" in args else detect_wm()
+    if wm not in CONF:
+        print("auxo-keys works with the Auxo Hyprland, Sway and i3 rices. Other desktops list their shortcuts "
+              "in their own settings.", file=sys.stderr)
+        return 1
+    rows = shortcuts(wm)
+    width = max((len(k) for k, _ in rows), default=10) + 3
+    text = "\n".join(f"{k.ljust(width)}{w}" for k, w in rows)
+    if "--print" in args or not (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        print(text)
+        return 0
+    if wm in ("hyprland", "sway") and shutil.which("wofi"):
+        cmd = ["wofi", "--dmenu", "--prompt", "Search shortcuts", "--width", "620", "--height", "560",
+               "--cache-file", "/dev/null"]
+    elif shutil.which("rofi"):
+        cmd = ["rofi", "-dmenu", "-i", "-p", "Shortcuts", "-no-custom"]
+    else:
+        print(text)
+        return 0
+    subprocess.run(cmd, input=text, text=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -42,7 +42,9 @@ auxo-tweak accent rose                # recolour GRUB, login, prompt, terminals,
 auxo-tweak mode light                 # light or dark, on every desktop
 auxo-tweak look set gaps=4 rounding=0 bar=bottom   # your own rice, on every desktop
 auxo-tweak apps creative dev          # popular app bundles in one go
-auxo-tweak look preset lite           # Auxo, glass, minimal, cozy, retro or lite
+auxo-tweak look preset lite           # Auxo, glass, minimal, cozy, retro, mac or lite
+auxo-tweak rice hyprland-mac          # Hyprland with a Mac-style menu bar, dock and search
+auxo-tweak monitors set DP-1 mode=2560x1440@144 scale=1.25 workspaces=1-5
 auxo-tweak doctor --fix               # find and repair common problems
 auxo-tweak ai on && auxo-ai           # Auxo AI: a free assistant that runs on your PC
 auxo-tweak kernel linux-lts           # swap kernels (stays the default boot entry after updates)
@@ -78,6 +80,7 @@ auxo-rollback --list                  # list snapshots
 |---|---|
 | `auxo-settings` | The graphical settings app (Super+I on Hyprland/Sway/i3), with search: Look (presets, share your rice), Windows & bar, Desktop, System (services, snapshots, maintenance, apps), Health, Ask Auxo. Runs `auxo-tweak` underneath; asks for your password only for system changes. |
 | `auxo-tweak` | Menu + CLI: `accent`, `mode`, `look`, `wallpaper`, `apps`, `ai`, `doctor`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-keys` | Every keyboard shortcut of your Hyprland, Sway or i3 setup in plain words (Super+/). |
 | `auxo-ai` | Auxo AI in the terminal: `auxo-ai` to chat, or `auxo-ai "question"`. |
 | `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |

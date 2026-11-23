@@ -17,7 +17,17 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
-- **Fixed: no sound.** Void ships PipeWire switched off, and Auxo never turned it on. Every
+- **Mac-style Hyprland**: a menu bar on top (▲ menu, app name, status icons), a frosted dock
+  with your apps, Spotlight-style search on Super+Space, Mac-like window animations and lock
+  screen. Pick it in Auxo Settings → Desktop → Style, or `sudo auxo-tweak rice hyprland-mac`.
+- **Displays**: a new Auxo Settings page and `auxo-tweak monitors` for resolution, refresh rate,
+  scale, rotation, VRR, layout (drag the screens) and which workspaces open on each screen,
+  written into the Hyprland, Sway and i3 rices. Hyprland now uses each monitor's highest
+  refresh rate by default (144 Hz monitors were stuck at 60).
+- `auxo-keys` (Super+/ on Hyprland, Sway, i3): every keyboard shortcut in plain words, searchable.
+- Fixed: Hyprland's idle screen-off and workspace scrolling used a newer Hyprland syntax than the
+  0.49 that Void users get, so they did nothing.
+ Void ships PipeWire switched off, and Auxo never turned it on. Every
   desktop (and the live ISO) now starts PipeWire at login with WirePlumber, the PulseAudio layer
   and ALSA routed through it (alsa-pipewire), as Void's handbook describes. i3 and Cinnamon now
   start with a D-Bus session, which PipeWire needs. `sudo auxo-tweak doctor --fix` repairs

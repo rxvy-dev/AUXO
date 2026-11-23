@@ -1,0 +1,32 @@
+/* Auxo Hyprland · Mac style */
+@import url("../auxo/colors.css");
+@import url("../auxo/look.css");   /* fonts and transparency from Auxo Settings */
+
+* { min-height: 0; border: none; }
+
+/* the menu bar: full width, thin, frosted */
+window#waybar.menubar { background: alpha(@bg, 0.55); border-radius: 0; color: @fg; }
+window#waybar.menubar #custom-auxo { color: @fg; font-size: 15px; padding: 0 12px 0 16px; }
+window#waybar.menubar #window { font-weight: 700; padding: 0 12px; }
+window#waybar.menubar #workspaces button { color: @muted; padding: 0 6px; border-radius: 6px; margin: 4px 1px; }
+window#waybar.menubar #workspaces button.active { color: @fg; background: alpha(@fg, 0.12); }
+window#waybar.menubar #clock { padding: 0 16px 0 10px; font-weight: 600; }
+window#waybar.menubar #pulseaudio, window#waybar.menubar #network, window#waybar.menubar #bluetooth,
+window#waybar.menubar #battery, window#waybar.menubar #custom-update, window#waybar.menubar #tray { padding: 0 9px; }
+window#waybar.menubar #custom-update { color: @accent; }
+window#waybar.menubar #battery.warning { color: #fbbf24; }
+window#waybar.menubar #battery.critical { color: @urgent; }
+
+/* the dock: a floating frosted shelf with app icons */
+window#waybar.dock { background: transparent; }
+window#waybar.dock .modules-center {
+  background: alpha(@bg, 0.45);
+  border: 1px solid alpha(@fg, 0.14);
+  border-radius: 20px;
+  padding: 4px 8px;
+}
+window#waybar.dock #image { padding: 0 5px; border-radius: 12px; }
+window#waybar.dock #image:hover { background: alpha(@fg, 0.12); }
+window#waybar.dock #taskbar button { padding: 0 5px; border-radius: 12px; border-bottom: 3px solid transparent; }
+window#waybar.dock #taskbar button:hover { background: alpha(@fg, 0.12); }
+window#waybar.dock #taskbar button.active { border-bottom: 3px solid alpha(@fg, 0.75); }

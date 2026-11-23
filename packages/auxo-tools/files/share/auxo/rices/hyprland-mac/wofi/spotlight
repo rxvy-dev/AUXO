@@ -1,0 +1,11 @@
+width=680
+height=420
+location=top
+yoffset=180
+show=drun
+prompt=Search
+allow_images=true
+image_size=32
+insensitive=true
+hide_scroll=true
+no_actions=true

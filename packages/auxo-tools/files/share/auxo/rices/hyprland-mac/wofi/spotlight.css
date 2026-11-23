@@ -1,0 +1,11 @@
+/* Spotlight-style search (Super+Space) */
+@import url("../auxo/colors.css");
+window { background-color: alpha(@bg, 0.72); border: 1px solid alpha(@fg, 0.16); border-radius: 18px; }
+#input { margin: 14px; padding: 12px 16px; border: none; border-radius: 12px; background: alpha(@fg, 0.07);
+         color: @fg; font-size: 20px; }
+#input:focus { box-shadow: none; outline: none; }
+#inner-box { margin: 0 8px 8px 8px; }
+#entry { padding: 8px 12px; border-radius: 10px; }
+#entry:selected { background: @accent; outline: none; }
+#entry:selected #text { color: @bg; }
+#text { color: @fg; margin-left: 10px; }

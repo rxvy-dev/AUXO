@@ -32,6 +32,7 @@ bindsym $mod+Return exec $term
 bindsym $mod+d exec $menu
 bindsym $mod+e exec thunar
 bindsym $mod+i exec auxo-settings
+bindsym $mod+slash exec auxo-keys
 bindsym $mod+q kill
 bindsym $mod+f fullscreen
 bindsym $mod+v floating toggle
@@ -85,4 +86,5 @@ for_window [app_id="pavucontrol|blueman-manager|auxo-welcome"] floating enable
 include /etc/sway/config.d/*
 
 # ── your look settings (Auxo Settings / auxo-tweak look) — loaded last so they win ──
+include ~/.config/auxo/monitors-sway   # Auxo Settings → Displays
 include ~/.config/auxo/look-sway

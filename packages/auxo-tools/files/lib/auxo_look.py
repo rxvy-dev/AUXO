@@ -431,6 +431,8 @@ def set_waybar_position(file, bar):
     if not os.path.exists(p):
         return False
     text = open(p).read()
+    if "auxo: bars stay where they are" in text:      # e.g. the Mac style's menu bar + dock
+        return False
     new = re.sub(r'"position"\s*:\s*"(top|bottom)"', f'"position": "{bar}"', text, count=1)
     new = re.sub(r'"margin"\s*:\s*"8 14 0 14"|"margin"\s*:\s*"0 14 8 14"',
                  '"margin": "8 14 0 14"' if bar == "top" else '"margin": "0 14 8 14"', new, count=1)
@@ -448,7 +450,9 @@ def write_user(home, look, accent, desktop=None):
     for name, content in generate(look, accent).items():
         write_file(f"{cfg}/{name}", content)
         touched.append(f".config/auxo/{name}")
-    for rel, line in HOOKS:
+    import auxo_monitors
+    touched += auxo_monitors.write(home)
+    for rel, line in HOOKS + auxo_monitors.HOOKS:
         if ensure_line(f"{home}/{rel}", line):
             touched.append(rel)
     for rel in (".config/waybar/config.jsonc", ".config/waybar/config"):
@@ -494,6 +498,8 @@ PRESETS = {
     "retro": ("Retro", "Square, solid and monospaced, like a terminal from the 80s", {
         "gaps": "0", "rounding": "0", "border": "2", "blur": "off", "transparency": "off", "animations": "off",
         "ui_font": "Fira Code"}),
+    "mac": ("Mac-style", "Generous gaps, soft corners, thin borders, frosted glass", {
+        "gaps": "10", "rounding": "12", "border": "1", "blur": "on", "transparency": "on", "animations": "on"}),
     "lite": ("Lite", "No blur, transparency or animations: the fastest on older PCs", {
         "gaps": "6", "rounding": "8", "border": "2", "blur": "off", "transparency": "off", "animations": "off"}),
 }

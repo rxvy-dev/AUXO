@@ -169,6 +169,125 @@ class LookPreview(QWidget):
         p.end()
 
 
+class MonitorCanvas(QWidget):
+    """Monitors drawn to scale. Drag one to move it; it snaps against the others when you let go."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.mons = []            # dicts: name, x, y, w, h (logical px), enabled, label
+        self.sel = None
+        self.drag = None
+        self.on_select = None
+        self.on_moved = None
+        self.setMinimumHeight(240)
+        self.setMouseTracking(True)
+
+    def set_monitors(self, mons, sel=None):
+        self.mons = mons
+        self.sel = sel if sel in [m["name"] for m in mons] else (mons[0]["name"] if mons else None)
+        self.update()
+
+    def _view(self):
+        on = [m for m in self.mons if m["enabled"]] or self.mons
+        if not on:
+            return 1, 0, 0
+        x0 = min(m["x"] for m in on)
+        y0 = min(m["y"] for m in on)
+        x1 = max(m["x"] + m["w"] for m in on)
+        y1 = max(m["y"] + m["h"] for m in on)
+        pad = 24
+        k = min((self.width() - 2 * pad) / max(1, x1 - x0), (self.height() - 2 * pad) / max(1, y1 - y0)) * 0.8
+        ox = (self.width() - (x1 - x0) * k) / 2 - x0 * k
+        oy = (self.height() - (y1 - y0) * k) / 2 - y0 * k
+        return k, ox, oy
+
+    def _rect(self, m, view=None):
+        k, ox, oy = view or self._view()
+        return QRectF(ox + m["x"] * k, oy + m["y"] * k, m["w"] * k, m["h"] * k)
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        a = QColor(accent_hex()[0])
+        view = self._view()
+        for m in self.mons:
+            r = self._rect(m, view).adjusted(2, 2, -2, -2)
+            sel = m["name"] == self.sel
+            fill = QColor(a) if sel else QColor("#2a2a38")
+            fill.setAlpha(70 if sel else (255 if m["enabled"] else 90))
+            p.setBrush(fill)
+            p.setPen(QPen(a if sel else QColor("#3a3a4a"), 2 if sel else 1, Qt.PenStyle.SolidLine if m["enabled"]
+                          else Qt.PenStyle.DashLine))
+            p.drawRoundedRect(r, 8, 8)
+            p.setPen(QColor("#e8e8f0") if m["enabled"] else QColor("#8b8ba0"))
+            f = QFont()
+            f.setBold(True)
+            f.setPixelSize(max(10, min(15, int(r.height() / 6))))
+            p.setFont(f)
+            p.drawText(r, Qt.AlignmentFlag.AlignCenter, m["name"] + ("" if m["enabled"] else "\noff") +
+                       (f"\n{m['label']}" if m.get("label") and m["enabled"] else ""))
+        p.end()
+
+    def _at(self, pos):
+        view = self._view()
+        for m in reversed(self.mons):
+            if self._rect(m, view).contains(pos.toPointF() if hasattr(pos, "toPointF") else pos):
+                return m
+        return None
+
+    def mousePressEvent(self, e):
+        m = self._at(e.position())
+        if m:
+            self.sel = m["name"]
+            self.drag = (m, e.position(), m["x"], m["y"], self._view()[0])
+            if self.on_select:
+                self.on_select(m["name"])
+            self.update()
+
+    def mouseMoveEvent(self, e):
+        if not self.drag:
+            return
+        m, start, x, y, k = self.drag
+        d = e.position() - start
+        m["x"] = int(x + d.x() / k)
+        m["y"] = int(y + d.y() / k)
+        self.update()
+
+    def mouseReleaseEvent(self, _e):
+        if not self.drag:
+            return
+        m = self.drag[0]
+        self.drag = None
+        snap(m, [o for o in self.mons if o is not m and o["enabled"]])
+        self.update()
+        if self.on_moved:
+            self.on_moved()
+
+
+def snap(m, others):
+    """Put monitor m against the nearest edge of another one (no gaps, no overlaps)."""
+    if not others:
+        m["x"], m["y"] = 0, 0
+        return
+    best = None
+    for o in others:
+        for x, y in ((o["x"] + o["w"], o["y"]), (o["x"] - m["w"], o["y"]),
+                     (o["x"], o["y"] + o["h"]), (o["x"], o["y"] - m["h"])):
+            # keep the dragged edge aligned where it was dropped, if it still touches
+            if x in (o["x"] + o["w"], o["x"] - m["w"]):
+                y = min(max(m["y"], o["y"] - m["h"] + 1), o["y"] + o["h"] - 1)
+            else:
+                x = min(max(m["x"], o["x"] - m["w"] + 1), o["x"] + o["w"] - 1)
+            if any(x < q["x"] + q["w"] and x + m["w"] > q["x"] and y < q["y"] + q["h"] and y + m["h"] > q["y"]
+                   for q in others):
+                continue
+            dist = abs(x - m["x"]) + abs(y - m["y"])
+            if best is None or dist < best[0]:
+                best = (dist, x, y)
+    if best:
+        m["x"], m["y"] = best[1], best[2]
+
+
 def paint_desktop(key, w=220, h=124):
     """A small drawn preview of each desktop's layout (no screenshots needed)."""
     a, a2 = accent_hex()
@@ -213,6 +332,18 @@ def paint_desktop(key, w=220, h=124):
         p.setBrush(acc)
         p.drawRoundedRect(QRectF(4, y + 3, 22, 10), 3, 3)
         window(QRectF(36, 26 if key == "xfce" else 12, 140, 78), radius=4)
+    elif key == "hyprland" and conf().get("RICE_HYPRLAND") == "hyprland-mac":
+        p.setBrush(QColor(21, 21, 30, 200))
+        p.drawRect(QRectF(0, 0, w, 9))                                   # menu bar
+        p.setBrush(QColor("#e8e8f0"))
+        p.drawEllipse(QRectF(5, 2.5, 4, 4))
+        window(QRectF(14, 16, w * 0.56 - 14, h - 46), True, 8)
+        window(QRectF(w * 0.56 + 6, 16, w * 0.44 - 20, h - 46), False, 8)
+        p.setBrush(QColor(40, 40, 54, 220))
+        p.drawRoundedRect(QRectF(w / 2 - 52, h - 22, 104, 17), 7, 7)    # dock
+        for i, col in enumerate((acc, acc2, QColor("#fbbf24"), QColor("#e8e8f0"), acc)):
+            p.setBrush(col)
+            p.drawRoundedRect(QRectF(w / 2 - 46 + i * 19, h - 19, 12, 11), 3, 3)
     elif key in ("hyprland", "sway", "i3"):
         r = {"hyprland": 8, "sway": 1, "i3": 6}[key]
         p.setBrush(panel)
@@ -791,9 +922,27 @@ class Settings(QMainWindow):
             d.setWordWrap(True)
             v.addWidget(d)
             row = QHBoxLayout()
+            if k == "hyprland" and k == current:
+                styles = QHBoxLayout()
+                styles.addWidget(QLabel("Style:"))
+                cur_style = conf().get("RICE_HYPRLAND", "hyprland")
+                grp = QButtonGroup(c)
+                for rice_name, text in (("hyprland", "Auxo"), ("hyprland-mac", "Mac-style")):
+                    sb = QPushButton(text)
+                    sb.setCheckable(True)
+                    sb.setChecked(rice_name == cur_style)
+                    sb.setToolTip("Menu bar on top, a dock, Spotlight-style search (Super+Space)"
+                                  if rice_name == "hyprland-mac" else "Floating bar, the classic Auxo look")
+                    sb.clicked.connect(lambda _=False, r=rice_name, t=text: self.run(
+                        ["rice", r], root=True, label=f"Hyprland style → {t}",
+                        done=lambda code: (self.reload_look(), self.refresh_desktops())))
+                    grp.addButton(sb)
+                    styles.addWidget(sb)
+                styles.addStretch(1)
+                v.addLayout(styles)
             if k == current:
                 b = QPushButton("Re-apply the Auxo rice")
-                rice = "kde" if k == "plasma" else k
+                rice = "kde" if k == "plasma" else (conf().get("RICE_HYPRLAND", k) if k == "hyprland" else k)
                 b.clicked.connect(lambda _=False, r=rice: self.run(["rice", r], root=True, label=f"Auxo {r} rice"))
             else:
                 b = QPushButton("Switch to " + name.split(" (")[0])
@@ -803,6 +952,194 @@ class Settings(QMainWindow):
             row.addStretch(1)
             v.addLayout(row)
             self.desk_grid.addWidget(c, i // 3, i % 3)
+
+    # ── Displays ──
+    def page_displays(self):
+        w, lay = self.page()
+        self.heading(lay, "Displays", "Resolution, refresh rate, scaling, rotation and where each screen sits. "
+                                      "Drag a screen to move it. For the Hyprland, Sway and i3 rices; no password needed.")
+        self.disp_note = QLabel()
+        self.disp_note.setObjectName("reach")
+        self.disp_note.setWordWrap(True)
+        lay.addWidget(self.disp_note)
+        self.canvas = MonitorCanvas()
+        self.canvas.on_select = self._disp_select
+        self.canvas.on_moved = lambda: self._disp_dirty(True)
+        lay.addWidget(self.canvas)
+        self.section(lay, "Screen", keys="monitor screen display resolution refresh rate hz scale hidpi rotate vrr freesync gsync")
+        self.disp_name = QLabel("—")
+        lay.addWidget(self.disp_name)
+        g = QGridLayout()
+        g.setHorizontalSpacing(14)
+        self.disp_mode = QComboBox()
+        self.disp_scale = QComboBox()
+        for v in ("auto", "1", "1.25", "1.5", "1.75", "2"):
+            self.disp_scale.addItem("Automatic" if v == "auto" else f"{float(v) * 100:.0f}%", v)
+        self.disp_rot = QComboBox()
+        for v in ("0", "90", "180", "270"):
+            self.disp_rot.addItem("Normal" if v == "0" else f"Rotated {v}°", v)
+        self.disp_vrr = QCheckBox("Variable refresh rate (FreeSync / G-Sync)")
+        self.disp_on = QCheckBox("Use this screen")
+        self.disp_ws = QLineEdit(placeholderText="e.g. 1-5")
+        for r, (label, wdg) in enumerate((("Resolution", self.disp_mode), ("Scale", self.disp_scale),
+                                          ("Rotation", self.disp_rot), ("Workspaces here", self.disp_ws))):
+            g.addWidget(QLabel(label), r, 0)
+            g.addWidget(wdg, r, 1)
+        g.addWidget(self.disp_vrr, 4, 1)
+        g.addWidget(self.disp_on, 5, 1)
+        g.setColumnStretch(2, 1)
+        lay.addLayout(g)
+        for wdg, sig in ((self.disp_mode, "currentIndexChanged"), (self.disp_scale, "currentIndexChanged"),
+                         (self.disp_rot, "currentIndexChanged"), (self.disp_vrr, "toggled"), (self.disp_on, "toggled"),
+                         (self.disp_ws, "textEdited")):
+            getattr(wdg, sig).connect(lambda *_: self._disp_store())
+        row = QHBoxLayout()
+        self.disp_apply = QPushButton("Apply")
+        self.disp_apply.setObjectName("primary")
+        self.disp_apply.clicked.connect(self.apply_displays)
+        again = QPushButton("Detect screens")
+        again.clicked.connect(self.load_displays)
+        reset = QPushButton("Back to automatic")
+        reset.clicked.connect(lambda: self.run(["monitors", "reset"], label="Displays back to automatic",
+                                               done=lambda c: self.load_displays()))
+        row.addWidget(self.disp_apply)
+        row.addWidget(again)
+        row.addWidget(reset)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.disp = {}
+        self._disp_loading = False
+        lay.addStretch(1)
+        QTimer.singleShot(0, self.load_displays)
+        return w
+
+    def load_displays(self):
+        p = QProcess(self)
+        p.finished.connect(lambda *_: self._disp_loaded(bytes(p.readAllStandardOutput()).decode(errors="replace")))
+        p.start(TWEAK, ["monitors", "--json"])
+        self._disp_proc = p
+
+    def _disp_loaded(self, out):
+        try:
+            data = json.loads(out or "{}")
+        except ValueError:
+            data = {}
+        saved = data.get("saved", {})
+        self.disp = {}
+        for m in data.get("detected", []):
+            s = saved.get(m["name"], {})
+            scale = float(s.get("scale")) if s.get("scale", "auto") != "auto" else float(m.get("scale") or 1)
+            rot = s.get("rotate", m.get("rotate", "0"))
+            w, h = m["width"] or 1920, m["height"] or 1080
+            if rot in ("90", "270"):
+                w, h = h, w
+            pos = s.get("position", "auto")
+            x, y = (int(v) for v in pos.split("x")) if pos != "auto" else (m["x"], m["y"])
+            cur = f"{m['width']}x{m['height']}" + (f"@{m['refresh']}" if m["refresh"] else "")
+            self.disp[m["name"]] = {
+                "name": m["name"], "desc": m.get("desc", ""), "modes": m.get("modes") or [cur],
+                "mode": s.get("mode", "highrr"), "current": cur, "scale": s.get("scale", "auto"), "rotate": rot,
+                "vrr": s.get("vrr", "on" if m.get("vrr") else "off") == "on",
+                "enabled": s.get("enabled", "on" if m.get("enabled", True) else "off") == "on",
+                "workspaces": s.get("workspaces", ""), "x": x, "y": y, "w": int(w / scale), "h": int(h / scale),
+                "label": cur}
+        # screens the kernel reports all sit at 0,0: put them side by side
+        placed = []
+        for m in self.disp.values():
+            if any(m["x"] < q["x"] + q["w"] and m["x"] + m["w"] > q["x"] and m["y"] < q["y"] + q["h"]
+                   and m["y"] + m["h"] > q["y"] for q in placed):
+                m["x"], m["y"] = max(q["x"] + q["w"] for q in placed), 0
+            placed.append(m)
+        desk = data.get("desktop", "")
+        own = {"plasma": ("KDE Plasma", "kcmshell6 kcm_kscreen"), "gnome": ("GNOME", "gnome-control-center display"),
+               "xfce": ("Xfce", "xfce4-display-settings"), "cinnamon": ("Cinnamon", "cinnamon-settings display"),
+               "chrono": ("Chrono", "chrono-settings")}
+        if desk in own:
+            self.disp_note.setText(f"You're on {own[desk][0]}, which has its own display settings "
+                                   f"(<code>{own[desk][1]}</code>). These here are used when you log in to Hyprland, "
+                                   "Sway or i3.")
+        elif data.get("source") == "kernel":
+            self.disp_note.setText("Couldn't ask a running desktop, so refresh rates aren't known yet: log in to "
+                                   "Hyprland, Sway or i3 and press Detect screens for the full list.")
+        else:
+            self.disp_note.setText("")
+        sel = self.canvas.sel
+        self.canvas.set_monitors(list(self.disp.values()), sel)
+        self._disp_select(self.canvas.sel)
+        self._disp_dirty(False)
+        if not self.disp:
+            self.disp_name.setText("No screens found")
+
+    def _disp_select(self, name):
+        m = self.disp.get(name)
+        if not m:
+            return
+        self._disp_loading = True
+        self.disp_name.setText(f"<b>{m['name']}</b>  <span style='color:#8b8ba0'>{html.escape(m['desc'])}"
+                               f"  · now {m['current']}</span>")
+        self.disp_mode.clear()
+        self.disp_mode.addItem("Best (highest refresh rate)", "highrr")
+        self.disp_mode.addItem("Monitor's preferred", "preferred")
+        for md in m["modes"]:
+            wd, rest = md.split("x", 1)
+            hgt, _, hz = rest.partition("@")
+            self.disp_mode.addItem(f"{wd} × {hgt}" + (f"  ·  {hz} Hz" if hz else ""), md)
+        idx = self.disp_mode.findData(m["mode"])
+        if idx < 0:
+            self.disp_mode.addItem(m["mode"], m["mode"])
+            idx = self.disp_mode.count() - 1
+        self.disp_mode.setCurrentIndex(idx)
+        self.disp_scale.setCurrentIndex(max(0, self.disp_scale.findData(m["scale"])))
+        self.disp_rot.setCurrentIndex(max(0, self.disp_rot.findData(m["rotate"])))
+        self.disp_vrr.setChecked(m["vrr"])
+        self.disp_on.setChecked(m["enabled"])
+        self.disp_ws.setText(m["workspaces"])
+        self._disp_loading = False
+
+    def _disp_store(self):
+        if self._disp_loading or self.canvas.sel not in self.disp:
+            return
+        m = self.disp[self.canvas.sel]
+        old_rot, old_scale = m["rotate"], m["scale"]
+        m.update(mode=self.disp_mode.currentData(), scale=self.disp_scale.currentData(),
+                 rotate=self.disp_rot.currentData(), vrr=self.disp_vrr.isChecked(), enabled=self.disp_on.isChecked(),
+                 workspaces=self.disp_ws.text().strip())
+        if m["rotate"] != old_rot and (int(m["rotate"]) - int(old_rot)) % 180:
+            m["w"], m["h"] = m["h"], m["w"]
+        if m["scale"] != old_scale:
+            f = (float(old_scale) if old_scale != "auto" else 1) / (float(m["scale"]) if m["scale"] != "auto" else 1)
+            m["w"], m["h"] = int(m["w"] * f), int(m["h"] * f)
+        snap(m, [o for o in self.disp.values() if o is not m and o["enabled"]]) if len(self.disp) > 1 else None
+        self.canvas.update()
+        self._disp_dirty(True)
+
+    def _disp_dirty(self, dirty):
+        self.disp_apply.setEnabled(dirty)
+        self.disp_apply.setText("Apply" if dirty else "Applied")
+
+    def apply_displays(self):
+        if self.disp and not any(m["enabled"] for m in self.disp.values()):
+            QMessageBox.warning(self, "Displays", "At least one screen has to stay on.")
+            return
+        on = [m for m in self.disp.values() if m["enabled"]]
+        x0 = min((m["x"] for m in on), default=0)
+        y0 = min((m["y"] for m in on), default=0)
+        queue = []
+        for m in self.disp.values():
+            queue.append(["monitors", "set", m["name"], f"mode={m['mode']}", f"scale={m['scale']}",
+                          f"position={m['x'] - x0}x{m['y'] - y0}", f"rotate={m['rotate']}",
+                          f"vrr={'on' if m['vrr'] else 'off'}", f"enabled={'on' if m['enabled'] else 'off'}",
+                          f"workspaces={m['workspaces']}", "--no-apply"])
+        queue[-1] = queue[-1][:-1]                 # the last one reloads the desktop
+
+        def step(code=0):
+            if code != 0:
+                return
+            if queue:
+                self.run(queue.pop(0), label="Displays applied" if not queue else "Saving displays…", done=step)
+            else:
+                self._disp_dirty(False)
+        step()
 
     def switch_desktop(self, k):
         name = DESKTOPS[k]["name"]
@@ -1159,6 +1496,7 @@ class Settings(QMainWindow):
 PAGES = [("Look", "preferences-desktop-theme", "page_look"),
          ("Windows & bar", "preferences-system-windows", "page_windows"),
          ("Desktop", "preferences-desktop", "page_desktop"),
+         ("Displays", "video-display", "page_displays"),
          ("System", "preferences-system", "page_system"),
          ("Health", "help-faq", "page_health"),
          ("Ask Auxo", "dialog-information", "page_ai")]
@@ -1169,7 +1507,7 @@ def main():
     app.setApplicationName("Auxo Settings")
     app.setDesktopFileName("auxo-settings")
     win = Settings()
-    page = {"look": 0, "windows": 1, "desktop": 2, "system": 3, "health": 4, "ai": 5}.get(
+    page = {"look": 0, "windows": 1, "desktop": 2, "displays": 3, "system": 4, "health": 5, "ai": 6}.get(
         (sys.argv[1:2] or [""])[0].lstrip("-"), 0)
     win.nav.setCurrentRow(page)
     win.show()

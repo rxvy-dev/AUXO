@@ -368,6 +368,52 @@ check "ISO sets up sound for the live session" "grep -q '10-wireplumber.conf' $H
 check "doctor checks sound"                  "\"$T\" doctor --json | python3 -c 'import json,sys; sys.exit(\"sound\" not in [c[\"id\"] for c in json.load(sys.stdin)])'"
 sed -i "s/^DESKTOP=.*/DESKTOP=\"$prev\"/" "$ROOT/etc/auxo/auxo.conf"
 
+echo "▲ monitors"
+mkdir -p "$ROOT/sys/class/drm/card1-DP-1" "$ROOT/sys/class/drm/card1-HDMI-A-1"
+echo connected > "$ROOT/sys/class/drm/card1-DP-1/status"; printf '2560x1440\n1920x1080\n' > "$ROOT/sys/class/drm/card1-DP-1/modes"
+echo connected > "$ROOT/sys/class/drm/card1-HDMI-A-1/status"; printf '1920x1080\n' > "$ROOT/sys/class/drm/card1-HDMI-A-1/modes"
+out=$(env -u WAYLAND_DISPLAY -u DISPLAY "$T" monitors --user alex 2>&1)
+check "monitors lists connected screens"     "echo \"\$out\" | grep -q DP-1 && echo \"\$out\" | grep -q HDMI-A-1"
+"$T" monitors set DP-1 mode=2560x1440@144 scale=1.25 position=0x0 vrr=on workspaces=1-5 --user alex >/dev/null 2>&1
+"$T" monitors set HDMI-A-1 position=2048x0 rotate=90 workspaces=5-9 --user alex >/dev/null 2>&1
+MH="$A/.config/auxo/monitors-hyprland.conf"
+check "Hyprland: mode, position, scale, VRR"  "grep -q 'monitor = DP-1, 2560x1440@144, 0x0, 1.25, vrr, 1' $MH"
+check "Hyprland: rotation + workspaces"       "grep -q 'monitor = HDMI-A-1, highrr, 2048x0, auto, transform, 1' $MH && grep -q 'workspace = 5, monitor:HDMI-A-1, default:true' $MH"
+check "a workspace moves to its new screen"   "! grep -q 'workspace = 5, monitor:DP-1' $MH"
+check "Sway: output + workspace lines"        "grep -q 'output DP-1 enable mode 2560x1440@144Hz scale 1.25 position 0 0 adaptive_sync on' $A/.config/auxo/monitors-sway && grep -q 'workspace 6 output HDMI-A-1' $A/.config/auxo/monitors-sway"
+check "i3: xrandr script"                     "grep -q 'xrandr --output HDMI-A-1 --auto --pos 2048x0 --rotate right' $A/.config/auxo/monitors-xrandr.sh && [ -x $A/.config/auxo/monitors-xrandr.sh ]"
+check "rices include the monitor files"       "grep -q 'source = ~/.config/auxo/monitors-hyprland.conf' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'include ~/.config/auxo/monitors-sway' $PKG/share/auxo/rices/sway/sway/config && grep -q 'include ~/.config/auxo/monitors-i3' $PKG/share/auxo/rices/i3/i3/config"
+check "Hyprland default: highest refresh rate" "grep -q '^monitor = , highrr, auto, auto' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf"
+check "bad values refused"                    "! \"$T\" monitors set DP-1 rotate=45 --user alex >/dev/null 2>&1 && ! \"$T\" monitors set DP-1 scale=9 --user alex >/dev/null 2>&1"
+check "turning every screen off is refused"   "! \"$T\" monitors set DP-1 enabled=off --user alex >/dev/null 2>&1 || ! \"$T\" monitors set HDMI-A-1 enabled=off --user alex >/dev/null 2>&1"
+"$T" monitors reset --user alex >/dev/null 2>&1
+check "reset goes back to automatic"          "! grep -q '^monitor = DP-1' $MH && [ -f $MH ]"
+check "monitors --json is valid"              "env -u WAYLAND_DISPLAY -u DISPLAY \"$T\" monitors --json --user alex | python3 -m json.tool >/dev/null"
+
+echo "▲ Mac-style Hyprland rice"
+"$T" rice hyprland-mac --user alex >/dev/null 2>&1
+check "base rice + Mac style on top"          "grep -q 'Mac style' $A/.config/hypr/style.conf && grep -q 'source = ~/.config/hypr/style.conf' $A/.config/hypr/hyprland.conf"
+check "menu bar + dock"                       "grep -q '\"name\": \"menubar\"' $A/.config/waybar/config.jsonc && grep -q '\"name\": \"dock\"' $A/.config/waybar/config.jsonc && grep -q 'wlr/taskbar' $A/.config/waybar/config.jsonc"
+check "Spotlight-style search on Super+Space" "grep -q 'bind = \$mod, Space, exec, pkill wofi || wofi --show drun --conf ~/.config/wofi/spotlight' $A/.config/hypr/style.conf && [ -f $A/.config/wofi/spotlight.css ]"
+check "▲ menu script is executable"           "[ -x $A/.config/waybar/auxo-menu.sh ]"
+check "Mac look preset applied"               "grep -q 'gaps=\"10\"' $A/.config/auxo/look.conf && grep -q 'border=\"1\"' $A/.config/auxo/look.conf"
+check "style remembered"                      "grep -q 'RICE_HYPRLAND=\"hyprland-mac\"' $ROOT/etc/auxo/auxo.conf"
+"$T" look set bar=bottom --user alex --no-apply >/dev/null 2>&1
+check "bar position leaves the menu bar on top" "grep -A3 '\"name\": \"menubar\"' $A/.config/waybar/config.jsonc | grep -q '\"position\": \"top\"'"
+python3 - "$A/.config/waybar/config.jsonc" <<'PY' && ok=1 || ok=0
+import json, re, sys
+json.loads(re.sub(r"^\s*//.*$", "", open(sys.argv[1]).read(), flags=re.M))
+PY
+check "Mac waybar config is valid JSON"       "[ $ok = 1 ]"
+"$T" rice hyprland --user alex >/dev/null 2>&1
+check "back to the Auxo style"                "! grep -q 'Mac style' $A/.config/hypr/style.conf && ! grep -q '\"name\": \"dock\"' $A/.config/waybar/config.jsonc && grep -q 'RICE_HYPRLAND=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
+check "Hyprland waybar scrolls workspaces (0.49 syntax)" "! grep -rq 'hl.dsp' $PKG/share/auxo/rices && grep -q 'hyprctl dispatch workspace e+1' $PKG/share/auxo/rices/hyprland/waybar/config.jsonc"
+
+echo "▲ keyboard shortcuts (auxo-keys)"
+out=$(env -u WAYLAND_DISPLAY -u DISPLAY AUXO_HOME="$A" "$PKG/bin/auxo-keys" --wm hyprland --print 2>&1)
+check "lists the Hyprland shortcuts in words" "echo \"\$out\" | grep -q 'Super+Enter *Terminal' && echo \"\$out\" | grep -q 'Super+1…9 *Go to workspace 1–9'"
+check "Super+/ opens it on every tiling rice" "grep -q 'slash, exec, pkill wofi || auxo-keys' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'mod+slash exec auxo-keys' $PKG/share/auxo/rices/sway/sway/config && grep -q 'mod+slash exec --no-startup-id auxo-keys' $PKG/share/auxo/rices/i3/i3/config"
+
 echo "▲ presets / sharing a rice / snapshots / AI"
 "$T" look preset retro --user alex --no-apply >/dev/null 2>&1
 check "preset retro: square, no blur, mono UI" "grep -q 'rounding=\"0\"' $LC/look.conf && grep -q 'blur=\"off\"' $LC/look.conf && grep -q 'ui_font=\"Fira Code\"' $LC/look.conf"

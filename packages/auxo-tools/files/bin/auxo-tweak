@@ -28,6 +28,7 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak repo nonfree|multilib    enable Void's extra repositories
   auxo-tweak service NAME on|off      bluetooth | cups | sshd | power-profiles
   auxo-tweak info                     show current Auxo settings
+  auxo-tweak monitors [set NAME k=v…]  resolution, refresh rate, scale, layout, workspaces (Hyprland, Sway, i3)
   auxo-tweak ai on|off|status         Auxo AI, a free assistant that runs on your PC (--model small|standard|large)
   auxo-tweak doctor [--fix]           find (and repair) common problems, like a login screen that rejects your password
 """
@@ -242,7 +243,14 @@ def cmd_shell(args):
 SESSION_RICES = {"gnome", "xfce", "cinnamon", "chrono"}
 
 
+# Rice styles layered on a base rice: the base is applied first, then the style's files on top
+RICE_LAYERS = {"hyprland-mac": "hyprland"}
+RICE_PRESET = {"hyprland-mac": "mac"}       # the look preset that goes with a style
+
+
 def apply_rice(name, user):
+    if name in RICE_LAYERS:
+        apply_rice(RICE_LAYERS[name], user)
     src = R(f"{SHARE}/rices/{name}")
     home = home_of(user)
     if name in SESSION_RICES:
@@ -275,8 +283,12 @@ def apply_rice(name, user):
         for f in files:
             if f.endswith(".sh"):
                 os.chmod(os.path.join(base, f), 0o755)
+    if name in RICE_PRESET:
+        look = auxo_look.preset(auxo_look.load(home), RICE_PRESET[name])
+        auxo_look.save(home, look)
     auxo_theme.apply_user(user, auxo_theme.current())
     chown(f"{home}/.config", user, recursive=True)
+    write_conf({f"RICE_{name.split('-')[0].upper()}": name})
     log(f"{user}: Auxo {name} rice applied (old files kept as *.auxo-bak)")
 
 
@@ -336,8 +348,11 @@ def cmd_desktop(args):
                 sv_disable(sv)
     users = target_users(args)
     if d.get("rice"):
+        # keep the style you picked last time (e.g. hyprland-mac)
+        rice = read_conf().get(f"RICE_{d['rice'].upper()}", d["rice"])
+        rice = rice if os.path.isdir(R(f"{SHARE}/rices/{rice}")) or rice in SESSION_RICES else d["rice"]
         for u in users:
-            apply_rice(d["rice"], u)
+            apply_rice(rice, u)
     if args.name == "plasma":
         import auxo_kde
         auxo_kde.apply_system(auxo_theme.current())
@@ -974,6 +989,93 @@ def cmd_info(args):
         print(f"{BOLD}Look ({u}){RESET}  " + "  ".join(f"{k}={lk[k]}" for k in ("mode", "bar", "gaps", "rounding", "ui_font")))
 
 
+# ── monitors: resolution, refresh rate, scale, layout, workspaces (Hyprland, Sway, i3) ──
+def _my_session_env(user):
+    """The environment of `user`'s running desktop: ours if we're inside it, else looked up."""
+    import pwd
+    if os.geteuid() != 0 and pwd.getpwuid(os.getuid()).pw_name == user and (
+            os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY")):
+        return dict(os.environ)
+    return auxo_theme.session_env(user)
+
+
+def _monitors_live(user, env):
+    """Reload the running window manager so the new layout shows now."""
+    if not env:
+        return False
+    if env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        run(["hyprctl", "reload"], check=False, user=user, env=env)
+    elif env.get("SWAYSOCK"):
+        run(["swaymsg", "reload"], check=False, user=user, env=env)
+    elif env.get("DISPLAY") and have("i3-msg") and read_conf().get("DESKTOP") == "i3":
+        run([os.path.join(home_of(user), ".config/auxo/monitors-xrandr.sh")], check=False, user=user, env=env)
+        run(["i3-msg", "reload"], check=False, user=user, env=env)
+    else:
+        return False
+    return True
+
+
+def cmd_monitors(args):
+    import auxo_monitors as M
+    user = _look_user(args)
+    home = home_of(user)
+    env = _my_session_env(user)
+    mons = M.load(home)
+    if args.action in (None, "list"):
+        src, found = M.detect(env, user if os.geteuid() == 0 else None)
+        if args.json:
+            import json
+            print(json.dumps({"source": src, "desktop": read_conf().get("DESKTOP", ""), "detected": found,
+                              "saved": mons}))
+            return
+        if not found:
+            print("no monitors found")
+        for m in found:
+            state = f"{m['width']}x{m['height']}" + (f"@{m['refresh']}" if m["refresh"] else "") + \
+                    f"  at {m['x']},{m['y']}  scale {m['scale']:g}" + (f"  rotated {m['rotate']}°" if m["rotate"] != "0" else "")
+            print(f"  {BOLD}{m['name']:<10}{RESET} {m['desc'][:28]:<28} {state if m['enabled'] else 'off'}")
+            if m["modes"]:
+                print(f"  {DIM}{'':<10} modes: {', '.join(m['modes'][:6])}{' …' if len(m['modes']) > 6 else ''}{RESET}")
+        if mons:
+            print(f"\n{BOLD}your settings{RESET} ({M.FILE}):")
+            for n, m in sorted(mons.items()):
+                diff = ", ".join(f"{k}={v}" for k, v in m.items() if v != M.DEFAULTS[k]) or "defaults"
+                print(f"  {n:<10} {diff}")
+        if read_conf().get("DESKTOP") in ("plasma", "gnome", "xfce", "cinnamon", "chrono"):
+            print(f"\n{DIM}your desktop has its own display settings; these apply to Hyprland, Sway and i3{RESET}")
+        else:
+            print(f"\n{DIM}change one: auxo-tweak monitors set DP-1 mode=2560x1440@144 scale=1.25 position=0x0 "
+                  f"workspaces=1-5{RESET}")
+        return
+    if args.action == "set":
+        if not args.items or "=" in args.items[0]:
+            raise AuxoError("name the monitor first: auxo-tweak monitors set DP-1 mode=2560x1440@144 (see: auxo-tweak monitors)")
+        name, changes = args.items[0], {}
+        for it in args.items[1:]:
+            if "=" not in it:
+                raise AuxoError(f"“{it}” should be setting=value. settings: {', '.join(M.KEYS)}")
+            k, v = it.split("=", 1)
+            changes[k.strip()] = v
+        M.detect(env, user if os.geteuid() == 0 else None)
+        try:
+            mons = M.update(mons, name, changes)
+        except M.MonitorError as e:
+            raise AuxoError(str(e)) from None
+    elif args.action == "reset":
+        mons = {} if not args.items else {k: v for k, v in mons.items() if k not in args.items}
+    M.save(home, mons, owner=user if os.geteuid() == 0 else None)
+    M.write(home, owner=user if os.geteuid() == 0 else None)
+    from auxo_look import ensure_line
+    for rel, line in M.HOOKS:
+        ensure_line(f"{home}/{rel}", line)
+    if args.no_apply:
+        log("monitors saved")
+    elif _monitors_live(user, env):
+        log("monitors saved and applied")
+    else:
+        log("monitors saved — used the next time you log in to Hyprland, Sway or i3")
+
+
 # ── Auxo AI: a local assistant (Ollama), free and offline once the model is downloaded ──
 AI_MODELS = {
     "small": ("llama3.2:1b", "about 1.3 GB — any PC with 8 GB of RAM"),
@@ -1300,7 +1402,8 @@ def main():
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
     s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop")
     s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
-    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "sway", "i3", "chrono"])
+    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac", "sway", "i3",
+                                                                      "chrono"])
     s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
     s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset", "presets", "preset",
                                                                        "export", "import"])
@@ -1340,6 +1443,10 @@ def main():
     s = sub.add_parser("service"); s.add_argument("name", choices=list(SERVICES)); s.add_argument("state", choices=["on", "off"])
     s.set_defaults(fn=cmd_service)
     s = sub.add_parser("info"); s.set_defaults(fn=cmd_info)
+    s = sub.add_parser("monitors"); s.add_argument("action", nargs="?", choices=["list", "set", "reset"])
+    s.add_argument("items", nargs="*"); s.add_argument("--user"); s.add_argument("--json", action="store_true")
+    s.add_argument("--no-apply", action="store_true", help="save without reloading the running desktop")
+    s.set_defaults(fn=cmd_monitors)
     s = sub.add_parser("ai"); s.add_argument("state", choices=["on", "off", "status", "models", "update"])
     s.add_argument("--model", help="small, standard, large or any Ollama model name"); s.add_argument("--purge", action="store_true")
     s.set_defaults(fn=cmd_ai)
