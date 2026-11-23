@@ -78,7 +78,7 @@ jobs:
             out/*.sha256
           compression-level: 0
 
-      - name: Publish (a release for tags, the "nightly" pre-release otherwise)
+      - name: Publish (a release for tags, a dated nightly marked "latest" otherwise)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -90,8 +90,12 @@ jobs:
             gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \
               || gh release upload "${GITHUB_REF_NAME}" $files --clobber
           else
-            gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
-            gh release create nightly $files --prerelease --target "$GITHUB_SHA" \
-              --title "Auxo Linux nightly ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})" \
-              --notes "Built from main by GitHub Actions; booted in QEMU before upload. Not a stable release. $note"
+            # a new tag per build: with immutable releases, a tag name can't be reused once released
+            tag="nightly-$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+            gh release create "$tag" $files --target "$GITHUB_SHA" --latest \
+              --title "Auxo Linux $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})" \
+              --notes "Built from main by GitHub Actions and booted in a VM before upload. Newest build is always at https://github.com/rxvy-dev/AUXO/releases/latest — $note"
+            # keep the newest three builds
+            gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("nightly-"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+              | while read -r old; do gh release delete "$old" --yes --cleanup-tag || true; done
           fi
