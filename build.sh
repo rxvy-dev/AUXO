@@ -71,7 +71,9 @@ if [[ $MODE == docker ]]; then
   exec $SUDO "$ENGINE" run --rm --privileged \
     -e MKLIVE_REPO -e MKLIVE_REF -e HOST_UID="${HOST_UID:-$(id -u)}" -e HOST_GID="${HOST_GID:-$(id -g)}" \
     -v "$HERE:/src" -w /src \
-    ghcr.io/void-linux/void-glibc-full:latest /src/scripts/build-iso-inner.sh
+    ghcr.io/void-linux/void-glibc-full:latest \
+    sh -c 'command -v bash >/dev/null || { xbps-install -Syu xbps && xbps-install -y bash; } && exec bash /src/scripts/build-iso-inner.sh'
+    # Void's image stopped shipping bash (Nov 2026), so it's installed before the bash build script runs
 fi
 
 # ── chroot (default): works on any distro ─────────────────────────────

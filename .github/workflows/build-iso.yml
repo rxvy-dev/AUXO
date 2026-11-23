@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    branches: [main]      # only builds when the commit message says [build iso] (see the job's if:)
   schedule:
     - cron: "17 4 * * 1"   # weekly fresh ISO (Mondays)
 
@@ -12,6 +13,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') || contains(github.event.head_commit.message, '[build iso]')
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -29,7 +31,8 @@ jobs:
           ./tests/test-tools.sh
           python3 tests/test-installer.py
           python3 tests/test-summit.py
-          sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 >/dev/null && python3 tests/test-settings.py
+          sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 libglib2.0-0t64 >/dev/null 2>&1 || sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 >/dev/null 2>&1 || true
+          python3 tests/test-settings.py
 
       - name: Build the ISO in a Void container (void-mklive)
         run: |
@@ -62,8 +65,7 @@ jobs:
             out/*.sha256
           compression-level: 0
 
-      - name: Attach to GitHub release (tags only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish (a release for tags, the "nightly" pre-release otherwise)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,5 +80,12 @@ jobs:
             files="$iso $iso.sha256"
             note="Verify with: sha256sum -c $iso.sha256"
           fi
-          gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \
-            || gh release upload "${GITHUB_REF_NAME}" $files --clobber
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \
+              || gh release upload "${GITHUB_REF_NAME}" $files --clobber
+          else
+            gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+            gh release create nightly $files --prerelease --target "$GITHUB_SHA" \
+              --title "Auxo Linux nightly ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})" \
+              --notes "Built from main by GitHub Actions; booted in QEMU before upload. Not a stable release. $note"
+          fi
