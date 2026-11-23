@@ -45,7 +45,7 @@ from auxo_accents import ACCENTS, ansi  # noqa: E402
 from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, installed, online,  # noqa: E402
                        require_root, read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
                        invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
-                       sv_enable, sv_disable, sv_enabled, SHARE, RESET, BOLD, DIM)
+                       sv_enable, sv_disable, sv_enabled, audio_setup, audio_missing, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
 import auxo_theme  # noqa: E402
 import auxo_gnome  # noqa: E402
@@ -330,6 +330,7 @@ def cmd_desktop(args):
             auxo_chrono.build(getattr(args, "chrono_ref", None) or auxo_chrono.REF)
         for sv in GUI_SERVICES:
             sv_enable(sv)
+        audio_setup()                            # PipeWire starts at login, with WirePlumber + Pulse + ALSA
         for sv in ("dhcpcd", "wpa_supplicant"):  # NetworkManager manages the network now
             if sv_enabled(sv):
                 sv_disable(sv)
@@ -1084,6 +1085,17 @@ def _doctor_checks():
         out.append(("services", "Desktop services (D-Bus, elogind, NetworkManager)",
                     f"not running at boot: {', '.join(miss)}" if miss else None,
                     lambda: [sv_enable(x) for x in GUI_SERVICES], "turns them on"))
+    if desk and desk != "none":
+        miss = audio_missing()
+        out.append(("sound", "Sound (PipeWire) starts at login",
+                    f"not set up: {', '.join(os.path.basename(m) for m in miss)}" if miss else None,
+                    lambda: (xbps_install("alsa-pipewire") if online() else None, audio_setup()),
+                    "links PipeWire, WirePlumber and the PulseAudio/ALSA layers; log out and back in"))
+        greet = R("/etc/greetd/config.toml")
+        if want == "greetd" and d.get("cmd") and os.path.exists(greet) and d["cmd"] not in open(greet).read():
+            out.append(("session", f"{d['name']} starts the right way", "the login screen uses an older start "
+                        "command (no D-Bus session: no sound)", lambda: auxo_theme.apply_login(auxo_theme.current()),
+                        "rewrites the login screen's start command"))
     if sv_enabled("NetworkManager"):
         both = [x for x in ("dhcpcd", "wpa_supplicant") if sv_enabled(x)]
         out.append(("network", "Only NetworkManager manages the network",

@@ -61,6 +61,7 @@ sddm
 firefox
 pipewire
 wireplumber
+alsa-pipewire
 
 # login + theming used by the installed system
 greetd

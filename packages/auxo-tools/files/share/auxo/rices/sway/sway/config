@@ -19,6 +19,7 @@ client.focused_inactive $bg     $bg     $muted  $bg       #2a2a38
 
 input type:touchpad { tap enabled; natural_scroll enabled }
 
+exec pipewire                       # sound (sway doesn't run XDG autostart)
 exec waybar
 exec mako
 exec nm-applet --indicator

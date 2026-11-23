@@ -6,7 +6,7 @@ except the Hyprland packages, which come from the hyprland-void community repo
 """
 
 # A graphical session on Void needs D-Bus + elogind (seat/session management) and polkit.
-GUI_BASE = ["dbus", "elogind", "polkit", "NetworkManager", "pipewire", "wireplumber",
+GUI_BASE = ["dbus", "elogind", "polkit", "NetworkManager", "pipewire", "wireplumber", "alsa-pipewire",
             "xdg-user-dirs", "xdg-utils", "mesa-dri", "vulkan-loader",
             "noto-fonts-ttf", "noto-fonts-emoji", "font-inter", "font-firacode", "papirus-icon-theme",
             # Auxo Settings and the welcome app (python3-pyqt6 alone has no GUI modules on Void)
@@ -79,7 +79,7 @@ DESKTOPS = {
                                       "papirus-icon-theme", "greetd", "tuigreet"],
         "dm": "greetd",
         "session": "cinnamon",
-        "cmd": "startx /usr/bin/cinnamon-session",
+        "cmd": "startx /usr/bin/dbus-run-session /usr/bin/cinnamon-session",   # PipeWire needs a D-Bus session
         "rice": "cinnamon",              # applied through its own settings (auxo_theme.session_apply)
     },
     "hyprland": {
@@ -107,7 +107,7 @@ DESKTOPS = {
                                       "feh", "alacritty", "maim", "xclip"] + COMMON_WM,
         "dm": "greetd",
         "session": "i3",
-        "cmd": "startx /usr/bin/i3",
+        "cmd": "startx /usr/bin/dbus-run-session /usr/bin/i3",                 # PipeWire needs a D-Bus session
         "rice": "i3",
     },
     "chrono": {

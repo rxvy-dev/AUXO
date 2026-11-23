@@ -334,3 +334,33 @@ def sv_disable(name, now=False):
     if DRY:
         print(f"[dry-run] disable service {name}", flush=True)
     return 0
+
+
+# ── sound: PipeWire, set up the way Void's handbook describes ──
+# Void ships PipeWire but doesn't start it: WirePlumber and the PulseAudio layer are switched on
+# with config links, and PipeWire itself runs as the user from each desktop's autostart.
+AUDIO_LINKS = {
+    "/etc/pipewire/pipewire.conf.d/10-wireplumber.conf": "/usr/share/examples/wireplumber/10-wireplumber.conf",
+    "/etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf": "/usr/share/examples/pipewire/20-pipewire-pulse.conf",
+    "/etc/xdg/autostart/pipewire.desktop": "/usr/share/applications/pipewire.desktop",
+    "/etc/alsa/conf.d/50-pipewire.conf": "/usr/share/alsa/alsa.conf.d/50-pipewire.conf",
+    "/etc/alsa/conf.d/99-pipewire-default.conf": "/usr/share/alsa/alsa.conf.d/99-pipewire-default.conf",
+}
+
+
+def audio_missing():
+    """Links that should exist (their target is installed) but don't."""
+    return [l for l, t in AUDIO_LINKS.items() if (DRY or os.path.exists(R(t))) and not os.path.lexists(R(l))]
+
+
+def audio_setup():
+    for link, target in AUDIO_LINKS.items():
+        if not DRY and not os.path.exists(R(target)):
+            continue                      # e.g. alsa-pipewire not installed yet
+        if os.path.lexists(R(link)):
+            continue
+        if DRY:
+            print(f"[dry-run] ln -s {target} {link}")
+            continue
+        os.makedirs(os.path.dirname(R(link)), exist_ok=True)
+        os.symlink(target, R(link))

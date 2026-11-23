@@ -10,6 +10,21 @@ run auxo-branding
 # user is created at boot by mklive and picks them up from /etc/xdg
 run auxo-tweak accent violet --no-grub --no-initramfs || true
 
+# ── sound: start PipeWire at login (Void ships it switched off) — same links as auxo-tweak's audio_setup
+for pair in \
+  "/etc/pipewire/pipewire.conf.d/10-wireplumber.conf:/usr/share/examples/wireplumber/10-wireplumber.conf" \
+  "/etc/pipewire/pipewire.conf.d/20-pipewire-pulse.conf:/usr/share/examples/pipewire/20-pipewire-pulse.conf" \
+  "/etc/xdg/autostart/pipewire.desktop:/usr/share/applications/pipewire.desktop" \
+  "/etc/alsa/conf.d/50-pipewire.conf:/usr/share/alsa/alsa.conf.d/50-pipewire.conf" \
+  "/etc/alsa/conf.d/99-pipewire-default.conf:/usr/share/alsa/alsa.conf.d/99-pipewire-default.conf"; do
+  link=${pair%%:*}; target=${pair#*:}
+  if [ -e "$ROOTFS$target" ] && [ ! -e "$ROOTFS$link" ]; then
+    mkdir -p "$ROOTFS$(dirname "$link")"; ln -s "$target" "$ROOTFS$link"
+  elif [ ! -e "$ROOTFS$target" ]; then
+    echo "warning: $target missing — sound may not start on the live ISO" >&2
+  fi
+done
+
 # ── keep the ISO under 2 GB (one download, no split parts) ──
 # 1. A small initramfs: mklive builds it with dracut -N, which packs firmware for every graphics
 #    and network card. The live USB needs neither before it mounts its own image; drivers load

@@ -17,6 +17,11 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Fixed: no sound.** Void ships PipeWire switched off, and Auxo never turned it on. Every
+  desktop (and the live ISO) now starts PipeWire at login with WirePlumber, the PulseAudio layer
+  and ALSA routed through it (alsa-pipewire), as Void's handbook describes. i3 and Cinnamon now
+  start with a D-Bus session, which PipeWire needs. `sudo auxo-tweak doctor --fix` repairs
+  existing installs.
 - **Steam and Discord come with Auxo**: the installer sets them up by default (online
   installs; untick them under Extras). Discord comes from Flathub: Void's own package is
   restricted (not redistributable), so xbps reported "discord not found in repository pool". Later: `sudo auxo-tweak gaming on`, `sudo auxo-tweak apps discord`.

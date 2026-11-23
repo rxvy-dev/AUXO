@@ -103,7 +103,7 @@ check "old Lua config from Arch Auxo parked" "test -f $ROOT/home/alex/.config/hy
 echo "▲ desktop i3 / sway / gnome / none"
 "$T" desktop i3 --user alex >/dev/null 2>&1
 check "i3 config + polybar launch exec"      "test -x $ROOT/home/alex/.config/polybar/launch.sh && grep -q colors-i3 $ROOT/home/alex/.config/i3/config"
-check "i3 starts through startx"             "grep -q \"\\-\\-cmd 'startx /usr/bin/i3'\" $ROOT/etc/greetd/config.toml"
+check "i3 starts through startx + D-Bus"     "grep -q \"\\-\\-cmd 'startx /usr/bin/dbus-run-session /usr/bin/i3'\" $ROOT/etc/greetd/config.toml"
 "$T" desktop sway --user alex >/dev/null 2>&1
 check "sway config"                          "grep -q colors-sway $ROOT/home/alex/.config/sway/config && grep -q 'sway/workspaces' $ROOT/home/alex/.config/waybar/config.jsonc"
 check "sway uses the polkit launcher"        "grep -q 'exec auxo-polkit-agent' $ROOT/home/alex/.config/sway/config"
@@ -355,6 +355,18 @@ check "doctor --fix moves the login screen"   "grep -q '^vt = 7' $ROOT/etc/greet
 sed -i 's/^vt = 7/vt = 1/' "$ROOT/etc/greetd/config.toml"
 ( cd "$ROOT" && sed -n "/^case/,/^esac/p" "$HERE/packages/build-xbps.sh" | sed "s/\${ACTION:-\$1}/post/" | sh )
 check "package update repairs old installs"   "grep -q '^vt = 7' $ROOT/etc/greetd/config.toml"
+
+echo "▲ sound (PipeWire)"
+prev=$(grep '^DESKTOP=' "$ROOT/etc/auxo/auxo.conf" | cut -d'"' -f2)
+out=$(AUXO_TEST_ONLINE=1 "$T" desktop sway --user alex 2>&1)
+check "desktop switch links WirePlumber + Pulse" "echo \"\$out\" | grep -q 'ln -s /usr/share/examples/wireplumber/10-wireplumber.conf /etc/pipewire/pipewire.conf.d/10-wireplumber.conf' && echo \"\$out\" | grep -q '20-pipewire-pulse.conf'"
+check "PipeWire autostarts + ALSA goes through it" "echo \"\$out\" | grep -q 'ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/pipewire.desktop' && echo \"\$out\" | grep -q '99-pipewire-default.conf'"
+check "alsa-pipewire installed with every desktop" "[ -e $ROOT/var/db/xbps/.auxo-test/alsa-pipewire ] && python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS as D; sys.exit(not all('alsa-pipewire' in d['packages'] for k,d in D.items() if d['packages']))\""
+check "tiling rices start PipeWire themselves" "grep -q '^exec-once = pipewire' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q '^exec pipewire' $PKG/share/auxo/rices/sway/sway/config && grep -q '^exec --no-startup-id pipewire' $PKG/share/auxo/rices/i3/i3/config"
+check "i3 + Cinnamon get a D-Bus session"    "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS as D; sys.exit(not all('dbus-run-session' in D[k]['cmd'] for k in ('i3','cinnamon','sway','hyprland','plasma')))\""
+check "ISO sets up sound for the live session" "grep -q '10-wireplumber.conf' $HERE/mklive/postsetup.sh && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx alsa-pipewire"
+check "doctor checks sound"                  "\"$T\" doctor --json | python3 -c 'import json,sys; sys.exit(\"sound\" not in [c[\"id\"] for c in json.load(sys.stdin)])'"
+sed -i "s/^DESKTOP=.*/DESKTOP=\"$prev\"/" "$ROOT/etc/auxo/auxo.conf"
 
 echo "▲ presets / sharing a rice / snapshots / AI"
 "$T" look preset retro --user alex --no-apply >/dev/null 2>&1
