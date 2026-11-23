@@ -19,7 +19,7 @@ BTRFS_OPTS = "noatime,compress=zstd:1"
 SUBVOLS = [("@", ""), ("@home", "home"), ("@log", "var/log"), ("@cache", "var/cache"), ("@snapshots", ".snapshots")]
 USER_GROUPS = ["wheel", "audio", "video", "input", "storage", "network", "lp", "scanner", "plugdev",
                "kvm", "bluetooth", "_seatd"]
-ONLINE_DESKTOPS = {"gnome", "xfce", "cinnamon", "hyprland", "sway", "i3"}
+ONLINE_DESKTOPS = {"gnome", "xfce", "cinnamon", "hyprland", "sway", "i3", "chrono"}
 RSYNC_EXCLUDES = ["/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/lost+found",
                   "/var/cache/xbps/*", "/swapfile"]
 # live-session files: from the Auxo ISO overlay, plus what void-mklive's boot hooks create

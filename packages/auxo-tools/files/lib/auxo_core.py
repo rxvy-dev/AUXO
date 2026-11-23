@@ -275,8 +275,16 @@ def normal_users():
 
 
 def invoking_user():
-    return os.environ.get("SUDO_USER") or os.environ.get("PKEXEC_UID_USER") or (
-        pwd.getpwuid(os.getuid()).pw_name if os.getuid() != 0 else None)
+    """The person behind this command: sudo sets SUDO_USER, pkexec (Auxo Settings) sets PKEXEC_UID."""
+    if os.environ.get("SUDO_USER"):
+        return os.environ["SUDO_USER"]
+    uid = os.environ.get("PKEXEC_UID")
+    if uid and uid.isdigit():
+        try:
+            return pwd.getpwuid(int(uid)).pw_name
+        except KeyError:
+            pass
+    return pwd.getpwuid(os.getuid()).pw_name if os.getuid() != 0 else None
 
 
 # ── services (runit) ──────────────────────────────────────────────────

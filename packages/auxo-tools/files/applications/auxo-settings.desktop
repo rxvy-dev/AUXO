@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Auxo Settings
+GenericName=System Settings
+Comment=Accent, light or dark, wallpaper, fonts, gaps, blur, desktops and system switches
+Exec=auxo-settings
+Icon=auxo
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=theme;rice;accent;wallpaper;dark;light;gaps;blur;desktop;kernel;

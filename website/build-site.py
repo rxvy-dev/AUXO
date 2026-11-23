@@ -708,12 +708,14 @@ DESKS = [
   box(0, 0, 100, 5.5, "pn") + box(.8, 7, 49, 92, "t nt act") + box(50.6, 7, 48.6, 45.5, "nt") + box(50.6, 53.5, 48.6, 45.5, "t nt")),
  ("i3", "i3", "X11 tiling", True, "Auxo rice: polybar, rofi and picom. Classic tiling with no wasted space.",
   box(0, 0, 33.4, 94, "t nt act") + box(33.4, 0, 33.3, 94, "nt") + box(66.7, 0, 33.3, 94, "t nt") + box(0, 94, 100, 6, "pn")),
- ("gnome", "GNOME", "Gestures and a dock", False, "Stock GNOME with your accent mapped to the system colour.",
+ ("gnome", "GNOME", "Gestures and a dock", True, "Auxo rice, no extensions: Papirus icons, Inter, dark style, your accent and Super+Enter for a terminal.",
   box(0, 0, 100, 5, "pn") + box(18, 13, 64, 64, "act") + box(33, 85, 34, 10, "dock")),
- ("xfce", "Xfce", "Light and classic", False, "Lightweight and familiar: top panel, bottom dock, stacked windows.",
+ ("xfce", "Xfce", "Light and classic", True, "Auxo rice: dark theme, Papirus icons, Inter, compositor shadows and your wallpaper. Light on old PCs.",
   box(0, 0, 100, 6, "pn") + box(10, 14, 48, 56, "") + box(36, 26, 50, 54, "t act") + box(34, 88, 32, 9, "dock")),
- ("cinnamon", "Cinnamon", "Familiar layout", False, "A traditional desktop with a full-width bottom panel.",
+ ("cinnamon", "Cinnamon", "Familiar layout", True, "Auxo rice: a traditional bottom panel with the dark theme, Papirus icons and your accent.",
   box(12, 10, 56, 62, "act") + box(40, 24, 48, 56, "t") + box(0, 93, 100, 7, "pn")),
+ ("chrono", "Chrono", "rxvy's own desktop", True, "rxvy's Wayland desktop with 40+ retro and modern themes, plus an Auxo theme in your accent.",
+  box(6, 8, 52, 56, "act") + box(40, 28, 50, 52, "t") + box(1.5, 92, 97, 6.5, "pn fl")),
  ("none", "No desktop", "Text only", False, "Just a login prompt. Add a desktop later with one command.",
   '<i class="tty"></i>'),
 ]
@@ -911,7 +913,7 @@ def logo_cells(items):
 
 SOFT = [
  ("desktops", "Desktops", "Chosen in the installer, switchable later with <code>auxo-tweak desktop</code>.",
-  "plasma · gnome · xfce · cinnamon · hyprland · sway · i3 · none"),
+  "plasma · gnome · xfce · cinnamon · hyprland · sway · i3 · chrono · none"),
  ("gaming", "Gaming", "The installer's Gaming bundle. Add the tuning later with <code>auxo-tweak gaming on</code>.",
   "steam · gamemode · mangohud · lutris · wine · winetricks · prismlauncher · discord · lib32 Vulkan drivers"),
  ("dev", "Development", "Compilers, editors and containers, including SDL for game development.",
@@ -956,7 +958,7 @@ home = head("Auxo Linux — Void Linux, set up the way you want it",
 </div></section>
 
 <div class="strip"><div class="wrap">
-  <div><b>8</b><span>desktops, three pre-riced</span></div>
+  <div><b>9</b><span>desktops, every one riced</span></div>
   <div><b>7</b><span>accent colours</span></div>
   <div><b>3</b><span>kernels to choose from</span></div>
   <div><b>1</b><span>command to change it all</span></div>
@@ -967,7 +969,7 @@ home = head("Auxo Linux — Void Linux, set up the way you want it",
   <div class="cards5">
     <div class="rv">{IC['time']}<h3>Ready in minutes</h3><p>A guided text installer sets up your desktop, drivers, snapshots and dual boot in one go.</p></div>
     <div class="rv">{IC['base']}<h3>Still pure Void</h3><p>Official Void repositories, xbps, runit and the Void docs all work as normal.</p></div>
-    <div class="rv">{IC['swap']}<h3>Change anything later</h3><p><code>auxo-tweak</code> swaps your desktop, kernel, shell or accent colour without reinstalling.</p></div>
+    <div class="rv">{IC['swap']}<h3>Change anything later</h3><p><b>Auxo Settings</b> or <code>auxo-tweak</code> swaps your desktop, look, kernel, shell or accent without reinstalling.</p></div>
     <div class="rv">{IC['undo']}<h3>Undo bad updates</h3><p>Every <code>auxo-update</code> takes a btrfs snapshot you can boot from GRUB and roll back to.</p></div>
   </div>
 </div></section>
@@ -1246,8 +1248,12 @@ TWEAK = [
  ("auxo-tweak", "Open the interactive menu."),
  ("auxo-tweak info", "Show your current Auxo settings."),
  ("auxo-tweak accent [NAME]", "Set the accent colour for GRUB, the login screen, prompt, terminals and bars. With no name, lists the colours."),
- ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
- ("auxo-tweak rice NAME", "Re-apply the Auxo dotfiles for <code>hyprland</code>, <code>sway</code> or <code>i3</code> (existing files are kept as <code>*.auxo-bak</code>). <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
+ ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code>, <code>chrono</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
+ ("auxo-tweak rice NAME", "Re-apply the Auxo rice: <code>hyprland</code>, <code>sway</code> or <code>i3</code> dotfiles (existing files are kept as <code>*.auxo-bak</code>), <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code> or <code>chrono</code>. <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
+ ("auxo-tweak mode dark|light", "Light or dark, on every desktop."),
+ ("auxo-tweak look [show|set|reset]", "Your own rice: <code>look set gaps=4 rounding=0 bar=bottom</code>. Settings: <code>mode</code>, <code>wallpaper</code>, <code>ui_font</code>, <code>mono_font</code>, <code>font_size</code>, <code>gaps</code>, <code>rounding</code>, <code>border</code>, <code>blur</code>, <code>transparency</code>, <code>animations</code>, <code>bar</code>. No password needed."),
+ ("auxo-tweak wallpaper FILE|accent", "Set the wallpaper on every desktop. <code>accent</code> goes back to the Auxo wallpaper in your colour."),
+ ("auxo-tweak apps [BUNDLE…]", "Popular apps in one go: <code>browsers</code>, <code>media</code>, <code>creative</code>, <code>office</code>, <code>dev</code>, <code>containers</code>, <code>chat</code>, <code>terminal</code>, <code>fun</code>, <code>tools</code>. With no name, lists them. <code>--remove</code> takes a bundle off."),
  ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code> or <code>linux-mainline</code>. It stays the default boot entry after updates."),
  ("auxo-tweak shell NAME", "Change your shell to <code>zsh</code>, <code>fish</code> or <code>bash</code>."),
  ("auxo-tweak drivers", "Detect your GPU and install the right driver. <code>--prune</code> removes drivers and VM guest tools for hardware that isn't there."),
@@ -1268,7 +1274,7 @@ TWEAK = [
 tweak_table = "".join(cmdrow(c, d) for c, d in TWEAK)
 acc_list = "".join(f'<span class="accchip"><i style="background:linear-gradient(135deg,{a},{b})"></i>{n}</span>' for n, a, b in ACCENTS)
 
-DOC_NAV = [("start", "Getting started"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("accents", "Accent colours"),
+DOC_NAV = [("start", "Getting started"), ("settings", "Auxo Settings"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("look", "Your look"), ("accents", "Accent colours"),
            ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("packages", "Packages and services"),
            ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("motd", "auxo-motd"), ("cybervis", "Cybervis"), ("fetch", "auxo-fetch"),
            ("vm", "Virtual machines"), ("trouble", "Troubleshooting"), ("faq", "FAQ")]
@@ -1289,12 +1295,22 @@ docs = head("Auxo Linux documentation",
   <article class="dbody">
 
 <h2 id="start">Getting started</h2>
-<p>After your first boot, the <b>Auxo welcome</b> app opens. It's a shortcut to the most common changes: accent colour, drivers, snapshots and updates. You can reopen it any time by running <code>auxo-welcome</code>.</p>
+<p>After your first boot, the <b>Auxo welcome</b> app opens. It's a shortcut to the most common changes: accent colour, drivers, snapshots and updates. You can reopen it any time by running <code>auxo-welcome</code>. For everything else there's <b>Auxo Settings</b> in the app menu.</p>
 <p>Three commands cover almost everything:</p>
 <div class="code"><span class="ta">auxo-tweak</span>      <span class="tm"># change desktop, kernel, shell, accent, drivers and more</span>
 <span class="ta">auxo-update</span>     <span class="tm"># safe system update with a snapshot first</span>
 <span class="ta">auxo-rollback</span>   <span class="tm"># make a snapshot your live system again</span></div>
 <p>Commands that change the system ask for your password automatically, so you don't need to type <code>sudo</code>.</p>
+
+<h2 id="settings">Auxo Settings</h2>
+<p><b>Auxo Settings</b> is the graphical way to change Auxo. Open it from the app menu, from the welcome app, with <code>auxo-settings</code>, or with <b>Super+I</b> on Hyprland, Sway and i3.</p>
+<ul class="dl">
+<li><b>Look</b>: accent colour, light or dark, wallpaper (the Auxo ones, your <code>~/Pictures/Wallpapers</code>, or any image), interface and terminal fonts, animations.</li>
+<li><b>Windows &amp; bar</b>: gaps, rounded corners, borders, blur, transparency and the bar at the top or bottom, with a live preview. Each setting says which desktops it reaches.</li>
+<li><b>Desktop</b>: every desktop with a preview. Switch with one click, or re-apply the Auxo rice to the one you're using.</li>
+<li><b>System</b>: kernel, shell, power profile, DNS, NVIDIA, snapshots, firewall, zram, gaming mode, app bundles and updates.</li>
+</ul>
+<p>It runs the same <code>auxo-tweak</code> commands as the terminal. Look settings are yours and need no password; system changes ask for it, and their progress shows at the bottom of the window.</p>
 
 <h2 id="tweak">auxo-tweak</h2>
 <p>Run <code>auxo-tweak</code> on its own for an interactive menu, or use a command directly. The installer runs these same commands, so changing something later gives the same result as choosing it during install.</p>
@@ -1309,10 +1325,21 @@ docs = head("Auxo Linux documentation",
 <li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty. Void doesn't package Hyprland, so it comes from the <a class="inl" href="https://github.com/Makrennel/hyprland-void">hyprland-void</a> community repository, which Auxo adds for you.</li>
 <li><b>Sway</b> (Auxo rice): waybar, foot and mako.</li>
 <li><b>i3</b> (Auxo rice): polybar, rofi and picom.</li>
-<li><b>GNOME</b>, <b>Xfce</b> and <b>Cinnamon</b>: the standard desktops with your accent applied.</li>
+<li><b>GNOME</b> (Auxo rice): Papirus icons, Inter, the dark style, your accent and Super+Enter for a terminal. No extensions, so GNOME updates can't break it.</li>
+<li><b>Xfce</b> and <b>Cinnamon</b> (Auxo rices): dark theme, Papirus icons, Inter and your wallpaper, set through their own settings.</li>
+<li><b>Chrono</b>: <a class="inl" href="https://github.com/rxvy-dev/chrono">rxvy's own Wayland desktop</a>, with 40+ themes from every era of computing and its own settings app. Auxo builds it from a tested commit and adds an <i>Auxo</i> theme in your accent. Building takes a few minutes.</li>
 <li><b>none</b>: a text login only. Add a desktop later.</li>
 </ul>
-<p>Most desktops start from a fast text login screen (greetd) in your accent colour. GNOME uses its own login screen, GDM. Broke your tiling setup? <code>auxo-tweak rice hyprland</code> (or <code>sway</code>, <code>i3</code>) puts the Auxo dotfiles back.</p>
+<p>Most desktops start from a fast text login screen (greetd) in your accent colour. GNOME uses its own login screen, GDM. Broke your setup? <code>auxo-tweak rice hyprland</code> (or any other desktop) puts the Auxo rice back.</p>
+
+<h2 id="look">Your look</h2>
+<p>One set of look settings follows you to every desktop. Change them in Auxo Settings, or from a terminal:</p>
+<div class="code"><span class="ta">❯</span> auxo-tweak mode light
+<span class="ta">❯</span> auxo-tweak look set gaps=4 rounding=0 border=1 blur=off bar=bottom
+<span class="ta">❯</span> auxo-tweak look set ui_font="Fira Sans" mono_font="Fira Code" font_size=11
+<span class="ta">❯</span> auxo-tweak wallpaper ~/Pictures/mountains.jpg
+<span class="ta">❯</span> auxo-tweak look reset</div>
+<p>They're saved in <code>~/.config/auxo/look.conf</code> and written into Hyprland, Sway, i3, Waybar, Polybar, picom, kitty, foot, Alacritty, GTK, Plasma, GNOME, Xfce, Cinnamon and Chrono. The Auxo configs load the look file last, so edit your own configs freely; only the look settings are overridden.</p>
 
 <h2 id="accents">Accent colours</h2>
 <p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars, and changes the wallpaper straight away.</p>
@@ -1438,12 +1465,12 @@ def mini_screen(k):
     lay = {d[0]: d[5] for d in DESKS}[k]
     return f'<div class="screen mini" aria-hidden="true">{RIDGE}<div class="L" style="display:block">{lay}</div></div>'
 
-KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"),
+KEYS_HYPR = [("Super+Enter", "Terminal (kitty)"), ("Super+D", "App launcher (wofi)"), ("Super+E", "File manager"), ("Super+T", "Open auxo-tweak"), ("Super+I", "Auxo Settings"),
              ("Super+Q", "Close window"), ("Super+F", "Fullscreen"), ("Super+V", "Toggle floating"), ("Super+L", "Lock screen"),
              ("Super+1…9", "Switch workspace"), ("Print", "Screenshot a region"), ("Super+Print", "Screenshot to clipboard"), ("Super+Shift+E", "Exit Hyprland")]
-KEYS_SWAY = [("Super+Enter", "Terminal (foot)"), ("Super+D", "App launcher (wofi)"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+KEYS_SWAY = [("Super+Enter", "Terminal (foot)"), ("Super+D", "App launcher (wofi)"), ("Super+I", "Auxo Settings"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
              ("Super+L", "Lock screen"), ("Print", "Screenshot a region"), ("Super+Shift+E", "Exit Sway")]
-KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (rofi)"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
+KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (rofi)"), ("Super+I", "Auxo Settings"), ("Super+Q", "Close window"), ("Super+F", "Fullscreen"),
            ("Super+L", "Lock screen"), ("Print", "Screenshot a region to the clipboard"), ("Super+Shift+E", "Exit i3")]
 
 DPAGE = [
@@ -1455,12 +1482,14 @@ DPAGE = [
   ["sway", "swaybg", "swayidle", "swaylock", "Waybar", "wofi", "mako", "foot"], KEYS_SWAY),
  ("i3", "i3", "Auxo rice · X11", "Classic X11 tiling with no wasted space. polybar, rofi and picom are configured to match your accent.",
   ["i3", "polybar", "rofi", "picom", "dunst", "alacritty", "feh", "maim"], KEYS_I3),
- ("gnome", "GNOME", "Wayland", "Stock GNOME with gestures and the activities overview, started by its own login screen, GDM. Your accent is mapped to the nearest GNOME accent colour.",
+ ("gnome", "GNOME", "Auxo rice · Wayland", "GNOME with gestures and the activities overview, started by its own login screen, GDM. Riced without extensions: Papirus icons, Inter, the dark style and your accent mapped to the nearest GNOME accent colour.",
   ["gnome-core", "gdm", "gnome-tweaks", "gnome-console", "nautilus"], None),
- ("xfce", "Xfce", "X11", "Light, fast and traditional. A good fit for older hardware.",
+ ("xfce", "Xfce", "Auxo rice · X11", "Light, fast and traditional, a good fit for older hardware. Riced with the dark theme, Papirus icons, Inter and compositor shadows.",
   ["xfce4", "xfce4-plugins", "network-manager-applet", "pavucontrol", "papirus-icon-theme"], None),
- ("cinnamon", "Cinnamon", "X11", "A traditional layout with a full-width bottom panel, menu and system tray.",
+ ("cinnamon", "Cinnamon", "Auxo rice · X11", "A traditional layout with a full-width bottom panel, menu and system tray, riced with the dark theme, Papirus icons and your accent.",
   ["cinnamon", "nemo", "gnome-terminal", "xed", "papirus-icon-theme"], None),
+ ("chrono", "Chrono", "rxvy's desktop · Wayland", "rxvy's own desktop, built from scratch on wlroots and Qt 6: 40+ themes from every era of computing (90s bevels to Liquid Glass), snapping, workspaces and a settings app for everything. Auxo builds it from a tested commit and adds an Auxo theme in your accent.",
+  ["wlroots 0.20", "Qt 6", "layer-shell-qt", "foot", "built from github.com/rxvy-dev/chrono"], None),
  ("none", "No desktop", "Text only", "Just the text login and a shell. Useful for servers, or for building your own setup from scratch. Add a desktop at any time.",
   [], None),
 ]
@@ -1486,11 +1515,11 @@ def dsec(k, n, tag, desc, pk, keys):
 </section>'''
 
 desk_page = head("Desktops — Auxo Linux",
-                 "Every desktop Auxo Linux offers: KDE Plasma, Hyprland, Sway, i3, GNOME, Xfce and Cinnamon. What each one installs, its keybindings, and the command to switch.",
+                 "Every desktop Auxo Linux offers: KDE Plasma, Hyprland, Sway, i3, GNOME, Xfce, Cinnamon and Chrono. What each one installs, its keybindings, and the command to switch.",
                  "https://auxolinux.com/desktops/") + nav("desktops") + f"""
 <main id="main">
-{page_head("Desktops", "Eight desktops. One command.", "Pick a desktop in the installer, or switch any time with <code>auxo-tweak desktop</code>. Your previous config files are kept as <code>*.auxo-bak</code>, and the login screen follows your choice.",
-  f'<div class="chips rise r3"><span><b>4</b> Wayland</span><span><b>3</b> X11</span><span><b>3</b> Auxo rices</span><span><b>1</b> text-only</span></div>')}
+{page_head("Desktops", "Nine desktops. One command.", "Pick a desktop in the installer, or switch any time with <code>auxo-tweak desktop</code>. Your previous config files are kept as <code>*.auxo-bak</code>, and the login screen follows your choice.",
+  f'<div class="chips rise r3"><span><b>5</b> Wayland</span><span><b>3</b> X11</span><span><b>8</b> riced</span><span><b>1</b> text-only</span></div>')}
 <nav class="subnav" aria-label="Desktops"><div class="wrap">{d_index}</div></nav>
 <div class="wrap">{"".join(dsec(*d) for d in DPAGE)}</div>
 <div class="band" style="padding-top:40px"><div class="wrap"><div class="inner rv">

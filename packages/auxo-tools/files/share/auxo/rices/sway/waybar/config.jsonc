@@ -16,6 +16,6 @@
   "cpu": { "format": " {usage}%", "interval": 3 },
   "memory": { "format": " {percentage}%", "interval": 5 },
   "battery": { "format": "{icon} {capacity}%", "format-icons": ["", "", "", "", ""], "states": { "warning": 25, "critical": 12 } },
-  "custom/update": { "exec": "checkupdates 2>/dev/null | wc -l", "interval": 1800, "format": " {}", "on-click": "foot auxo-update" },
+  "custom/update": { "exec": "xbps-install -Mun 2>/dev/null | wc -l", "interval": 1800, "format": " {}", "on-click": "foot auxo-update" },
   "tray": { "spacing": 8 }
 }

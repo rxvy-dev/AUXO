@@ -4,8 +4,13 @@
 Run with no arguments for the interactive menu, or use a sub-command:
 
   auxo-tweak accent [NAME]            system + user accent colour (GRUB, login screen, MOTD, terminals, bars)
-  auxo-tweak desktop NAME             plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | none
-  auxo-tweak rice NAME                re-apply the Auxo setup for hyprland | sway | i3 | kde
+  auxo-tweak desktop NAME             plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | chrono | none
+  auxo-tweak rice NAME                re-apply the Auxo rice: kde | gnome | xfce | cinnamon | hyprland | sway | i3 | chrono
+  auxo-tweak look [set K=V…|reset]    your look: light/dark, wallpaper, fonts, gaps, corners, borders, blur,
+                                      transparency, animations, bar position (also in the Auxo Settings app)
+  auxo-tweak mode dark|light          light or dark, on every desktop
+  auxo-tweak wallpaper FILE|accent    your own wallpaper, or the Auxo one in your accent
+  auxo-tweak apps list|NAME…          app bundles: browsers, media, creative, office, dev, chat, terminal, fun
   auxo-tweak kernel NAME              linux | linux-lts | linux-mainline (becomes the default boot entry)
   auxo-tweak shell NAME               zsh | fish | bash
   auxo-tweak drivers [--prune]        detect the GPU and install the right driver
@@ -42,6 +47,7 @@ from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, 
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
 import auxo_theme  # noqa: E402
 import auxo_gnome  # noqa: E402
+import auxo_look  # noqa: E402
 
 
 def target_users(args):
@@ -229,11 +235,26 @@ def cmd_shell(args):
 
 
 # ── desktop / rice ────────────────────────────────────────────────────
+# rices with no files to copy: GNOME, Xfce and Cinnamon get theirs through their own settings
+# (gsettings / xfconf) at the next login or straight away; Chrono's comes from the look files
+SESSION_RICES = {"gnome", "xfce", "cinnamon", "chrono"}
+
+
 def apply_rice(name, user):
     src = R(f"{SHARE}/rices/{name}")
+    home = home_of(user)
+    if name in SESSION_RICES:
+        auxo_theme.apply_user(user, auxo_theme.current(), desktop=name)   # look files + first-login autostart
+        env = auxo_theme.session_env(user)
+        desk = (env or {}).get("XDG_CURRENT_DESKTOP", "").lower()
+        if env and (name in desk or (name == "gnome" and "gnome" in desk)):
+            run(["auxo-tweak", "session-apply", "--rice"], check=False, user=user, env=env)
+            log(f"{user}: Auxo {name} rice applied")
+        else:
+            log(f"{user}: the Auxo {name} rice is applied at the next {name.title()} login")
+        return
     if not os.path.isdir(src):
         raise AuxoError(f"no rice named {name}")
-    home = home_of(user)
     dst = R(f"{home}/.config")
     if name == "hyprland":
         # Void's Hyprland reads hyprland.conf; park a Lua config from the Arch-based Auxo
@@ -302,6 +323,9 @@ def cmd_desktop(args):
             add_repo(args.name, d["repo"])
         log(f"installing {d['name']}")
         xbps_install(*d["packages"])
+        if d.get("build") == "chrono":
+            import auxo_chrono
+            auxo_chrono.build(getattr(args, "chrono_ref", None) or auxo_chrono.REF)
         for sv in GUI_SERVICES:
             sv_enable(sv)
         for sv in ("dhcpcd", "wpa_supplicant"):  # NetworkManager manages the network now
@@ -352,6 +376,126 @@ def cmd_rice(args):
         return
     for u in target_users(args):
         apply_rice(args.name, u)
+
+
+# ── look (per user: no root needed) ───────────────────────────────────
+def _look_user(args):
+    if getattr(args, "user", None):
+        require_root()
+        return args.user
+    if os.geteuid() == 0:
+        u = invoking_user()
+        if u:
+            return u
+    import pwd
+    return pwd.getpwuid(os.getuid()).pw_name
+
+
+def _apply_look(user, live=True):
+    """Write the look files for `user` and (live) push them to the desktop they're using now."""
+    accent = auxo_theme.current()
+    auxo_theme.apply_user(user, accent, autostart=False)
+    if not live:
+        return
+    import pwd
+    me = pwd.getpwuid(os.getuid()).pw_name
+    if me == user and os.environ.get("XDG_CURRENT_DESKTOP"):
+        auxo_theme.session_apply(accent)                        # we're inside the session already
+    else:
+        env = auxo_theme.session_env(user)
+        if env:
+            run(["auxo-tweak", "session-apply"], check=False, user=user, env=env)
+
+
+def cmd_look(args):
+    user = _look_user(args)
+    home = home_of(user)
+    look = auxo_look.load(home)
+    if args.action in (None, "show"):
+        if args.json:
+            import json
+            print(json.dumps({"user": user, "look": look, "defaults": auxo_look.DEFAULTS,
+                              "reach": auxo_look.REACH, "labels": auxo_look.LABELS,
+                              "desktop": read_conf().get("DESKTOP", ""), "accent": auxo_theme.current()}))
+            return
+        print(f"{BOLD}Look settings for {user}{RESET}  {DIM}({auxo_look.path(home)}){RESET}")
+        for k, v in look.items():
+            mark = "" if v == auxo_look.DEFAULTS[k] else f"  {DIM}(default {auxo_look.DEFAULTS[k]}){RESET}"
+            print(f"  {k:<13} {v:<18}{mark}  {DIM}{auxo_look.REACH[k]}{RESET}")
+        print(f"\n{DIM}change one: auxo-tweak look set gaps=4 rounding=0 bar=bottom   ·   reset: auxo-tweak look reset{RESET}")
+        return
+    if args.action == "get":
+        for k in args.items:
+            if k not in look:
+                raise AuxoError(f"unknown setting '{k}'. settings: {', '.join(auxo_look.DEFAULTS)}")
+            print(look[k])
+        return
+    if args.action == "set":
+        if not args.items:
+            raise AuxoError("give settings to change, like: auxo-tweak look set mode=light gaps=4")
+        for item in args.items:
+            if "=" not in item:
+                raise AuxoError(f"'{item}': use KEY=VALUE, like gaps=4")
+            k, v = item.split("=", 1)
+            try:
+                look[k.strip()] = auxo_look.validate(k.strip(), v)
+            except auxo_look.LookError as e:
+                raise AuxoError(str(e)) from None
+    elif args.action == "reset":
+        keys = args.items or list(auxo_look.DEFAULTS)
+        for k in keys:
+            if k not in auxo_look.DEFAULTS:
+                raise AuxoError(f"unknown setting '{k}'")
+            look[k] = auxo_look.DEFAULTS[k]
+    auxo_look.save(home, look)
+    _apply_look(user, live=not args.no_apply)
+    changed = ", ".join(f"{k}={look[k]}" for k in (args.items and [i.split("=", 1)[0].strip() for i in args.items] or look))
+    log(f"{user}: look → {changed}")
+
+
+def cmd_mode(args):
+    args.action, args.items, args.json = "set", [f"mode={args.mode}"], False
+    cmd_look(args)
+
+
+def cmd_wallpaper(args):
+    v = args.file
+    if v.lower() not in ("accent", "default", "auxo"):
+        v = os.path.abspath(os.path.expanduser(v))
+        if not os.path.isfile(R(v)):
+            raise AuxoError(f"no such image: {v}")
+    args.action, args.items, args.json = "set", [f"wallpaper={v}"], False
+    cmd_look(args)
+
+
+# ── app bundles (every name checked against Void's package list) ──────
+from auxo_apps import APP_BUNDLES, NONFREE_APPS  # noqa: E402
+
+
+def cmd_apps(args):
+    if not args.names or args.names == ["list"]:
+        for k, (desc, pkgs) in APP_BUNDLES.items():
+            have_all = all(installed(p) for p in pkgs)
+            print(f"  {BOLD}{k:<11}{RESET} {desc}{'  ' + DIM + '(installed)' + RESET if have_all else ''}")
+        print(f"\n{DIM}install: auxo-tweak apps creative dev   ·   remove: auxo-tweak apps --remove fun{RESET}")
+        return
+    bad = [n for n in args.names if n not in APP_BUNDLES]
+    if bad:
+        raise AuxoError(f"no app bundle named {', '.join(bad)}. bundles: {', '.join(APP_BUNDLES)}")
+    require_root()
+    pkgs = [p for n in args.names for p in APP_BUNDLES[n][1]]
+    if args.remove:
+        present = [p for p in pkgs if installed(p) or DRY]
+        if present:
+            xbps_remove(*present)
+        log(f"removed: {', '.join(args.names)}")
+        return
+    if not online():
+        raise AuxoError("no internet connection — connect first (nmtui) and try again")
+    if NONFREE_APPS & set(pkgs):
+        repo_enable("nonfree")
+    xbps_install(*pkgs)
+    log(f"installed: {', '.join(args.names)}")
 
 
 # ── snapshots ─────────────────────────────────────────────────────────
@@ -749,10 +893,14 @@ def cmd_info(args):
         if k == "ACCENT":
             v = f"{ansi(ACCENTS[acc][0])}{acc}{RESET}"
         print(f"  {k.lower():<10} {v}")
+    u = invoking_user()
+    if u:
+        lk = auxo_look.load(home_of(u))
+        print(f"{BOLD}Look ({u}){RESET}  " + "  ".join(f"{k}={lk[k]}" for k in ("mode", "bar", "gaps", "rounding", "ui_font")))
 
 
 def cmd_session_apply(args):
-    auxo_theme.session_apply(args.accent, once=args.once)
+    auxo_theme.session_apply(args.accent, once=args.once, rice=args.rice)
 
 
 # ── gaming ────────────────────────────────────────────────────────────
@@ -821,13 +969,14 @@ def menu():
         return
     me = [sys.executable, os.path.abspath(__file__)]
     while True:
-        choice = wt("--menu", "Climb your own setup — pick something to change", "24", "72", "17",
-                    "accent", "Accent colour", "desktop", "Desktop / window manager", "kernel", "Kernel",
+        choice = wt("--menu", "Climb your own setup — pick something to change", "26", "72", "20",
+                    "settings", "Open Auxo Settings (the graphical app)",
+                    "accent", "Accent colour", "mode", "Light or dark", "desktop", "Desktop / window manager", "kernel", "Kernel",
                     "shell", "Login shell", "drivers", "GPU drivers", "nvidia", "NVIDIA driver",
                     "scheduler", "CPU scheduler (sched-ext)", "power", "Power profile",
                     "firewall", "Firewall", "dns", "DNS servers", "snapshots", "Btrfs snapshots",
                     "gaming", "Gaming mode", "flatpak", "Flatpak + Flathub", "cleanup", "Free up disk space",
-                    "mirrors", "Faster mirror", "update", "Update everything (auxo-update)", "quit", "Exit")
+                    "mirrors", "Faster mirror", "apps", "Install app bundles", "update", "Update everything (auxo-update)", "quit", "Exit")
         if choice in (None, "quit"):
             return
         cmd = None
@@ -845,7 +994,16 @@ def menu():
             "snapshots": ("Snapshots", [["on", "enable"], ["off", "disable"], ["status", "show"]]),
             "gaming": ("Gaming mode", [["on", ""], ["off", ""], ["status", ""]]),
             "flatpak": ("Flatpak", [["on", ""], ["status", ""]]),
+            "apps": ("App bundles", [[k, v[0][:50]] for k, v in APP_BUNDLES.items()]),
         }
+        if choice == "settings":
+            subprocess.Popen(["auxo-settings"], start_new_session=True) if have("auxo-settings") else None
+            continue
+        if choice == "mode":
+            v = wt("--menu", "Light or dark", "12", "40", "2", "dark", "", "light", "")
+            if v:
+                subprocess.run([*me, "mode", v])          # per user: no sudo
+            continue
         if choice in pick:
             title, items = pick[choice]
             v = wt("--menu", title, "20", "64", str(min(len(items), 10)), *sum(items, []))
@@ -876,9 +1034,19 @@ def main():
     s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_shell)
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
-    s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop"); s.set_defaults(fn=cmd_desktop)
-    s = sub.add_parser("rice"); s.add_argument("name", choices=["hyprland", "sway", "i3", "kde"]); s.add_argument("--user")
-    s.set_defaults(fn=cmd_rice)
+    s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop")
+    s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
+    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "sway", "i3", "chrono"])
+    s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
+    s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset"])
+    s.add_argument("items", nargs="*"); s.add_argument("--user"); s.add_argument("--json", action="store_true")
+    s.add_argument("--no-apply", action="store_true", help="write the files but leave the running desktop alone"); s.set_defaults(fn=cmd_look)
+    s = sub.add_parser("mode"); s.add_argument("mode", choices=["dark", "light"]); s.add_argument("--user")
+    s.add_argument("--no-apply", action="store_true"); s.set_defaults(fn=cmd_mode)
+    s = sub.add_parser("wallpaper"); s.add_argument("file", help="an image, or 'accent' for the Auxo wallpaper")
+    s.add_argument("--user"); s.add_argument("--no-apply", action="store_true"); s.set_defaults(fn=cmd_wallpaper)
+    s = sub.add_parser("apps"); s.add_argument("names", nargs="*"); s.add_argument("--remove", action="store_true")
+    s.set_defaults(fn=cmd_apps)
     s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status"])
     s.add_argument("--no-grub", action="store_true"); s.add_argument("--no-now", action="store_true")
     s.add_argument("--description"); s.set_defaults(fn=cmd_snapshots)
@@ -907,6 +1075,7 @@ def main():
     s.set_defaults(fn=cmd_service)
     s = sub.add_parser("info"); s.set_defaults(fn=cmd_info)
     s = sub.add_parser("session-apply"); s.add_argument("--accent", choices=list(ACCENTS)); s.add_argument("--once", action="store_true")
+    s.add_argument("--rice", action="store_true", help="also apply the GNOME/Cinnamon/Xfce rice")
     s.set_defaults(fn=cmd_session_apply)
 
     args = p.parse_args()

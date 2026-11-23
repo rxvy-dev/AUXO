@@ -84,7 +84,7 @@
     }
   },
   "custom/update": {
-    "exec": "checkupdates 2>/dev/null | wc -l",
+    "exec": "xbps-install -Mun 2>/dev/null | wc -l",
     "interval": 1800,
     "format": " {}",
     "on-click": "kitty -e auxo-update"

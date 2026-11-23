@@ -98,6 +98,7 @@ class Welcome(QMainWindow):
             ]
         else:
             items = [
+                ("🎨  Auxo Settings", lambda: subprocess.Popen(["auxo-settings"])),
                 ("⬆  Update everything", lambda: terminal("auxo-update")),
                 ("🎮  Install GPU drivers", lambda: terminal("sudo auxo-tweak drivers")),
                 ("🕰  Turn on snapshots", lambda: terminal("sudo auxo-tweak snapshots on")),

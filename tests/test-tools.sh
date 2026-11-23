@@ -6,7 +6,7 @@ set -uo pipefail
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 PKG="$HERE/packages/auxo-tools/files"
 ROOT=$(mktemp -d /tmp/auxo-fakeroot.XXXX)
-trap 'rm -rf "$ROOT"' EXIT
+[ -n "${AUXO_KEEP:-}" ] || trap 'rm -rf "$ROOT"' EXIT
 export AUXO_ROOT="$ROOT" AUXO_DRY_RUN=1 AUXO_LIB="$PKG/lib"
 T="$PKG/bin/auxo-tweak"
 pass=0; fail=0
@@ -73,7 +73,8 @@ printf 'insmod gfxterm\nset theme=/usr/share/grub/themes/auxo/theme.txt\n' > "$R
 out=$("$T" accent cyan --user alex 2>&1)
 check "no grub-mkconfig once theme is wired" "! echo \"\$out\" | grep -q grub-mkconfig"
 rm "$ROOT/boot/grub/grub.cfg"
-out=$("$T" accent cyan --user alex 2>&1)
+GB=$(mktemp -d); printf '#!/bin/sh\n' > "$GB/grub-mkconfig"; chmod +x "$GB/grub-mkconfig"   # grub isn't on every test machine
+out=$(PATH="$GB:$PATH" "$T" accent cyan --user alex 2>&1); rm -rf "$GB"
 check "first theme setup rebuilds grub.cfg under a lock" "echo \"\$out\" | grep -q 'flock -w 120 /run/lock/auxo-grub.lock grub-mkconfig'"
 "$T" accent emerald --user alex --no-grub >/dev/null 2>&1
 
@@ -135,7 +136,7 @@ check "rice kde keeps other kdeglobals keys" "grep -q 'foo=bar' $K"
 echo "▲ live wallpaper change per desktop"
 FB="$ROOT/fakebin"; mkdir -p "$FB"
 for b in hyprctl hyprpaper swaymsg feh i3-msg gsettings plasma-apply-wallpaperimage plasma-apply-colorscheme xfconf-query makoctl; do printf '#!/bin/sh\n' > "$FB/$b"; chmod +x "$FB/$b"; done
-sa() { XDG_CURRENT_DESKTOP="$1" PATH="$FB:$PATH" "$T" session-apply --accent emerald 2>&1; }
+sa() { local o; o=$(XDG_CURRENT_DESKTOP="$1" PATH="$FB:$PATH" "$T" session-apply --accent emerald 2>&1); printf '%s\n' "$o"; }
 check "KDE: Auxo colour scheme + accent"     "sa KDE | grep -q 'plasma-apply-colorscheme --accent-color .#34d399. AuxoDark'"
 check "KDE: plasma wallpaper"                "sa KDE | grep -q 'plasma-apply-wallpaperimage /usr/share/wallpapers/auxo-emerald.png'"
 check "GNOME: gsettings picture-uri"         "sa GNOME | grep -q 'org.gnome.desktop.background picture-uri file:///usr/share/wallpapers/auxo-emerald.png'"
@@ -299,9 +300,58 @@ check "ISO ships cybervis + a CJK font"      "sed 's/#.*//' $HERE/mklive/package
 check "package list has no stray comments"   "! sed 's/#.*//' $HERE/mklive/packages.txt | xargs | grep -q '#'"
 check "ISO build installs a compiler"        "grep -q 'xbps-install -y .* gcc' $HERE/scripts/build-iso-inner.sh"
 
+echo "▲ look engine (auxo-tweak look / mode / wallpaper)"
+A="$ROOT/home/alex"; LC="$A/.config/auxo"
+"$T" desktop hyprland --user alex >/dev/null 2>&1
+"$T" look set gaps=16 rounding=4 border=3 blur=off bar=bottom ui_font="Fira Sans" font_size=11 --user alex --no-apply >/dev/null 2>&1
+check "look.conf saved"                       "grep -q '^gaps=\"16\"' $LC/look.conf && grep -q '^ui_font=\"Fira Sans' $LC/look.conf"
+check "Hyprland look: gaps, rounding, border" "grep -q 'gaps_out = 32' $LC/look-hyprland.conf && grep -q 'rounding = 4' $LC/look-hyprland.conf && grep -q 'border_size = 3' $LC/look-hyprland.conf"
+check "Hyprland look: blur off"               "grep -A2 'blur' $LC/look-hyprland.conf | grep -q 'enabled = false'"
+check "rice loads the look file last"         "tail -3 $A/.config/hypr/hyprland.conf | grep -q 'look-hyprland.conf'"
+check "Sway + i3 look files"                  "grep -q 'gaps outer' $LC/look-sway && grep -q 'default_border pixel 3' $LC/look-i3"
+check "waybar moved to the bottom"            "grep -q '\"position\": \"bottom\"' $A/.config/waybar/config.jsonc"
+check "waybar CSS uses the font + radius"     "grep -q 'Fira Sans' $LC/look.css && grep -q '4px' $LC/look.css"
+check "invalid values are refused"            "! \"$T\" look set gaps=500 --user alex --no-apply >/dev/null 2>&1 && ! \"$T\" look set colour=red --user alex --no-apply >/dev/null 2>&1"
+check "look --json is valid"                  "\"$T\" look --json --user alex | python3 -m json.tool >/dev/null"
+"$T" mode light --user alex --no-apply >/dev/null 2>&1
+check "light mode: lighter colours"           "grep -q '^mode=\"light' $LC/look.conf && grep -qi 'f5f5f8\|fafafa\|ffffff' $LC/colors.css"
+check "light mode: KDE Auxo Light scheme"     "grep -q 'ColorScheme=AuxoLight' $A/.config/kdeglobals && grep -q 'Name=Auxo Light' $ROOT/usr/share/color-schemes/AuxoLight.colors"
+"$T" wallpaper /usr/share/wallpapers/auxo-cyan.png --user alex --no-apply >/dev/null 2>&1
+check "wallpaper follows the choice"          "[ \$(readlink $LC/wallpaper.png) = /usr/share/wallpapers/auxo-cyan.png ]"
+check "missing wallpaper refused"             "! \"$T\" wallpaper /nope.png --user alex >/dev/null 2>&1"
+"$T" look reset --user alex --no-apply >/dev/null 2>&1
+check "reset brings the defaults back"        "grep -q 'gaps_out = 16' $LC/look-hyprland.conf && ! grep -q '^mode=\"light' $LC/look.conf"
+
+echo "▲ session rices (GNOME / Xfce / Cinnamon) + Chrono"
+out=$("$T" rice gnome --user alex 2>&1)
+check "GNOME rice needs no extensions"        "! echo \"\$out\" | grep -qi 'gnome-extensions\|enabled-extensions'"
+out=$(PATH="$FB:$PATH" AUXO_HOME="$A" XDG_CURRENT_DESKTOP=GNOME "$T" session-apply --rice 2>&1)
+check "GNOME: dark, Inter, accent, terminal key" "echo \"\$out\" | grep -q 'color-scheme prefer-dark' && echo \"\$out\" | grep -q 'font-name' && echo \"\$out\" | grep -q 'auxo-terminal'"
+out=$(PATH="$FB:$PATH" AUXO_HOME="$A" XDG_CURRENT_DESKTOP=XFCE "$T" session-apply --rice 2>&1)
+check "Xfce: xfconf theme, fonts, panel"      "echo \"\$out\" | grep -q 'xfconf-query -c xsettings' && echo \"\$out\" | grep -q 'xfwm4' && echo \"\$out\" | grep -q 'xfce4-panel'"
+out=$(PATH="$FB:$PATH" AUXO_HOME="$A" XDG_CURRENT_DESKTOP=X-Cinnamon "$T" session-apply --rice 2>&1)
+check "Cinnamon: gsettings theme + wallpaper" "echo \"\$out\" | grep -q 'org.cinnamon' && echo \"\$out\" | grep -q 'picture-uri'"
+out=$("$T" desktop chrono --user alex 2>&1)
+check "Chrono: wlroots 0.20 + Qt6 build deps" "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q 'wlroots0.20-devel' && echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q 'qt6-declarative-devel'"
+check "Chrono: built from the pinned commit"  "echo \"\$out\" | grep -q 'chrono checkout --quiet --force 48590c6' && echo \"\$out\" | grep -q 'cmake --install'"
+check "Chrono: greetd starts chrono-session"  "grep -q 'chrono-session' $ROOT/etc/greetd/config.toml && grep -q 'DESKTOP=\"chrono\"' $ROOT/etc/auxo/auxo.conf"
+check "Chrono: Auxo theme in your accent"     "grep -q '^name = Auxo' $A/.config/chrono/themes/auxo.theme && grep -q '^theme = auxo' $A/.config/chrono/chrono.conf"
+printf '[general]\nterminal = alacritty\n' > "$A/.config/chrono/chrono.conf"
+"$T" look set bar=top --user alex --no-apply >/dev/null 2>&1
+check "Chrono: keeps your settings, follows the bar" "grep -q 'terminal = alacritty' $A/.config/chrono/chrono.conf && grep -q '^position = top' $A/.config/chrono/chrono.conf"
+
+echo "▲ app bundles"
+out=$("$T" apps 2>&1)
+check "apps lists the bundles"                "echo \"\$out\" | grep -q creative && echo \"\$out\" | grep -q dev"
+out=$(AUXO_TEST_ONLINE=1 "$T" apps media fun 2>&1)
+check "apps installs a bundle"                "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q 'mpv' && echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q cmatrix"
+check "unknown bundle refused"                "! \"$T\" apps nope >/dev/null 2>&1"
+check "Settings app + menu entry ship"        "python3 -m py_compile $PKG/bin/auxo-settings && grep -q '^Exec=auxo-settings' $PKG/applications/auxo-settings.desktop"
+check "ISO has the PyQt6 GUI modules"         "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-widgets && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-gui"
+
 echo "▲ info / fetch / scripts"
 out=$("$T" info 2>&1); echo "$out" | sed 's/^/    /' | head -6
-check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop    none' && echo \"\$out\" | grep -q 'kernel     linux-lts'"
+check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop    chrono' && echo \"\$out\" | grep -q 'kernel     linux-lts'"
 out=$(AUXO_ROOT=/ "$PKG/bin/auxo-fetch" --accent amber 2>&1)
 check "fetch prints os + accent"             "echo \"\$out\" | grep -q 'accent'"
 check "fetch --json is valid"                "AUXO_ROOT=/ \"$PKG/bin/auxo-fetch\" --json | python3 -m json.tool >/dev/null"

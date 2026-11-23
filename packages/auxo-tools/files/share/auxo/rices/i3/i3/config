@@ -25,6 +25,7 @@ exec --no-startup-id auxo-tweak session-apply --once
 bindsym $mod+Return exec $term
 bindsym $mod+d exec --no-startup-id rofi -show drun
 bindsym $mod+e exec thunar
+bindsym $mod+i exec auxo-settings
 bindsym $mod+q kill
 bindsym $mod+f fullscreen toggle
 bindsym $mod+v floating toggle
@@ -75,3 +76,6 @@ bindsym XF86MonBrightnessUp exec --no-startup-id brightnessctl s 5%+
 bindsym XF86MonBrightnessDown exec --no-startup-id brightnessctl s 5%-
 
 for_window [class="Pavucontrol|Blueman-manager|auxo-welcome"] floating enable
+
+# ── your look settings (Auxo Settings / auxo-tweak look) — loaded last so they win ──
+include ~/.config/auxo/look-i3

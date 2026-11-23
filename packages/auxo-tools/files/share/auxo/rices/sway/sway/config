@@ -30,6 +30,7 @@ exec swayidle -w timeout 300 'swaylock -f -c 0b0b10' timeout 420 'swaymsg "outpu
 bindsym $mod+Return exec $term
 bindsym $mod+d exec $menu
 bindsym $mod+e exec thunar
+bindsym $mod+i exec auxo-settings
 bindsym $mod+q kill
 bindsym $mod+f fullscreen
 bindsym $mod+v floating toggle
@@ -81,3 +82,6 @@ bindsym XF86MonBrightnessDown exec brightnessctl s 5%-
 
 for_window [app_id="pavucontrol|blueman-manager|auxo-welcome"] floating enable
 include /etc/sway/config.d/*
+
+# ── your look settings (Auxo Settings / auxo-tweak look) — loaded last so they win ──
+include ~/.config/auxo/look-sway

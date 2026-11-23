@@ -8,7 +8,9 @@ except the Hyprland packages, which come from the hyprland-void community repo
 # A graphical session on Void needs D-Bus + elogind (seat/session management) and polkit.
 GUI_BASE = ["dbus", "elogind", "polkit", "NetworkManager", "pipewire", "wireplumber",
             "xdg-user-dirs", "xdg-utils", "mesa-dri", "vulkan-loader",
-            "noto-fonts-ttf", "noto-fonts-emoji", "font-inter"]
+            "noto-fonts-ttf", "noto-fonts-emoji", "font-inter", "font-firacode", "papirus-icon-theme",
+            # Auxo Settings and the welcome app (python3-pyqt6 alone has no GUI modules on Void)
+            "python3-pyqt6", "python3-pyqt6-gui", "python3-pyqt6-widgets"]
 GUI_SERVICES = ["dbus", "elogind", "NetworkManager"]
 
 COMMON_WM = [
@@ -19,6 +21,20 @@ COMMON_WM = [
 WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy",
               "qt6-wayland", "qt5-wayland", "xdg-desktop-portal-gtk"]
 X11 = ["xorg-minimal", "xinit", "xorg-fonts", "xrandr", "xsetroot"]
+
+# Chrono (rxvy's own Wayland desktop) is built from source by auxo-tweak; these are the Void
+# packages its build needs (the list Chrono's scripts/install-deps.sh uses on Void) plus what it
+# uses at runtime. See auxo_chrono.py.
+CHRONO_BUILD = ["base-devel", "git", "cmake", "meson", "ninja", "pkg-config",
+                "wayland-devel", "wayland-protocols", "libinput-devel", "libxkbcommon-devel", "pixman-devel",
+                "libdrm-devel", "cairo-devel", "pango-devel", "pam-devel", "libxcb-devel", "xcb-util-wm-devel",
+                "xcb-util-renderutil-devel", "xcb-util-errors-devel", "xorg-server-xwayland", "libseat-devel",
+                "libdisplay-info-devel", "libliftoff-devel", "MesaLib-devel", "libffi-devel", "expat-devel",
+                "vulkan-loader-devel", "Vulkan-Headers", "glslang", "lcms2-devel", "eudev-libudev-devel",
+                "qt6-base-devel", "qt6-declarative-devel", "qt6-wayland-devel", "qt6-svg", "layer-shell-qt-devel",
+                "wlroots0.20-devel"]
+CHRONO_RUNTIME = ["grim", "slurp", "wl-clipboard", "hwids", "foot", "xdg-desktop-portal-wlr",
+                  "xdg-desktop-portal-gtk", "brightnessctl", "playerctl", "qt6-wayland", "greetd", "tuigreet"]
 
 # Hyprland is not in Void's official repos; this community repo builds it for Void.
 HYPRLAND_REPO = "https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc"
@@ -40,6 +56,7 @@ DESKTOPS = {
         "dm": "gdm",
         "session": "gnome",
         "cmd": "gnome-session",
+        "rice": "gnome",              # applied through its own settings (auxo_theme.session_apply)
     },
     "xfce": {
         "name": "Xfce",
@@ -48,6 +65,7 @@ DESKTOPS = {
         "dm": "greetd",
         "session": "xfce",
         "cmd": "startx /usr/bin/startxfce4",
+        "rice": "xfce",              # applied through its own settings (auxo_theme.session_apply)
     },
     "cinnamon": {
         "name": "Cinnamon",
@@ -56,6 +74,7 @@ DESKTOPS = {
         "dm": "greetd",
         "session": "cinnamon",
         "cmd": "startx /usr/bin/cinnamon-session",
+        "rice": "cinnamon",              # applied through its own settings (auxo_theme.session_apply)
     },
     "hyprland": {
         "name": "Hyprland (Auxo rice)",
@@ -84,6 +103,15 @@ DESKTOPS = {
         "session": "i3",
         "cmd": "startx /usr/bin/i3",
         "rice": "i3",
+    },
+    "chrono": {
+        "name": "Chrono (rxvy's desktop)",
+        "packages": GUI_BASE + CHRONO_BUILD + CHRONO_RUNTIME,
+        "build": "chrono",            # built from source by auxo_chrono
+        "dm": "greetd",
+        "session": "chrono",
+        "cmd": "chrono-session",      # sets up its own D-Bus session
+        "rice": "chrono",
     },
     "none": {
         "name": "No desktop (TTY)",

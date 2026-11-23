@@ -42,12 +42,13 @@ ACCENT_COLORS = {"violet": (141, curses.COLOR_MAGENTA), "cyan": (45, curses.COLO
                  "mono": (252, curses.COLOR_WHITE)}
 DESKTOP_INFO = {
     "plasma": "Modern and flexible, with the Auxo global theme. Installs offline.",
-    "gnome": "Clean and simple, with its own login screen.",
-    "xfce": "Light and traditional. Great on older PCs.",
-    "cinnamon": "Familiar layout, like Windows.",
+    "gnome": "Clean and simple, with its own login screen. Auxo rice: Papirus icons, Inter, dark mode.",
+    "xfce": "Light and traditional. Great on older PCs. Riced by Auxo.",
+    "cinnamon": "Familiar layout, like Windows. Riced by Auxo.",
     "hyprland": "Animated tiling, fully riced by Auxo (from the hyprland-void repo).",
     "sway": "Tiling Wayland, riced by Auxo. Keyboard-driven.",
     "i3": "The classic tiling window manager (X11), riced by Auxo.",
+    "chrono": "rxvy's own Wayland desktop: 40+ retro and modern themes. Built from source (a few minutes).",
     "none": "No desktop: log in to a text console.",
 }
 SHELL_INFO = {"zsh": "Auxo prompt, autosuggestions, syntax highlighting (recommended)",

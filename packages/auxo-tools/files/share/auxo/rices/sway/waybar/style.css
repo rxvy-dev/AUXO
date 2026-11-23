@@ -1,7 +1,8 @@
 @import url("../auxo/colors.css");
+@import url("../auxo/look.css");   /* fonts, corners, transparency: Auxo Settings */
 
-* { font-family: "Inter", "Font Awesome 6 Free", "JetBrains Mono"; font-size: 13px; min-height: 0; }
-window#waybar { background: alpha(@bg, 0.82); border: 1px solid alpha(@accent, 0.35); border-radius: 14px; color: @fg; }
+* { min-height: 0; }
+window#waybar { border: 1px solid alpha(@accent, 0.35); color: @fg; }
 #custom-auxo { color: @accent; font-size: 17px; padding: 0 14px; }
 #workspaces button { color: @muted; padding: 0 8px; border-radius: 10px; margin: 5px 2px; }
 #workspaces button.active { background: @accent; color: @bg; }

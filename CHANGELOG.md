@@ -17,6 +17,30 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Auxo Settings** (`auxo-settings`, Super+I on the tiling desktops): a graphical app for
+  everything below. Look (accent, light or dark, wallpaper, fonts, animations), Windows &
+  bar (gaps, rounded corners, borders, blur, transparency, bar top or bottom, with a live
+  preview), Desktop (switch between all desktops, re-apply the rice) and System (kernel,
+  shell, power, DNS, NVIDIA, snapshots, firewall, zram, gaming mode, app bundles, update).
+  It runs `auxo-tweak` underneath and asks for your password only for system changes.
+- **One look for every desktop**: `auxo-tweak look set gaps=4 rounding=0 bar=bottom …`
+  saves your choices in `~/.config/auxo/look.conf` and writes them into Hyprland, Sway, i3,
+  Waybar, Polybar, picom, kitty, foot, Alacritty, GTK, Plasma, GNOME, Xfce, Cinnamon and
+  Chrono. Your own config edits stay; the look file is loaded last.
+- **Light mode**: `auxo-tweak mode light` (Auxo Light colour scheme for Plasma, light GTK
+  and GNOME, lighter bars and terminals, accents darkened to stay readable).
+- `auxo-tweak wallpaper FILE` (or `accent` for the Auxo wallpaper in your colour).
+- **Every desktop is riced**: new Auxo rices for GNOME (no extensions needed — Papirus
+  icons, Inter, dark style, your accent, Super+Enter terminal), Xfce and Cinnamon, set
+  through their own settings so updates can't break them.
+- **Chrono**, rxvy's own Wayland desktop (github.com/rxvy-dev/chrono), is now an Auxo
+  desktop: `auxo-tweak desktop chrono`, or pick it in the installer. Built from a tested
+  commit, with an Auxo theme generated in your accent.
+- `auxo-tweak apps`: one-command bundles of popular apps (browsers, media, creative, office,
+  dev, containers, chat, terminal, fun, tools).
+- Fixed: the Waybar update counter used Arch's `checkupdates` (now `xbps-install -Mun`);
+  the ISO lacked PyQt6's GUI modules (`python3-pyqt6-gui`, `-widgets`) that the welcome app
+  needs; Fira Code replaces JetBrains Mono, which Void doesn't package.
 - Cybervis comes preinstalled: matrix rain, audio spectrum, plasma, fire, warp and more in
   your terminal (`cybervis`, or Cybervis in the app menu). Compiled during the ISO build.
 - Japanese, Chinese and Korean text now displays properly (noto-fonts-cjk-sans on the ISO).

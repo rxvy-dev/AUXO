@@ -1,0 +1,788 @@
+#!/usr/bin/env python3
+"""Auxo Settings — change how Auxo looks and works, without a terminal.
+
+Every change goes through auxo-tweak, so the app and the command line always agree:
+look settings run as you (`auxo-tweak look set …`), system changes ask for your password
+with the normal graphical prompt (`pkexec auxo-tweak …`) and show their progress live.
+"""
+import os
+import pwd
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+try:
+    from PyQt6.QtCore import Qt, QProcess, QTimer, QRectF, QSize
+    from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
+    from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFontComboBox,
+                                 QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
+                                 QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider,
+                                 QSpinBox, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
+except ImportError:
+    print("auxo-settings needs PyQt6: sudo xbps-install python3-pyqt6 python3-pyqt6-widgets", file=sys.stderr)
+    sys.exit(1)
+
+from auxo_accents import ACCENTS, DEFAULT  # noqa: E402
+import auxo_look  # noqa: E402
+from auxo_desktops import DESKTOPS, KERNELS, SHELLS  # noqa: E402
+
+ROOT = os.environ.get("AUXO_ROOT", "/").rstrip("/")
+TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
+PKEXEC = os.environ.get("AUXO_PKEXEC", "pkexec")
+ME = pwd.getpwuid(os.getuid()).pw_name
+HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
+
+DESKTOP_INFO = {
+    "plasma": "Modern and flexible, with the Auxo global theme.",
+    "gnome": "Clean and simple. Auxo rice: Papirus icons, Inter, dark mode, Super+Enter terminal.",
+    "xfce": "Light and traditional, great on older PCs. Riced by Auxo.",
+    "cinnamon": "A familiar layout, like Windows. Riced by Auxo.",
+    "hyprland": "Animated tiling with blur and rounded corners, fully riced by Auxo.",
+    "sway": "Tiling on Wayland, keyboard-driven, riced by Auxo.",
+    "i3": "The classic tiling window manager (X11), riced by Auxo.",
+    "chrono": "rxvy's own Wayland desktop with 40+ retro and modern themes. Built from source.",
+}
+
+
+def conf():
+    out = {}
+    try:
+        for line in open(f"{ROOT}/etc/auxo/auxo.conf"):
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                out[k] = v.strip('"')
+    except OSError:
+        pass
+    return out
+
+
+def accent_hex():
+    a = conf().get("ACCENT", DEFAULT)
+    return ACCENTS.get(a, ACCENTS[DEFAULT])
+
+
+def my_shell():
+    try:
+        sh = os.path.basename(pwd.getpwnam(ME).pw_shell)
+        return {"fish": "fish"}.get(sh, sh)
+    except KeyError:
+        return "bash"
+
+
+# ── drawn previews ────────────────────────────────────────────────────
+class LookPreview(QWidget):
+    """A tiny desktop that redraws as you move the sliders."""
+
+    def __init__(self, look, parent=None):
+        super().__init__(parent)
+        self.look = dict(look)
+        self.setMinimumSize(360, 270)
+
+    def set_look(self, look):
+        self.look = dict(look)
+        self.update()
+
+    def paintEvent(self, _e):
+        lk = self.look
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        pal = auxo_look.palette(conf().get("ACCENT", DEFAULT), lk["mode"])
+        acc = QColor(pal["accent"])
+        bg, bg2, fg = QColor(pal["bg"]), QColor(pal["bg2"]), QColor(pal["fg"])
+        w, h = self.width(), self.height()
+        scr = QRectF(0, 0, w, h)
+        clip = QPainterPath()
+        clip.addRoundedRect(scr, 12, 12)
+        p.setClipPath(clip)
+        # wallpaper: a soft gradient in the accent, or the chosen image
+        wall = auxo_look.wallpaper(lk, conf().get("ACCENT", DEFAULT))
+        pm = QPixmap(ROOT + wall if ROOT else wall)
+        if not pm.isNull():
+            p.drawPixmap(scr.toRect(), pm.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                                 Qt.TransformationMode.SmoothTransformation))
+        else:
+            p.fillRect(scr, bg)
+            p.setPen(Qt.PenStyle.NoPen)
+            c = QColor(acc)
+            c.setAlpha(60)
+            p.setBrush(c)
+            p.drawEllipse(QRectF(w * 0.55, -h * 0.3, w * 0.7, h * 0.9))
+        s = w / 360.0
+        gap = int(lk["gaps"]) * s * 0.6
+        rad = int(lk["rounding"]) * s * 0.6
+        bw = max(0.0, int(lk["border"]) * s * 0.6)
+        trans = lk["transparency"] == "on"
+        bar_h = 18 * s
+        top = lk["bar"] == "top"
+        bar = QRectF(6 * s, 6 * s if top else h - bar_h - 6 * s, w - 12 * s, bar_h)
+        bc = QColor(bg)
+        bc.setAlpha(205 if trans else 255)
+        p.setPen(QPen(QColor(acc.red(), acc.green(), acc.blue(), 110), 1))
+        p.setBrush(bc)
+        p.drawRoundedRect(bar, min(rad, bar_h / 2), min(rad, bar_h / 2))
+        p.setPen(acc)
+        f = QFont(lk["ui_font"])
+        f.setPixelSize(int(10 * s))
+        p.setFont(f)
+        p.drawText(bar.adjusted(8 * s, 0, 0, 0), Qt.AlignmentFlag.AlignVCenter, "▲")
+        p.setPen(fg)
+        p.drawText(bar, Qt.AlignmentFlag.AlignCenter, "Mon 12:00")
+        # two tiled windows
+        area = QRectF(gap + 6 * s, (bar.bottom() if top else 6 * s) + gap + 4 * s,
+                      w - 2 * gap - 12 * s, h - bar_h - 2 * gap - 18 * s)
+        left = QRectF(area.left(), area.top(), area.width() * 0.55 - gap / 2, area.height())
+        right = QRectF(left.right() + gap, area.top(), area.right() - left.right() - gap, area.height())
+        for i, r in enumerate((left, right)):
+            fill = QColor(bg2)
+            fill.setAlpha(255 if (i == 0 or not trans) else 225)
+            p.setBrush(fill)
+            p.setPen(QPen(acc if i == 0 else QColor(pal["inactive"]), bw) if bw > 0 else Qt.PenStyle.NoPen)
+            p.drawRoundedRect(r, rad, rad)
+            p.setPen(QColor(pal["muted"]))
+            fm = QFont(lk["mono_font"] if i == 1 else lk["ui_font"])
+            fm.setPixelSize(int(int(lk["font_size"]) * 1.0 * s))
+            p.setFont(fm)
+            text = "Aa  The quick fox" if i == 0 else "❯ auxo-fetch"
+            p.drawText(r.adjusted(10 * s, 10 * s, -6 * s, -6 * s), Qt.AlignmentFlag.AlignTop, text)
+            if i == 0:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(acc)
+                p.drawRoundedRect(QRectF(r.left() + 10 * s, r.bottom() - 26 * s, 60 * s, 14 * s), 4 * s, 4 * s)
+        if lk["blur"] == "on":
+            p.setPen(QColor(pal["muted"]))
+            f.setPixelSize(int(8 * s))
+            p.setFont(f)
+            p.drawText(QRectF(0, 0, w - 8 * s, h - 4 * s), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignBottom, "blur")
+        p.end()
+
+
+def paint_desktop(key, w=220, h=124):
+    """A small drawn preview of each desktop's layout (no screenshots needed)."""
+    a, a2 = accent_hex()
+    pm = QPixmap(w, h)
+    pm.fill(QColor("#0b0b10"))
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    acc, acc2 = QColor(a), QColor(a2)
+    grad_c = QColor(acc)
+    grad_c.setAlpha(50)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(grad_c)
+    p.drawEllipse(QRectF(w * 0.5, -h * 0.4, w * 0.8, h * 1.1))
+    panel = QColor("#15151e")
+    win = QColor("#1b1b26")
+
+    def window(r, active=True, radius=6):
+        p.setBrush(win)
+        p.setPen(QPen(acc if active else QColor("#2a2a38"), 1.4))
+        p.drawRoundedRect(r, radius, radius)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor("#2a2a38"))
+        p.drawRoundedRect(QRectF(r.left() + 6, r.top() + 6, r.width() * 0.5, 4), 2, 2)
+
+    if key == "plasma":
+        window(QRectF(30, 16, 130, 74))
+        p.setBrush(panel)
+        p.drawRoundedRect(QRectF(40, h - 22, w - 80, 16), 8, 8)
+        p.setBrush(acc)
+        for i in range(5):
+            p.drawEllipse(QRectF(w / 2 - 40 + i * 18, h - 18, 8, 8))
+    elif key == "gnome":
+        p.setBrush(QColor("#000000"))
+        p.drawRect(QRectF(0, 0, w, 10))
+        p.setBrush(QColor("#e8e8f0"))
+        p.drawRoundedRect(QRectF(w / 2 - 14, 3, 28, 4), 2, 2)
+        window(QRectF(40, 22, 140, 86), radius=10)
+    elif key in ("xfce", "cinnamon"):
+        y = 0 if key == "xfce" else h - 16
+        p.setBrush(panel)
+        p.drawRect(QRectF(0, y, w, 16))
+        p.setBrush(acc)
+        p.drawRoundedRect(QRectF(4, y + 3, 22, 10), 3, 3)
+        window(QRectF(36, 26 if key == "xfce" else 12, 140, 78), radius=4)
+    elif key in ("hyprland", "sway", "i3"):
+        r = {"hyprland": 8, "sway": 1, "i3": 6}[key]
+        p.setBrush(panel)
+        p.drawRoundedRect(QRectF(6, 5, w - 12, 12), r, r)
+        g = 8 if key != "sway" else 5
+        window(QRectF(g + 4, 24, w * 0.55 - g, h - 24 - g), True, r)
+        window(QRectF(w * 0.55 + 4, 24, w * 0.45 - g - 8, (h - 32 - g) / 2), False, r)
+        window(QRectF(w * 0.55 + 4, 24 + (h - 32 - g) / 2 + g / 2 + 4, w * 0.45 - g - 8, (h - 32 - g) / 2 - 4), False, r)
+    elif key == "chrono":
+        window(QRectF(22, 14, 120, 70), True, 10)
+        window(QRectF(92, 34, 110, 62), False, 10)
+        p.setBrush(panel)
+        p.drawRoundedRect(QRectF(8, h - 20, w - 16, 14), 7, 7)
+        p.setBrush(acc2)
+        p.drawEllipse(QRectF(14, h - 17, 8, 8))
+    p.end()
+    return pm
+
+
+# ── the window ────────────────────────────────────────────────────────
+class Settings(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Auxo Settings")
+        self.setWindowIcon(QIcon.fromTheme("auxo", QIcon.fromTheme("preferences-system")))
+        self.resize(1040, 720)
+        self.look = auxo_look.load(HOME)
+        self.proc = None
+        self.pending = {}
+        self.apply_timer = QTimer(self, singleShot=True, interval=450)
+        self.apply_timer.timeout.connect(self._flush_look)
+
+        central = QWidget()
+        outer = QVBoxLayout(central)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        body = QHBoxLayout()
+        body.setSpacing(0)
+        self.nav = QListWidget()
+        self.nav.setObjectName("nav")
+        self.nav.setFixedWidth(220)
+        self.pages = QStackedWidget()
+        for name, icon, page in (("Look", "preferences-desktop-theme", self.page_look()),
+                                 ("Windows & bar", "preferences-system-windows", self.page_windows()),
+                                 ("Desktop", "preferences-desktop", self.page_desktop()),
+                                 ("System", "preferences-system", self.page_system())):
+            it = QListWidgetItem(QIcon.fromTheme(icon), "  " + name)
+            it.setSizeHint(QSize(200, 46))
+            self.nav.addItem(it)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.Shape.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            scroll.setWidget(page)
+            self.pages.addWidget(scroll)
+        self.nav.currentRowChanged.connect(self.pages.setCurrentIndex)
+        self.nav.setCurrentRow(0)
+        side = QVBoxLayout()
+        side.setContentsMargins(0, 0, 0, 0)
+        brand = QLabel("▲  Auxo Settings")
+        brand.setObjectName("brand")
+        side.addWidget(brand)
+        side.addWidget(self.nav, 1)
+        give = QLabel('<a href="https://terryfox.org/?form=GENERAL" style="color:#ff8a92;text-decoration:none">'
+                      '♥ Auxo supports cancer research</a>')
+        give.setOpenExternalLinks(True)
+        give.setObjectName("give")
+        side.addWidget(give)
+        sidew = QWidget()
+        sidew.setObjectName("side")
+        sidew.setLayout(side)
+        body.addWidget(sidew)
+        body.addWidget(self.pages, 1)
+        outer.addLayout(body, 1)
+        # activity bar: what's running, with the full log on demand
+        self.status = QLabel("Ready")
+        self.status.setObjectName("status")
+        self.logbtn = QToolButton(text="Show log")
+        self.logbtn.setCheckable(True)
+        self.log = QPlainTextEdit(readOnly=True)
+        self.log.setObjectName("log")
+        self.log.setVisible(False)
+        self.log.setMaximumHeight(180)
+        self.logbtn.toggled.connect(self.log.setVisible)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(16, 8, 16, 8)
+        bar.addWidget(self.status, 1)
+        bar.addWidget(self.logbtn)
+        barw = QWidget()
+        barw.setObjectName("activity")
+        barw.setLayout(bar)
+        outer.addWidget(self.log)
+        outer.addWidget(barw)
+        self.setCentralWidget(central)
+        self.restyle()
+
+    # ── style ──
+    def restyle(self):
+        a, a2 = accent_hex()
+        light = self.look["mode"] == "light"
+        bg, side, card, fg, mut, line = (("#f5f5f8", "#ececf2", "#ffffff", "#1b1b26", "#6b6b80", "#dcdce6") if light else
+                                         ("#0e0e14", "#0b0b10", "#15151e", "#e8e8f0", "#8b8ba0", "#262633"))
+        on_acc = "#ffffff" if light else "#0b0b10"
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{ background: {bg}; color: {fg}; font-size: 10.5pt; }}
+            #side, #nav {{ background: {side}; border: none; }}
+            #brand {{ background: {side}; color: {a}; font-size: 15pt; font-weight: 700; padding: 22px 18px 14px 18px; }}
+            #give {{ background: {side}; padding: 14px 18px; }}
+            #nav::item {{ padding: 6px 10px; margin: 2px 10px; border-radius: 8px; color: {mut}; }}
+            #nav::item:selected {{ background: {a}; color: {on_acc}; }}
+            #nav::item:hover:!selected {{ background: {card}; color: {fg}; }}
+            QLabel#h1 {{ font-size: 20pt; font-weight: 700; }}
+            QLabel#h2 {{ font-size: 12.5pt; font-weight: 700; margin-top: 10px; }}
+            QLabel#sub, QLabel#reach {{ color: {mut}; }}
+            QLabel#reach {{ font-size: 9pt; }}
+            QFrame#card {{ background: {card}; border: 1px solid {line}; border-radius: 12px; }}
+            QFrame#card QLabel {{ background: transparent; border: none; }}
+            #nav {{ outline: 0; }}
+            QFrame#card[current="true"] {{ border: 2px solid {a}; }}
+            QPushButton {{ background: {card}; border: 1px solid {line}; border-radius: 8px; padding: 7px 14px; }}
+            QPushButton:hover {{ border-color: {a}; }}
+            QPushButton:checked, QPushButton#primary {{ background: {a}; color: {on_acc}; border-color: {a}; font-weight: 600; }}
+            QPushButton:disabled {{ color: {mut}; }}
+            QComboBox, QSpinBox, QFontComboBox {{ background: {card}; border: 1px solid {line}; border-radius: 8px; padding: 5px 8px; }}
+            QSlider::groove:horizontal {{ height: 6px; background: {line}; border-radius: 3px; }}
+            QSlider::sub-page:horizontal {{ background: {a}; border-radius: 3px; }}
+            QSlider::handle:horizontal {{ background: {fg}; width: 16px; height: 16px; margin: -6px 0; border-radius: 8px; }}
+            QCheckBox::indicator {{ width: 38px; height: 20px; border-radius: 10px; background: {line}; }}
+            QCheckBox::indicator:checked {{ background: {a}; }}
+            #activity {{ background: {side}; border-top: 1px solid {line}; }}
+            #status {{ color: {mut}; background: transparent; }}
+            #log {{ background: {side}; font-family: monospace; border: none; border-top: 1px solid {line}; }}
+            QToolButton {{ background: transparent; color: {mut}; border: none; }}
+            QScrollArea {{ border: none; }}
+        """)
+
+    # ── helpers ──
+    def heading(self, lay, title, sub=None):
+        t = QLabel(title)
+        t.setObjectName("h1")
+        lay.addWidget(t)
+        if sub:
+            s = QLabel(sub)
+            s.setObjectName("sub")
+            s.setWordWrap(True)
+            lay.addWidget(s)
+
+    def section(self, lay, title, reach=None):
+        t = QLabel(title)
+        t.setObjectName("h2")
+        lay.addWidget(t)
+        if reach:
+            r = QLabel(f"Applies to: {reach}")
+            r.setObjectName("reach")
+            lay.addWidget(r)
+
+    def card(self):
+        f = QFrame()
+        f.setObjectName("card")
+        return f
+
+    def page(self):
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(36, 28, 36, 28)
+        lay.setSpacing(10)
+        return w, lay
+
+    # ── running auxo-tweak ──
+    def run(self, args, root=False, label=None, done=None):
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            QMessageBox.information(self, "Auxo Settings", "Something is still running. Wait for it to finish first.")
+            return
+        prog, argv = (PKEXEC, [TWEAK, *args]) if root else (TWEAK, list(args))
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self._read)
+        self.proc.finished.connect(lambda code, _st: self._finished(code, label, done))
+        self.status.setText(("⏳ " + (label or " ".join(args))) + ("  (asks for your password)" if root else ""))
+        self.log.appendPlainText(f"$ {'pkexec ' if root else ''}auxo-tweak {' '.join(args)}")
+        self.proc.start(prog, argv)
+
+    def _read(self):
+        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        import re
+        text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+        self.log.insertPlainText(text)
+        self.log.ensureCursorVisible()
+        last = [l for l in text.splitlines() if l.strip()]
+        if last:
+            self.status.setText("⏳ " + last[-1].lstrip(": ")[:140])
+
+    def _finished(self, code, label, done):
+        if code == 0:
+            self.status.setText(f"✓ {label or 'Done'}")
+        elif code in (126, 127):
+            self.status.setText("Cancelled (no password given)")
+        else:
+            self.status.setText(f"✗ {label or 'That'} didn't work — click Show log for details")
+            self.logbtn.setChecked(True)
+        if done:
+            done(code)
+
+    # look settings are batched: dragging a slider sends one change when you stop
+    def set_look(self, key, value, now=False):
+        self.look[key] = str(value)
+        self.pending[key] = str(value)
+        self.preview.set_look(self.look)
+        if key == "mode":
+            self.restyle()
+        if now:
+            self._flush_look()
+        else:
+            self.apply_timer.start()
+
+    def _flush_look(self):
+        if not self.pending:
+            return
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            self.apply_timer.start()
+            return
+        items = [f"{k}={v}" for k, v in self.pending.items()]
+        self.pending = {}
+        self.run(["look", "set", *items], label="Look: " + ", ".join(items))
+
+    # ── pages ──
+    def page_look(self):
+        w, lay = self.page()
+        self.heading(lay, "Look", "Colours, light or dark, wallpaper and fonts — on every desktop.")
+        self.section(lay, "Accent colour", "every desktop, the boot menu and the login screen")
+        row = QHBoxLayout()
+        cur = conf().get("ACCENT", DEFAULT)
+        self.swatches = QButtonGroup(self)
+        for name, (c1, c2) in ACCENTS.items():
+            b = QPushButton()
+            b.setCheckable(True)
+            b.setChecked(name == cur)
+            b.setToolTip(name)
+            b.setFixedSize(46, 46)
+            b.setStyleSheet(f"QPushButton {{ background: qlineargradient(x1:0,y1:1,x2:1,y2:0, stop:0 {c1}, stop:1 {c2});"
+                            f" border-radius: 23px; border: 3px solid transparent; }}"
+                            f" QPushButton:checked {{ border: 3px solid white; }}")
+            b.clicked.connect(lambda _=False, n=name: self.run(["accent", n], root=True, label=f"Accent → {n}",
+                                                               done=lambda c: (self.restyle(), self.preview.update(),
+                                                                               self.refresh_desktops())))
+            self.swatches.addButton(b)
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+
+        self.section(lay, "Light or dark", auxo_look.REACH["mode"])
+        row = QHBoxLayout()
+        grp = QButtonGroup(self)
+        for m in ("dark", "light"):
+            b = QPushButton(m.title())
+            b.setCheckable(True)
+            b.setChecked(self.look["mode"] == m)
+            b.setMinimumWidth(110)
+            b.clicked.connect(lambda _=False, m=m: self.set_look("mode", m, now=True))
+            grp.addButton(b)
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+
+        self.section(lay, "Wallpaper", auxo_look.REACH["wallpaper"])
+        grid = QGridLayout()
+        grid.setSpacing(10)
+        self.wall_btns = QButtonGroup(self)
+        walls = [("accent", "Auxo (follows your accent)")]
+        wd = f"{ROOT}/usr/share/wallpapers"
+        for f in sorted(os.listdir(wd)) if os.path.isdir(wd) else []:
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                stem = f.rsplit(".", 1)[0]
+                walls.append((f"/usr/share/wallpapers/{f}",
+                              "Auxo " + stem[5:].title() if stem.startswith("auxo-") else stem))
+        pics = os.path.join(HOME, "Pictures", "Wallpapers")
+        for f in sorted(os.listdir(pics))[:12] if os.path.isdir(pics) else []:
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp")):
+                walls.append((os.path.join(pics, f), f.rsplit(".", 1)[0]))
+        for i, (path, name) in enumerate(walls):
+            src = auxo_look.wallpaper({"wallpaper": "accent"}, conf().get("ACCENT", DEFAULT)) if path == "accent" else path
+            b = QToolButton()
+            b.setCheckable(True)
+            b.setChecked(self.look["wallpaper"] == path)
+            b.setText(name[:26])
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            pm = QPixmap(ROOT + src if ROOT else src)
+            if not pm.isNull():
+                b.setIcon(QIcon(pm.scaled(150, 84, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                          Qt.TransformationMode.SmoothTransformation)))
+                b.setIconSize(QSize(150, 84))
+            b.setStyleSheet("QToolButton { border: 2px solid transparent; border-radius: 10px; padding: 4px; }"
+                            "QToolButton:checked { border-color: %s; }" % accent_hex()[0])
+            b.clicked.connect(lambda _=False, p=path: self.set_look("wallpaper", p, now=True))
+            self.wall_btns.addButton(b)
+            grid.addWidget(b, i // 4, i % 4)
+        lay.addLayout(grid)
+        pick = QPushButton("Choose an image…")
+        pick.clicked.connect(self.choose_wallpaper)
+        prow = QHBoxLayout()
+        prow.addWidget(pick)
+        prow.addStretch(1)
+        lay.addLayout(prow)
+
+        self.section(lay, "Fonts", auxo_look.REACH["ui_font"])
+        g = QGridLayout()
+        g.addWidget(QLabel("Interface"), 0, 0)
+        self.ui_font = QFontComboBox()
+        self.ui_font.setCurrentFont(QFont(self.look["ui_font"]))
+        self.ui_font.currentFontChanged.connect(lambda f: self.set_look("ui_font", f.family()))
+        g.addWidget(self.ui_font, 0, 1)
+        g.addWidget(QLabel("Terminal"), 1, 0)
+        self.mono_font = QFontComboBox()
+        self.mono_font.setFontFilters(QFontComboBox.FontFilter.MonospacedFonts)
+        self.mono_font.setCurrentFont(QFont(self.look["mono_font"]))
+        self.mono_font.currentFontChanged.connect(lambda f: self.set_look("mono_font", f.family()))
+        g.addWidget(self.mono_font, 1, 1)
+        g.addWidget(QLabel("Size"), 2, 0)
+        size = QSpinBox()
+        size.setRange(7, 24)
+        size.setValue(int(self.look["font_size"]))
+        size.setSuffix(" pt")
+        size.valueChanged.connect(lambda v: self.set_look("font_size", v))
+        g.addWidget(size, 2, 1)
+        g.setColumnStretch(2, 1)
+        lay.addLayout(g)
+
+        self.section(lay, "Animations", auxo_look.REACH["animations"])
+        anim = QCheckBox("Animate windows and menus")
+        anim.setChecked(self.look["animations"] == "on")
+        anim.toggled.connect(lambda v: self.set_look("animations", "on" if v else "off", now=True))
+        lay.addWidget(anim)
+        lay.addStretch(1)
+        return w
+
+    def choose_wallpaper(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Choose a wallpaper", os.path.join(HOME, "Pictures"),
+                                           "Images (*.png *.jpg *.jpeg *.webp *.bmp)")
+        if f:
+            self.set_look("wallpaper", f, now=True)
+
+    def page_windows(self):
+        w, lay = self.page()
+        self.heading(lay, "Windows & bar", "Gaps, rounded corners, borders, blur and the bar. The preview "
+                                           "shows the result; your desktop follows a moment after you let go.")
+        self.preview = LookPreview(self.look)
+        lay.addWidget(self.preview)
+
+        def slider(key, lo, hi, unit="px"):
+            self.section(lay, auxo_look.LABELS[key], auxo_look.REACH[key])
+            row = QHBoxLayout()
+            s = QSlider(Qt.Orientation.Horizontal)
+            s.setRange(lo, hi)
+            s.setValue(int(self.look[key]))
+            val = QLabel(f"{self.look[key]} {unit}")
+            val.setMinimumWidth(56)
+            s.valueChanged.connect(lambda v: (val.setText(f"{v} {unit}"), self.set_look(key, v)))
+            row.addWidget(s, 1)
+            row.addWidget(val)
+            lay.addLayout(row)
+            return s
+
+        self.s_gaps = slider("gaps", 0, 40)
+        self.s_round = slider("rounding", 0, 30)
+        self.s_border = slider("border", 0, 8)
+        for key, text in (("blur", "Blur behind see-through windows and bars"),
+                          ("transparency", "See-through bars and terminals, slightly faded unfocused windows")):
+            self.section(lay, auxo_look.LABELS[key], auxo_look.REACH[key])
+            c = QCheckBox(text)
+            c.setChecked(self.look[key] == "on")
+            c.toggled.connect(lambda v, k=key: self.set_look(k, "on" if v else "off", now=True))
+            lay.addWidget(c)
+        self.section(lay, "Bar position", auxo_look.REACH["bar"])
+        row = QHBoxLayout()
+        grp = QButtonGroup(self)
+        for pos in ("top", "bottom"):
+            b = QPushButton(pos.title())
+            b.setCheckable(True)
+            b.setChecked(self.look["bar"] == pos)
+            b.setMinimumWidth(110)
+            b.clicked.connect(lambda _=False, pos=pos: self.set_look("bar", pos, now=True))
+            grp.addButton(b)
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        reset = QPushButton("Back to the Auxo defaults")
+        reset.clicked.connect(self.reset_look)
+        r2 = QHBoxLayout()
+        r2.addStretch(1)
+        r2.addWidget(reset)
+        lay.addLayout(r2)
+        lay.addStretch(1)
+        return w
+
+    def reset_look(self):
+        def after(code):
+            if code == 0:
+                self.look = auxo_look.load(HOME)
+                self.preview.set_look(self.look)
+                for s, k in ((self.s_gaps, "gaps"), (self.s_round, "rounding"), (self.s_border, "border")):
+                    s.blockSignals(True)
+                    s.setValue(int(self.look[k]))
+                    s.blockSignals(False)
+                self.restyle()
+        self.run(["look", "reset", "gaps", "rounding", "border", "blur", "transparency", "animations", "bar"],
+                 label="Look back to the Auxo defaults", done=after)
+
+    def page_desktop(self):
+        w, lay = self.page()
+        self.heading(lay, "Desktop", "Every desktop comes riced by Auxo in your accent. Switching installs it "
+                                     "(internet needed) and you pick it at the next login — nothing is reinstalled.")
+        self.desk_grid = QGridLayout()
+        self.desk_grid.setSpacing(14)
+        lay.addLayout(self.desk_grid)
+        self.refresh_desktops()
+        lay.addStretch(1)
+        return w
+
+    def refresh_desktops(self):
+        if not hasattr(self, "desk_grid"):
+            return
+        while self.desk_grid.count():
+            it = self.desk_grid.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        current = conf().get("DESKTOP", "")
+        keys = [k for k in DESKTOPS if k != "none"]
+        for i, k in enumerate(keys):
+            c = self.card()
+            c.setProperty("current", "true" if k == current else "false")
+            v = QVBoxLayout(c)
+            v.setContentsMargins(14, 14, 14, 14)
+            img = QLabel()
+            img.setPixmap(paint_desktop(k))
+            v.addWidget(img)
+            name = DESKTOPS[k]["name"].replace(" (Auxo rice)", "")
+            t = QLabel(f"<b>{name}</b>" + ("  <span style='color:%s'>· current</span>" % accent_hex()[0] if k == current else ""))
+            v.addWidget(t)
+            d = QLabel(DESKTOP_INFO.get(k, ""))
+            d.setObjectName("sub")
+            d.setWordWrap(True)
+            v.addWidget(d)
+            row = QHBoxLayout()
+            if k == current:
+                b = QPushButton("Re-apply the Auxo rice")
+                rice = "kde" if k == "plasma" else k
+                b.clicked.connect(lambda _=False, r=rice: self.run(["rice", r], root=True, label=f"Auxo {r} rice"))
+            else:
+                b = QPushButton("Switch to " + name.split(" (")[0])
+                b.setObjectName("primary")
+                b.clicked.connect(lambda _=False, k=k: self.switch_desktop(k))
+            row.addWidget(b)
+            row.addStretch(1)
+            v.addLayout(row)
+            self.desk_grid.addWidget(c, i // 3, i % 3)
+
+    def switch_desktop(self, k):
+        name = DESKTOPS[k]["name"]
+        extra = "\n\nChrono is built from source, which takes a few minutes." if k == "chrono" else ""
+        if QMessageBox.question(self, "Switch desktop", f"Install {name} and make it your desktop?\n\n"
+                                f"It needs an internet connection. You'll use it after logging out.{extra}") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        self.run(["desktop", k], root=True, label=f"Desktop → {name}", done=lambda c: self.refresh_desktops())
+
+    def page_system(self):
+        w, lay = self.page()
+        self.heading(lay, "System", "Kernel, shell, drivers and the switches you'd otherwise need a terminal for. "
+                                    "These ask for your password.")
+        c = conf()
+
+        def combo_row(title, items, current, cmd, reach=None):
+            self.section(lay, title, reach)
+            row = QHBoxLayout()
+            cb = QComboBox()
+            for key, label in items:
+                cb.addItem(label, key)
+            idx = max(0, cb.findData(current))
+            cb.setCurrentIndex(idx)
+            go = QPushButton("Apply")
+            go.clicked.connect(lambda: self.run([*cmd, cb.currentData()], root=True, label=f"{title} → {cb.currentText()}"))
+            row.addWidget(cb, 1)
+            row.addWidget(go)
+            lay.addLayout(row)
+
+        combo_row("Kernel", [(k, f"{k} — {v}") for k, v in KERNELS.items()], c.get("KERNEL", "linux"), ["kernel"])
+        combo_row("Login shell", [(k, k) for k in SHELLS], my_shell(), ["shell"])
+        combo_row("Power profile", [(k, k.replace("-", " ").title()) for k in ("balanced", "performance", "power-saver")],
+                  c.get("POWER", "balanced"), ["power"])
+        combo_row("DNS servers", [("auto", "From your network"), ("cloudflare", "Cloudflare"), ("quad9", "Quad9"),
+                                  ("google", "Google")], c.get("DNS", "auto"), ["dns"])
+
+        self.section(lay, "Switches")
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        toggles = [("NVIDIA driver", "NVIDIA", ["nvidia"], "the right driver for your card (or back to nouveau)"),
+                   ("Snapshots", "SNAPSHOTS", ["snapshots"], "a bootable btrfs snapshot before every update"),
+                   ("Firewall", "FIREWALL", ["firewall"], "block incoming connections"),
+                   ("zram swap", "ZRAM", ["zram"], "compressed swap in RAM"),
+                   ("Gaming mode", "GAMING", ["gaming"], "Steam, GameMode, MangoHud, gamescope + tweaks")]
+        for i, (title, key, cmd, desc) in enumerate(toggles):
+            box = QCheckBox(title)
+            box.setChecked(c.get(key, "off") not in ("off", "", "nouveau", "0", "no"))
+            box.toggled.connect(lambda v, box=box, cmd=cmd, title=title: self.toggle(box, cmd, title, v))
+            sub = QLabel(desc)
+            sub.setObjectName("reach")
+            grid.addWidget(box, i, 0)
+            grid.addWidget(sub, i, 1)
+        grid.setColumnStretch(1, 1)
+        lay.addLayout(grid)
+
+        self.section(lay, "Apps")
+        note = QLabel("Tick what you want; everything comes from Void's repositories (Discord from its nonfree repo).")
+        note.setObjectName("reach")
+        lay.addWidget(note)
+        from auxo_apps import APP_BUNDLES as bundles
+        self.app_boxes = []
+        ag = QGridLayout()
+        for i, (k, (desc, _pkgs)) in enumerate(bundles.items()):
+            b = QCheckBox(k.title())
+            b.setProperty("bundle", k)
+            sub = QLabel(desc)
+            sub.setObjectName("reach")
+            sub.setWordWrap(True)
+            ag.addWidget(b, i, 0)
+            ag.addWidget(sub, i, 1)
+            self.app_boxes.append(b)
+        ag.setColumnStretch(1, 1)
+        lay.addLayout(ag)
+        inst = QPushButton("Install selected apps")
+        inst.setObjectName("primary")
+        inst.clicked.connect(self.install_apps)
+        r = QHBoxLayout()
+        r.addWidget(inst)
+        upd = QPushButton("Update everything")
+        upd.clicked.connect(lambda: self.run_update())
+        r.addWidget(upd)
+        r.addStretch(1)
+        lay.addLayout(r)
+        lay.addStretch(1)
+        return w
+
+    def toggle(self, box, cmd, title, value):
+        def undo(code):
+            if code != 0:           # cancelled or failed: put the switch back the way it was
+                box.blockSignals(True)
+                box.setChecked(not value)
+                box.blockSignals(False)
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            undo(1)
+            return
+        self.run([*cmd, "on" if value else "off"], root=True, label=f"{title} {'on' if value else 'off'}", done=undo)
+
+    def install_apps(self):
+        picked = [b.property("bundle") for b in self.app_boxes if b.isChecked()]
+        if not picked:
+            self.status.setText("Tick the app bundles you want first")
+            return
+        self.run(["apps", *picked], root=True, label="Apps: " + ", ".join(picked),
+                 done=lambda c: [b.setChecked(False) for b in self.app_boxes] if c == 0 else None)
+
+    def run_update(self):
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            return
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self._read)
+        self.proc.finished.connect(lambda code, _s: self._finished(code, "Update", None))
+        self.status.setText("⏳ Updating everything (asks for your password)")
+        self.logbtn.setChecked(True)
+        self.proc.start(PKEXEC, ["auxo-update", "-y"])
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("Auxo Settings")
+    app.setDesktopFileName("auxo-settings")
+    win = Settings()
+    page = {"look": 0, "windows": 1, "desktop": 2, "system": 3}.get((sys.argv[1:2] or [""])[0].lstrip("-"), 0)
+    win.nav.setCurrentRow(page)
+    win.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

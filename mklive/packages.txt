@@ -51,6 +51,8 @@ noto-fonts-emoji
 # Japanese/Chinese/Korean text (the installer offers those languages), and cybervis's katakana rain
 noto-fonts-cjk-sans
 font-inter
+font-firacode
+papirus-icon-theme
 
 # graphics (NVIDIA comes from nonfree after install: auxo-tweak nvidia on)
 mesa-dri
@@ -77,6 +79,8 @@ socklog-void
 newt
 python3
 python3-pyqt6
+python3-pyqt6-gui
+python3-pyqt6-widgets
 pciutils
 usbutils
 sudo

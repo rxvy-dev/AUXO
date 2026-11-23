@@ -25,10 +25,11 @@ jobs:
 
       - name: Run the tests
         run: |
-          pip install --quiet pyte
+          pip install --quiet pyte PyQt6
           ./tests/test-tools.sh
           python3 tests/test-installer.py
           python3 tests/test-summit.py
+          sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 >/dev/null && python3 tests/test-settings.py
 
       - name: Build the ISO in a Void container (void-mklive)
         run: |
