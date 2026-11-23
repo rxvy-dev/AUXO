@@ -211,9 +211,10 @@ def build_plan(cfg, env):
     if "snapshots" in extras and cfg.filesystem != "btrfs":
         notes.append("snapshots need btrfs — skipped")
         extras.remove("snapshots")
-    for x in ("flatpak", "gaming"):
+    for x, later in (("flatpak", "auxo-tweak flatpak on"), ("gaming", "auxo-tweak gaming on"),
+                     ("discord", "auxo-tweak apps discord")):
         if x in extras and not env.online:
-            notes.append(f"{x} needs internet — skipped (turn it on later: auxo-tweak {x} on)")
+            notes.append(f"{x} needs internet — skipped (add it later: sudo {later})")
             extras.remove(x)
 
     # 1 ── partitions
@@ -331,6 +332,8 @@ def build_plan(cfg, env):
         acts.append(tweak(T, "flatpak", "on"))
     if "gaming" in extras:
         acts.append(tweak(T, "gaming", "on", *u))
+    if "discord" in extras:
+        acts.append(tweak(T, "apps", "discord"))
     acts.append(Write(f"{T}/home/{cfg.username}/.config/autostart/auxo-welcome.desktop",
                       "[Desktop Entry]\nType=Application\nName=Welcome to Auxo\nExec=auxo-welcome\n"
                       "X-GNOME-Autostart-enabled=true\n"))

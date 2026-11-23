@@ -45,9 +45,10 @@ EXTRAS = {
     "drivers": "Install the right GPU driver (NVIDIA, AMD, Intel)",
     "firewall": "Firewall: block incoming connections",
     "flatpak": "Flatpak + Flathub app store",
-    "gaming": "Gaming: Steam, GameMode, MangoHud, gamescope",
+    "gaming": "Steam + gaming tools (GameMode, MangoHud, gamescope)",
+    "discord": "Discord",
 }
-DEFAULT_EXTRAS = ["snapshots", "zram", "drivers"]
+DEFAULT_EXTRAS = ["snapshots", "zram", "drivers", "gaming", "discord"]
 
 
 @dataclass

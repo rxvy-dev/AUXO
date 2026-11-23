@@ -9,6 +9,7 @@ APP_BUNDLES = {
             ["base-devel", "git", "cmake", "ninja", "gdb", "clang", "python3-pip", "nodejs", "rust", "cargo", "go",
              "vscode", "neovim", "lazygit"]),
     "containers": ("Podman, Docker and Docker Compose", ["podman", "docker", "docker-compose"]),
+    "discord": ("Discord (from Void's nonfree repo)", ["discord"]),
     "chat": ("Discord, Telegram, Element, HexChat (Discord comes from Void's nonfree repo)",
              ["discord", "telegram-desktop", "element-desktop", "hexchat"]),
     "terminal": ("btop, htop, fastfetch, ncdu, tldr, bat, eza, fzf, ripgrep, zoxide",

@@ -145,6 +145,10 @@ check("hyprland → Plasma offline, with a note", has(L, "auxo-tweak desktop pla
 check("LTS → stable kernel offline", not has(L, "auxo-tweak kernel") and any("linux-lts needs internet" in n for n in notes))
 check("snapshots skipped on ext4", not has(L, "snapshots on") and any("need btrfs" in n for n in notes))
 check("gaming skipped offline", not has(L, "gaming on"))
+cfg2b = InstallConfig(disk="/dev/sda", username="sam", password="pw")          # default extras, offline
+_, _, notes_b, L_b = dry_run(cfg2b, Env(efi=True, online=False))
+check("Steam + Discord skipped offline, with how to add them", not has(L_b, "gaming on") and not has(L_b, "apps discord")
+      and any("sudo auxo-tweak apps discord" in n for n in notes_b))
 check("BIOS: 1 MiB bios_grub partition", has(L, "-n1:0:+1M -t1:ef02 -c1:BIOS"))
 check("BIOS: no EFI formatting or mounting", not has(L, "mkfs.vfat") and not has(L, "/boot/efi"))
 check("BIOS: GRUB into the disk", has(L, "grub-install --target=i386-pc --recheck /dev/sda"))
@@ -164,6 +168,10 @@ check("fish shell", has(L, "auxo-tweak shell fish --user kim"))
 check("root password set, not locked", not has(L, "passwd -l root") and sum(1 for l in L if "chpasswd" in l) == 2)
 check("extras: firewall, flatpak, gaming", has(L, "auxo-tweak firewall on") and has(L, "auxo-tweak flatpak on")
       and has(L, "auxo-tweak gaming on --user kim"))
+from auxo_install.config import DEFAULT_EXTRAS  # noqa: E402
+check("Steam and Discord are on by default", "gaming" in DEFAULT_EXTRAS and "discord" in DEFAULT_EXTRAS)
+T, steps, notes, L = dry_run(InstallConfig(disk="/dev/sda", username="kim", password="pw"), Env(efi=True, online=True))
+check("default online install: Steam + Discord", has(L, "auxo-tweak gaming on --user kim") and has(L, "auxo-tweak apps discord"))
 
 print("▲ runner")
 T = tempfile.mkdtemp()

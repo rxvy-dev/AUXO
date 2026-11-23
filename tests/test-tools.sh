@@ -407,6 +407,8 @@ out=$("$T" apps 2>&1)
 check "apps lists the bundles"                "echo \"\$out\" | grep -q creative && echo \"\$out\" | grep -q dev"
 out=$(AUXO_TEST_ONLINE=1 "$T" apps media fun 2>&1)
 check "apps installs a bundle"                "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q 'mpv' && echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q cmatrix"
+out=$(AUXO_TEST_ONLINE=1 "$T" apps discord 2>&1)
+check "apps discord installs Discord"        "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -qw discord"
 check "unknown bundle refused"                "! \"$T\" apps nope >/dev/null 2>&1"
 check "Settings app + menu entry ship"        "python3 -m py_compile $PKG/bin/auxo-settings && grep -q '^Exec=auxo-settings' $PKG/applications/auxo-settings.desktop"
 check "ISO has the PyQt6 GUI modules"         "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-widgets && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-gui"

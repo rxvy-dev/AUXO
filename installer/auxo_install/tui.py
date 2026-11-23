@@ -541,7 +541,7 @@ class TUI:
         items = []
         for k, label in EXTRAS.items():
             enabled = not (k == "snapshots" and self.cfg.filesystem != "btrfs")
-            if k in ("gaming", "flatpak") and not self.env.online:
+            if k in ("gaming", "flatpak", "discord") and not self.env.online:
                 label += " (needs internet)"
             if not enabled:
                 label += " (needs btrfs)"
