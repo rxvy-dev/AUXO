@@ -46,7 +46,7 @@ EXTRAS = {
     "firewall": "Firewall: block incoming connections",
     "flatpak": "Flatpak + Flathub app store",
     "gaming": "Steam + gaming tools (GameMode, MangoHud, gamescope)",
-    "discord": "Discord",
+    "discord": "Discord (from Flathub)",
 }
 DEFAULT_EXTRAS = ["snapshots", "zram", "drivers", "gaming", "discord"]
 

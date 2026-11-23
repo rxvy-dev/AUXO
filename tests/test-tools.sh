@@ -408,7 +408,10 @@ check "apps lists the bundles"                "echo \"\$out\" | grep -q creative
 out=$(AUXO_TEST_ONLINE=1 "$T" apps media fun 2>&1)
 check "apps installs a bundle"                "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q 'mpv' && echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q cmatrix"
 out=$(AUXO_TEST_ONLINE=1 "$T" apps discord 2>&1)
-check "apps discord installs Discord"        "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -qw discord"
+check "apps discord: from Flathub (Void's is restricted)" "echo \"\$out\" | grep -q 'flatpak remote-add --system --if-not-exists flathub' && echo \"\$out\" | grep -q 'flatpak install --system -y --noninteractive flathub com.discordapp.Discord' && ! echo \"\$out\" | grep -E 'xbps-install -y ' | grep -qw discord"
+out=$(AUXO_TEST_ONLINE=1 "$T" apps chat 2>&1)
+check "apps chat: xbps for the rest, Flathub for Discord" "echo \"\$out\" | grep -E 'xbps-install -y ' | grep -q telegram-desktop && echo \"\$out\" | grep -q 'flathub com.discordapp.Discord'"
+check "no bundle asks xbps for a restricted package" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_apps import APP_BUNDLES, FLATPAK_APPS; sys.exit(any(p=='discord' and p not in FLATPAK_APPS for _,(d,ps) in APP_BUNDLES.items() for p in ps))\""
 check "unknown bundle refused"                "! \"$T\" apps nope >/dev/null 2>&1"
 check "Settings app + menu entry ship"        "python3 -m py_compile $PKG/bin/auxo-settings && grep -q '^Exec=auxo-settings' $PKG/applications/auxo-settings.desktop"
 check "ISO has the PyQt6 GUI modules"         "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-widgets && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx python3-pyqt6-gui"

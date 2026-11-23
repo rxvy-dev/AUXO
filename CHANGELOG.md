@@ -18,7 +18,8 @@
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
 - **Steam and Discord come with Auxo**: the installer sets them up by default (online
-  installs; untick them under Extras). Later: `sudo auxo-tweak gaming on`, `sudo auxo-tweak apps discord`.
+  installs; untick them under Extras). Discord comes from Flathub: Void's own package is
+  restricted (not redistributable), so xbps reported "discord not found in repository pool". Later: `sudo auxo-tweak gaming on`, `sudo auxo-tweak apps discord`.
 - **Fixed: "wrong password" at the login screen.** The login screen (greetd) and Void's text
   login (agetty) both listened on tty1, so each got part of every keystroke and passwords came
   out wrong. The login screen now has its own console (tty7). Already installed? Press Ctrl+Alt+F2,

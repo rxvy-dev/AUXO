@@ -514,13 +514,26 @@ def cmd_wallpaper(args):
 
 
 # ── app bundles (every name checked against Void's package list) ──────
-from auxo_apps import APP_BUNDLES, NONFREE_APPS  # noqa: E402
+from auxo_apps import APP_BUNDLES, FLATPAK_APPS, NONFREE_APPS  # noqa: E402
+
+
+def _flatpak_has(app_id):
+    if DRY or not have("flatpak"):
+        return False
+    import subprocess
+    return subprocess.run(["flatpak", "info", "--system", app_id], capture_output=True).returncode == 0
+
+
+def _flatpak_setup():
+    xbps_install("flatpak")
+    run(["flatpak", "remote-add", "--system", "--if-not-exists", "flathub",
+         "https://dl.flathub.org/repo/flathub.flatpakrepo"], check=False)
 
 
 def cmd_apps(args):
     if not args.names or args.names == ["list"]:
         for k, (desc, pkgs) in APP_BUNDLES.items():
-            have_all = all(installed(p) for p in pkgs)
+            have_all = all(_flatpak_has(FLATPAK_APPS[p]) if p in FLATPAK_APPS else installed(p) for p in pkgs)
             print(f"  {BOLD}{k:<11}{RESET} {desc}{'  ' + DIM + '(installed)' + RESET if have_all else ''}")
         print(f"\n{DIM}install: auxo-tweak apps creative dev   ·   remove: auxo-tweak apps --remove fun{RESET}")
         return
@@ -528,18 +541,28 @@ def cmd_apps(args):
     if bad:
         raise AuxoError(f"no app bundle named {', '.join(bad)}. bundles: {', '.join(APP_BUNDLES)}")
     require_root()
-    pkgs = [p for n in args.names for p in APP_BUNDLES[n][1]]
+    every = [p for n in args.names for p in APP_BUNDLES[n][1]]
+    flat = [FLATPAK_APPS[p] for p in every if p in FLATPAK_APPS]
+    pkgs = [p for p in every if p not in FLATPAK_APPS]
     if args.remove:
         present = [p for p in pkgs if installed(p) or DRY]
         if present:
             xbps_remove(*present)
+        for app in flat:
+            if DRY or _flatpak_has(app):
+                run(["flatpak", "uninstall", "--system", "-y", "--noninteractive", app], check=False)
         log(f"removed: {', '.join(args.names)}")
         return
     if not online():
         raise AuxoError("no internet connection — connect first (nmtui) and try again")
     if NONFREE_APPS & set(pkgs):
         repo_enable("nonfree")
-    xbps_install(*pkgs)
+    if pkgs:
+        xbps_install(*pkgs)
+    if flat:
+        _flatpak_setup()
+        log(f"installing from Flathub: {', '.join(flat)}")
+        run(["flatpak", "install", "--system", "-y", "--noninteractive", "flathub", *flat])
     log(f"installed: {', '.join(args.names)}")
 
 
