@@ -30,19 +30,30 @@ except ImportError:
 root = tempfile.mkdtemp()
 home = tempfile.mkdtemp()
 os.makedirs(f"{root}/etc/auxo")
-open(f"{root}/etc/auxo/auxo.conf", "w").write('ACCENT="emerald"\nDESKTOP="hyprland"\nKERNEL="linux"\nFIREWALL="on"\n')
+open(f"{root}/etc/auxo/auxo.conf", "w").write('ACCENT="emerald"\nDESKTOP="hyprland"\nKERNEL="linux"\nFIREWALL="on"\nAI="on"\n')
 shutil.copytree(f"{PKG}/share/wallpapers", f"{root}/usr/share/wallpapers")
 # a stand-in for auxo-tweak and pkexec that records what the app asks for
 calls = os.path.join(home, "calls")
 bindir = tempfile.mkdtemp()
 fake = os.path.join(bindir, "fake-tweak")
-open(fake, "w").write(f'#!/bin/sh\necho "$@" >> {calls}\necho ":: working"\n')
+DOCTOR = ('[{"id": "login-vt", "title": "Login screen has its own console", "problem": "shares tty1", '
+          '"fixable": true, "hint": "moves it"}, {"id": "disk", "title": "Free space on /", "problem": null, '
+          '"fixable": true, "hint": ""}]')
+open(fake, "w").write("#!/bin/sh\n"
+                      f'echo "$@" >> {calls}\n'
+                      f"if [ \"$1 $2\" = \"doctor --json\" ]; then echo '{DOCTOR}'; exit 0; fi\n"
+                      'echo ":: working"\n')
 os.chmod(fake, 0o755)
+ai = os.path.join(bindir, "fake-ai")
+open(ai, "w").write("#!/bin/sh\n"
+                    f"cat > {home}/ai-in.json\n"
+                    "printf 'Turn on Bluetooth with:\\n\\n```\\nsudo auxo-tweak service bluetooth on\\n```\\n'\n")
+os.chmod(ai, 0o755)
 pk = os.path.join(bindir, "fake-pkexec")
 open(pk, "w").write(f'#!/bin/sh\nshift\necho "root $@" >> {calls}\n')
 os.chmod(pk, 0o755)
 os.environ.update(QT_QPA_PLATFORM="offscreen", AUXO_ROOT=root, AUXO_HOME=home, AUXO_LIB=f"{PKG}/lib",
-                  AUXO_TWEAK=fake, AUXO_PKEXEC=pk)
+                  AUXO_TWEAK=fake, AUXO_PKEXEC=pk, AUXO_AI=ai)
 sys.path.insert(0, f"{PKG}/lib")
 import importlib.machinery  # noqa: E402
 import importlib.util  # noqa: E402
@@ -83,7 +94,7 @@ def log():
     return open(calls).read() if os.path.exists(calls) else ""
 
 
-check("opens with four pages", win.nav.count() == 4 and win.pages.count() == 4)
+check("opens with six pages", win.nav.count() == 6 and win.pages.count() == 6)
 check("reads the accent from auxo.conf", S.accent_hex() == S.ACCENTS["emerald"])
 names = [b.toolTip() for b in win.swatches.buttons()]
 check("one swatch per accent, current one ticked", names == list(S.ACCENTS) and
@@ -124,6 +135,50 @@ check("app bundles are listed", len(win.app_boxes) >= 8)
 win.app_boxes[0].setChecked(True); win.install_apps(); wait_proc()
 check("installing apps runs pkexec auxo-tweak apps", f"root apps {win.app_boxes[0].property('bundle')}" in log())
 check("status line reports success", win.status.text().startswith("✓"))
+
+# search jumps to the right page
+win.jump("bluetooth"); wait()
+check("search: “bluetooth” opens System → Services", win.nav.currentRow() == 3)
+win.jump("gaps"); wait()
+check("search: “gaps” opens Windows & bar", win.nav.currentRow() == 1)
+win.jump("password"); wait()
+check("search: “password” opens Health", win.nav.currentRow() == 4)
+
+# presets + importing a rice
+win.nav.setCurrentRow(1); wait()
+next(b for b in win.findChildren(QPushButton) if b.text() == "Minimal").click(); wait_proc()
+check("a preset runs look preset", "look preset minimal" in log())
+rice = os.path.join(home, "friend.auxorice")
+open(rice, "w").write("[auxo]\nname = Friend's rice\naccent = rose\n[look]\ngaps = 3\n")
+from PyQt6.QtWidgets import QFileDialog, QMessageBox  # noqa: E402
+QFileDialog.getOpenFileName = staticmethod(lambda *a, **k: (rice, ""))
+QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+win.import_rice(); wait_proc(); wait(300); wait_proc()
+check("importing a rice runs look import, then offers its accent", f"look import {rice}" in log() and "root accent rose" in log())
+
+# health
+win.nav.setCurrentRow(4); win.check_health(); wait(800); shot("health")
+check("health lists problems and the fix", "shares tty1" in win.health_box.itemAt(0).widget().text() and win.fix_btn.isEnabled())
+check("sidebar shows how many to fix", "1 to fix" in win.nav.item(4).text())
+win.fix_btn.click(); wait_proc()
+check("Fix everything runs pkexec auxo-tweak doctor --fix", "root doctor --fix" in log())
+
+# Ask Auxo
+win.nav.setCurrentRow(5); wait()
+check("AI on: no setup card, chat ready", not win.ai_setup.isVisible() and win.ask.isEnabled())
+win.ask.setText("how do I turn on bluetooth?"); win.send_question()
+for _ in range(40):
+    wait(100)
+    if win.ai_proc.state() == win.ai_proc.ProcessState.NotRunning:
+        break
+wait(200); shot("ask-auxo")
+check("the question goes to auxo-ai", "bluetooth" in open(os.path.join(home, "ai-in.json")).read())
+check("the answer is shown", "Turn on Bluetooth" in win.chat_view.toPlainText())
+check("suggested commands become Run links", "Run: auxo-tweak service bluetooth on" in win.chat_view.toPlainText())
+win.run_suggested("auxo-tweak service bluetooth on"); wait_proc()
+check("running a suggestion uses pkexec", "root service bluetooth on" in log())
+win.run_suggested("auxo-tweak look preset glass"); wait_proc()
+check("look suggestions run without a password", "\nlook preset glass" in "\n" + log())
 
 desk = subprocess.run(["desktop-file-validate", f"{PKG}/applications/auxo-settings.desktop"], capture_output=True,
                       text=True) if shutil.which("desktop-file-validate") else None

@@ -42,6 +42,9 @@ auxo-tweak accent rose                # recolour GRUB, login, prompt, terminals,
 auxo-tweak mode light                 # light or dark, on every desktop
 auxo-tweak look set gaps=4 rounding=0 bar=bottom   # your own rice, on every desktop
 auxo-tweak apps creative dev          # popular app bundles in one go
+auxo-tweak look preset lite           # Auxo, glass, minimal, cozy, retro or lite
+auxo-tweak doctor --fix               # find and repair common problems
+auxo-tweak ai on && auxo-ai           # Auxo AI: a free assistant that runs on your PC
 auxo-tweak kernel linux-lts           # swap kernels (stays the default boot entry after updates)
 auxo-tweak nvidia on                  # the right NVIDIA driver for your card
 auxo-tweak scheduler lavd --mode gaming   # sched-ext CPU scheduler
@@ -58,6 +61,8 @@ auxo-rollback --list                  # list snapshots
 | **9 desktop choices, all riced** | KDE Plasma 6 with the **Auxo global theme** (the live desktop, installs offline), Hyprland, Sway, i3, GNOME, Xfce and Cinnamon with **Auxo rices**, [Chrono](https://github.com/rxvy-dev/chrono) (rxvy's own Wayland desktop, built from source with an Auxo theme), or no desktop. Hyprland comes from the [hyprland-void](https://github.com/Makrennel/hyprland-void) community repo, since Void doesn't package it. |
 | **One accent, everywhere** | 7 accents applied to the GRUB theme, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
 | **Your own rice** | One set of look settings (light/dark, wallpaper, interface and terminal fonts, gaps, rounded corners, borders, blur, transparency, animations, bar top or bottom) applied to every desktop, from Auxo Settings or `auxo-tweak look`. Saved in `~/.config/auxo/look.conf`; your own config edits stay. |
+| **Auxo AI** | A free, private assistant that runs on your PC (Ollama with a 1.3, 2 or 5 GB model). It knows every `auxo-tweak` command and your settings, and can run the fixes it suggests after you confirm. `auxo-ai` in a terminal, or **Ask Auxo** in Auxo Settings. |
+| **Self-repair** | `auxo-tweak doctor` (Health in Auxo Settings) checks the login screen, services, network, accounts, sudo and disk space, and `--fix` repairs what it can. |
 | **Kernels** | Void's `linux`, `linux-lts` or `linux-mainline`. A kernel hook keeps your pick as the default GRUB entry after every update. |
 | **NVIDIA** | `auxo-tweak nvidia on` picks `nvidia` (Turing and newer, open kernel modules), `nvidia580` (Maxwell–Volta) or `nvidia470` (Kepler) from Void's nonfree repo, with DKMS for every installed kernel. `nvidia prime` adds `prime-run` for laptops. |
 | **Performance** | sched-ext CPU schedulers through `scx-loader` (`lavd`, `bpfland`, `flash`, `cosmos`, `rusty`) with gaming/low-latency/power-save modes, power profiles, zram. |
@@ -71,8 +76,9 @@ auxo-rollback --list                  # list snapshots
 
 | Tool | What it does |
 |---|---|
-| `auxo-settings` | The graphical settings app (Super+I on Hyprland/Sway/i3): Look, Windows & bar, Desktop, System. Runs `auxo-tweak` underneath; asks for your password only for system changes. |
-| `auxo-tweak` | Menu + CLI: `accent`, `mode`, `look`, `wallpaper`, `apps`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-settings` | The graphical settings app (Super+I on Hyprland/Sway/i3), with search: Look (presets, share your rice), Windows & bar, Desktop, System (services, snapshots, maintenance, apps), Health, Ask Auxo. Runs `auxo-tweak` underneath; asks for your password only for system changes. |
+| `auxo-tweak` | Menu + CLI: `accent`, `mode`, `look`, `wallpaper`, `apps`, `ai`, `doctor`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-ai` | Auxo AI in the terminal: `auxo-ai` to chat, or `auxo-ai "question"`. |
 | `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |
 | `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |

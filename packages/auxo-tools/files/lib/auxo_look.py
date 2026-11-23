@@ -478,3 +478,73 @@ def font_spec(family, size):
 
 def rgb_csv(h):
     return ",".join(str(x) for x in hex_to_rgb(h))
+
+
+# ── presets: one click, a whole look (fonts and wallpaper stay yours unless the preset needs them) ──
+PRESETS = {
+    "auxo": ("Auxo", "The default: floating windows, soft corners, blur", {
+        "gaps": "8", "rounding": "12", "border": "2", "blur": "on", "transparency": "on", "animations": "on"}),
+    "glass": ("Glass", "Big corners, see-through everything, lots of blur", {
+        "gaps": "12", "rounding": "18", "border": "1", "blur": "on", "transparency": "on", "animations": "on"}),
+    "minimal": ("Minimal", "Tight gaps, square corners, nothing see-through", {
+        "gaps": "4", "rounding": "0", "border": "1", "blur": "off", "transparency": "off", "animations": "on"}),
+    "cozy": ("Cozy", "Roomy gaps, round corners, bigger text", {
+        "gaps": "16", "rounding": "22", "border": "3", "font_size": "11", "blur": "on", "transparency": "on",
+        "animations": "on"}),
+    "retro": ("Retro", "Square, solid and monospaced, like a terminal from the 80s", {
+        "gaps": "0", "rounding": "0", "border": "2", "blur": "off", "transparency": "off", "animations": "off",
+        "ui_font": "Fira Code"}),
+    "lite": ("Lite", "No blur, transparency or animations: the fastest on older PCs", {
+        "gaps": "6", "rounding": "8", "border": "2", "blur": "off", "transparency": "off", "animations": "off"}),
+}
+
+
+def preset(look, name):
+    if name not in PRESETS:
+        raise LookError(f"no preset named {name}. presets: {', '.join(PRESETS)}")
+    out = dict(look)
+    out.update(PRESETS[name][2])
+    return out
+
+
+# ── sharing a rice: a small text file anyone can import ──
+RICE_EXT = ".auxorice"
+
+
+def rice_export(look, accent, desktop, name="My Auxo rice"):
+    lines = ["# Auxo rice — import it with Auxo Settings (Look → Import a rice) or:",
+             "#   auxo-tweak look import THIS-FILE", "[auxo]", f"name = {name}", f"accent = {accent}",
+             f"desktop = {desktop or ''}", "[look]"]
+    for k in DEFAULTS:
+        v = look[k]
+        if k == "wallpaper" and v != "accent" and not v.startswith(WALLDIR + "/"):
+            lines.append("# wallpaper: your own image isn't included, share it alongside this file")
+            v = "accent"
+        lines.append(f"{k} = {v}")
+    return "\n".join(lines) + "\n"
+
+
+def rice_import(text):
+    """→ (look changes, accent or None, desktop or None, name). Unknown or invalid lines are skipped."""
+    section, meta, changes = "", {}, {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", ";")):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip().lower()
+            continue
+        if "=" not in line:
+            continue
+        k, v = (x.strip() for x in line.split("=", 1))
+        if section == "auxo":
+            meta[k] = v
+        elif section == "look" and k in DEFAULTS:
+            try:
+                changes[k] = validate(k, v)
+            except LookError:
+                pass
+    if not changes and not meta:
+        raise LookError("that isn't an Auxo rice file")
+    acc = meta.get("accent") if meta.get("accent") in ACCENTS else None
+    return changes, acc, meta.get("desktop") or None, meta.get("name", "Auxo rice")

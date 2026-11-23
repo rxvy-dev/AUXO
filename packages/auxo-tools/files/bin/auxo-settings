@@ -5,8 +5,12 @@ Every change goes through auxo-tweak, so the app and the command line always agr
 look settings run as you (`auxo-tweak look set …`), system changes ask for your password
 with the normal graphical prompt (`pkexec auxo-tweak …`) and show their progress live.
 """
+import html
+import json
 import os
 import pwd
+import re
+import shlex
 import sys
 
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
@@ -14,10 +18,11 @@ sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 try:
     from PyQt6.QtCore import Qt, QProcess, QTimer, QRectF, QSize
     from PyQt6.QtGui import QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPixmap
-    from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFontComboBox,
-                                 QFrame, QGridLayout, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                                 QMainWindow, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider,
-                                 QSpinBox, QStackedWidget, QToolButton, QVBoxLayout, QWidget)
+    from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QCompleter, QFileDialog,
+                                 QFontComboBox, QFrame, QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit,
+                                 QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPlainTextEdit,
+                                 QPushButton, QScrollArea, QSlider, QSpinBox, QStackedWidget, QTextBrowser,
+                                 QToolButton, QVBoxLayout, QWidget)
 except ImportError:
     print("auxo-settings needs PyQt6: sudo xbps-install python3-pyqt6 python3-pyqt6-widgets", file=sys.stderr)
     sys.exit(1)
@@ -31,6 +36,14 @@ TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
 PKEXEC = os.environ.get("AUXO_PKEXEC", "pkexec")
 ME = pwd.getpwuid(os.getuid()).pw_name
 HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
+AI = os.environ.get("AUXO_AI", "auxo-ai")
+SVDIR = "/etc/runit/runsvdir/default"
+# auxo-tweak commands that change only your own settings: no password needed
+USER_CMDS = {"look", "mode", "wallpaper", "info", "doctor", "presets"}
+SERVICES = [("bluetooth", "bluetoothd", "Bluetooth", "headphones, mice, controllers"),
+            ("cups", "cupsd", "Printing", "printers and scanners (CUPS)"),
+            ("sshd", "sshd", "Remote login (SSH)", "log in to this PC from another one"),
+            ("power-profiles", "power-profiles-daemon", "Power profiles", "battery / balanced / performance switching")]
 
 DESKTOP_INFO = {
     "plasma": "Modern and flexible, with the Auxo global theme.",
@@ -242,10 +255,12 @@ class Settings(QMainWindow):
         self.nav.setObjectName("nav")
         self.nav.setFixedWidth(220)
         self.pages = QStackedWidget()
-        for name, icon, page in (("Look", "preferences-desktop-theme", self.page_look()),
-                                 ("Windows & bar", "preferences-system-windows", self.page_windows()),
-                                 ("Desktop", "preferences-desktop", self.page_desktop()),
-                                 ("System", "preferences-system", self.page_system())):
+        self._sections = []          # (page, widget, words) for search
+        self.ai_proc = None
+        self.chat = []
+        for idx, (name, icon, build) in enumerate(PAGES):
+            self._building = idx
+            page = getattr(self, build)()
             it = QListWidgetItem(QIcon.fromTheme(icon), "  " + name)
             it.setSizeHint(QSize(200, 46))
             self.nav.addItem(it)
@@ -262,6 +277,22 @@ class Settings(QMainWindow):
         brand = QLabel("▲  Auxo Settings")
         brand.setObjectName("brand")
         side.addWidget(brand)
+        self.search = QLineEdit(placeholderText="Search settings…")
+        self.search.setObjectName("search")
+        self.search.setClearButtonEnabled(True)
+        words = sorted({t for _p, _w, t, _k in self._sections})
+        comp = QCompleter(words, self)
+        comp.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        comp.setFilterMode(Qt.MatchFlag.MatchContains)
+        comp.activated.connect(self.jump)
+        self.search.setCompleter(comp)
+        self.search.returnPressed.connect(lambda: self.jump(self.search.text()))
+        sw = QWidget()
+        sw.setObjectName("searchwrap")
+        sl = QVBoxLayout(sw)
+        sl.setContentsMargins(14, 0, 14, 10)
+        sl.addWidget(self.search)
+        side.addWidget(sw)
         side.addWidget(self.nav, 1)
         give = QLabel('<a href="https://terryfox.org/?form=GENERAL" style="color:#ff8a92;text-decoration:none">'
                       '♥ Auxo supports cancer research</a>')
@@ -308,6 +339,13 @@ class Settings(QMainWindow):
             #side, #nav {{ background: {side}; border: none; }}
             #brand {{ background: {side}; color: {a}; font-size: 15pt; font-weight: 700; padding: 22px 18px 14px 18px; }}
             #give {{ background: {side}; padding: 14px 18px; }}
+            #searchwrap {{ background: {side}; }}
+            #search {{ background: {card}; border: 1px solid {line}; border-radius: 8px; padding: 6px 10px; }}
+            #search:focus {{ border-color: {a}; }}
+            QTextBrowser#chat {{ background: {card}; border: 1px solid {line}; border-radius: 12px; padding: 10px; }}
+            QLineEdit#ask {{ background: {card}; border: 1px solid {line}; border-radius: 10px; padding: 9px 12px; }}
+            QLabel#flash {{ color: {a}; }}
+            QLabel#ok {{ color: #34d399; }} QLabel#bad {{ color: #fb7185; }}
             #nav::item {{ padding: 6px 10px; margin: 2px 10px; border-radius: 8px; color: {mut}; }}
             #nav::item:selected {{ background: {a}; color: {on_acc}; }}
             #nav::item:hover:!selected {{ background: {card}; color: {fg}; }}
@@ -347,14 +385,34 @@ class Settings(QMainWindow):
             s.setWordWrap(True)
             lay.addWidget(s)
 
-    def section(self, lay, title, reach=None):
+    def section(self, lay, title, reach=None, keys=""):
         t = QLabel(title)
         t.setObjectName("h2")
         lay.addWidget(t)
+        self._sections.append((self._building, t, title, f"{title} {reach or ''} {keys}".lower()))
         if reach:
             r = QLabel(f"Applies to: {reach}")
             r.setObjectName("reach")
             lay.addWidget(r)
+
+    def jump(self, text):
+        """Search: go to the page and section that best matches, and flash it."""
+        q = text.strip().lower()
+        if not q:
+            return
+        hit = (next((x for x in self._sections if x[2].lower() == q), None)
+               or next((x for x in self._sections if x[2].lower().startswith(q)), None)
+               or next((x for x in self._sections if q in x[3]), None)
+               or next((x for x in self._sections if all(w in x[3] for w in q.split())), None))
+        if not hit:
+            self.status.setText(f"Nothing called “{text}” — try words like gaps, wallpaper, kernel, bluetooth")
+            return
+        page, label = hit[0], hit[1]
+        self.nav.setCurrentRow(page)
+        self.pages.widget(page).ensureWidgetVisible(label, 0, 120)
+        label.setObjectName("flash")
+        label.setStyleSheet("font-size: 12.5pt; font-weight: 700; margin-top: 10px;")
+        QTimer.singleShot(1600, lambda: (label.setObjectName("h2"), label.setStyleSheet("")))
 
     def card(self):
         f = QFrame()
@@ -369,18 +427,25 @@ class Settings(QMainWindow):
         return w, lay
 
     # ── running auxo-tweak ──
+    def busy(self):
+        return self.proc and self.proc.state() != QProcess.ProcessState.NotRunning
+
     def run(self, args, root=False, label=None, done=None):
-        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+        self.run_prog(TWEAK, args, root, label, done, shown="auxo-tweak")
+
+    def run_prog(self, prog, args, root=False, label=None, done=None, shown=None):
+        if self.busy():
             QMessageBox.information(self, "Auxo Settings", "Something is still running. Wait for it to finish first.")
-            return
-        prog, argv = (PKEXEC, [TWEAK, *args]) if root else (TWEAK, list(args))
+            return False
+        exe, argv = (PKEXEC, [prog, *args]) if root else (prog, list(args))
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self._read)
         self.proc.finished.connect(lambda code, _st: self._finished(code, label, done))
         self.status.setText(("⏳ " + (label or " ".join(args))) + ("  (asks for your password)" if root else ""))
-        self.log.appendPlainText(f"$ {'pkexec ' if root else ''}auxo-tweak {' '.join(args)}")
-        self.proc.start(prog, argv)
+        self.log.appendPlainText(f"$ {'pkexec ' if root else ''}{shown or os.path.basename(prog)} {' '.join(args)}")
+        self.proc.start(exe, argv)
+        return True
 
     def _read(self):
         text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
@@ -453,8 +518,10 @@ class Settings(QMainWindow):
         self.section(lay, "Light or dark", auxo_look.REACH["mode"])
         row = QHBoxLayout()
         grp = QButtonGroup(self)
+        self.mode_btns = {}
         for m in ("dark", "light"):
             b = QPushButton(m.title())
+            self.mode_btns[m] = b
             b.setCheckable(True)
             b.setChecked(self.look["mode"] == m)
             b.setMinimumWidth(110)
@@ -518,7 +585,7 @@ class Settings(QMainWindow):
         self.mono_font.currentFontChanged.connect(lambda f: self.set_look("mono_font", f.family()))
         g.addWidget(self.mono_font, 1, 1)
         g.addWidget(QLabel("Size"), 2, 0)
-        size = QSpinBox()
+        size = self.size_spin = QSpinBox()
         size.setRange(7, 24)
         size.setValue(int(self.look["font_size"]))
         size.setSuffix(" pt")
@@ -529,11 +596,83 @@ class Settings(QMainWindow):
 
         self.section(lay, "Animations", auxo_look.REACH["animations"])
         anim = QCheckBox("Animate windows and menus")
+        self.chk = {"animations": anim}
         anim.setChecked(self.look["animations"] == "on")
         anim.toggled.connect(lambda v: self.set_look("animations", "on" if v else "off", now=True))
         lay.addWidget(anim)
+
+        self.section(lay, "Share your rice", "a small file with your accent and look", keys="export import backup")
+        note = QLabel("Save your setup as a .auxorice file to share in the Auxo Discord, or import someone else's.")
+        note.setObjectName("reach")
+        lay.addWidget(note)
+        row = QHBoxLayout()
+        ex = QPushButton("Export my rice…")
+        ex.clicked.connect(self.export_rice)
+        im = QPushButton("Import a rice…")
+        im.clicked.connect(self.import_rice)
+        row.addWidget(ex)
+        row.addWidget(im)
+        row.addStretch(1)
+        lay.addLayout(row)
         lay.addStretch(1)
         return w
+
+    def export_rice(self):
+        f, _ = QFileDialog.getSaveFileName(self, "Export your rice", os.path.join(HOME, f"my-rice{auxo_look.RICE_EXT}"),
+                                           f"Auxo rice (*{auxo_look.RICE_EXT})")
+        if f:
+            if not f.endswith(auxo_look.RICE_EXT):
+                f += auxo_look.RICE_EXT
+            name, ok = QInputDialog.getText(self, "Name your rice", "Name shown when someone imports it:",
+                                            text=f"{ME}'s Auxo rice")
+            self.run(["look", "export", f, "--name", name if ok and name else f"{ME}'s Auxo rice"],
+                     label=f"Rice saved to {os.path.basename(f)}")
+
+    def import_rice(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Import a rice", HOME, f"Auxo rice (*{auxo_look.RICE_EXT});;All files (*)")
+        if not f:
+            return
+        try:
+            changes, acc, desk, name = auxo_look.rice_import(open(f).read())
+        except (OSError, auxo_look.LookError) as e:
+            QMessageBox.warning(self, "Import a rice", f"Couldn't read that file: {e}")
+            return
+
+        def accent_too(code):
+            self.reload_look()
+            if code == 0 and acc and acc != conf().get("ACCENT", DEFAULT):
+                if QMessageBox.question(self, name, f"This rice uses the {acc} accent. Switch to it too?") \
+                        == QMessageBox.StandardButton.Yes:
+                    self.run(["accent", acc], root=True, label=f"Accent → {acc}",
+                             done=lambda c: (self.restyle(), self.preview.update(), self.refresh_desktops()))
+        self.run(["look", "import", f], label=f"Imported “{name}”", done=accent_too)
+
+    def reload_look(self):
+        """Read look.conf again and move every control to match (after a preset, import or reset)."""
+        self.look = auxo_look.load(HOME)
+        self.preview.set_look(self.look)
+        widgets = [(self.s_gaps, "gaps"), (self.s_round, "rounding"), (self.s_border, "border")]
+        for s_, k in widgets:
+            s_.blockSignals(True)
+            s_.setValue(int(self.look[k]))
+            s_.blockSignals(False)
+        for k, b in self.chk.items():
+            b.blockSignals(True)
+            b.setChecked(self.look[k] == "on")
+            b.blockSignals(False)
+        for d, b in ((self.mode_btns, "mode"), (self.bar_btns, "bar")):
+            for v, btn in d.items():
+                btn.setChecked(self.look[b] == v)
+        self.size_spin.blockSignals(True)
+        self.size_spin.setValue(int(self.look["font_size"]))
+        self.size_spin.blockSignals(False)
+        for cb, k in ((self.ui_font, "ui_font"), (self.mono_font, "mono_font")):
+            cb.blockSignals(True)
+            cb.setCurrentFont(QFont(self.look[k]))
+            cb.blockSignals(False)
+        for lbl, k in self.slider_labels:
+            lbl.setText(f"{self.look[k]} px")
+        self.restyle()
 
     def choose_wallpaper(self):
         f, _ = QFileDialog.getOpenFileName(self, "Choose a wallpaper", os.path.join(HOME, "Pictures"),
@@ -547,6 +686,17 @@ class Settings(QMainWindow):
                                            "shows the result; your desktop follows a moment after you let go.")
         self.preview = LookPreview(self.look)
         lay.addWidget(self.preview)
+        self.section(lay, "Presets", "Hyprland, Sway, i3, Chrono and the bars", keys="style theme lite fast old pc")
+        grid = QGridLayout()
+        grid.setSpacing(8)
+        for i, (k, (name, desc, _v)) in enumerate(auxo_look.PRESETS.items()):
+            b = QPushButton(name)
+            b.setToolTip(desc)
+            b.clicked.connect(lambda _=False, k=k, n=name: self.run(["look", "preset", k], label=f"Preset: {n}",
+                                                                      done=lambda c: self.reload_look()))
+            grid.addWidget(b, 0, i)
+        lay.addLayout(grid)
+        self.slider_labels = []
 
         def slider(key, lo, hi, unit="px"):
             self.section(lay, auxo_look.LABELS[key], auxo_look.REACH[key])
@@ -556,6 +706,7 @@ class Settings(QMainWindow):
             s.setValue(int(self.look[key]))
             val = QLabel(f"{self.look[key]} {unit}")
             val.setMinimumWidth(56)
+            self.slider_labels.append((val, key))
             s.valueChanged.connect(lambda v: (val.setText(f"{v} {unit}"), self.set_look(key, v)))
             row.addWidget(s, 1)
             row.addWidget(val)
@@ -569,14 +720,17 @@ class Settings(QMainWindow):
                           ("transparency", "See-through bars and terminals, slightly faded unfocused windows")):
             self.section(lay, auxo_look.LABELS[key], auxo_look.REACH[key])
             c = QCheckBox(text)
+            self.chk[key] = c
             c.setChecked(self.look[key] == "on")
             c.toggled.connect(lambda v, k=key: self.set_look(k, "on" if v else "off", now=True))
             lay.addWidget(c)
         self.section(lay, "Bar position", auxo_look.REACH["bar"])
         row = QHBoxLayout()
         grp = QButtonGroup(self)
+        self.bar_btns = {}
         for pos in ("top", "bottom"):
             b = QPushButton(pos.title())
+            self.bar_btns[pos] = b
             b.setCheckable(True)
             b.setChecked(self.look["bar"] == pos)
             b.setMinimumWidth(110)
@@ -597,13 +751,7 @@ class Settings(QMainWindow):
     def reset_look(self):
         def after(code):
             if code == 0:
-                self.look = auxo_look.load(HOME)
-                self.preview.set_look(self.look)
-                for s, k in ((self.s_gaps, "gaps"), (self.s_round, "rounding"), (self.s_border, "border")):
-                    s.blockSignals(True)
-                    s.setValue(int(self.look[k]))
-                    s.blockSignals(False)
-                self.restyle()
+                self.reload_look()
         self.run(["look", "reset", "gaps", "rounding", "border", "blur", "transparency", "animations", "bar"],
                  label="Look back to the Auxo defaults", done=after)
 
@@ -711,7 +859,44 @@ class Settings(QMainWindow):
         grid.setColumnStretch(1, 1)
         lay.addLayout(grid)
 
-        self.section(lay, "Apps")
+        self.section(lay, "Services", keys="bluetooth printer printing cups ssh remote power")
+        sg = QGridLayout()
+        sg.setHorizontalSpacing(24)
+        for i, (key, sv, title, desc) in enumerate(SERVICES):
+            box = QCheckBox(title)
+            box.setChecked(os.path.lexists(f"{ROOT}{SVDIR}/{sv}"))
+            box.toggled.connect(lambda v, box=box, key=key, title=title: self.toggle(box, ["service", key], title, v))
+            sub = QLabel(desc)
+            sub.setObjectName("reach")
+            sg.addWidget(box, i, 0)
+            sg.addWidget(sub, i, 1)
+        sg.setColumnStretch(1, 1)
+        lay.addLayout(sg)
+
+        self.section(lay, "Snapshots & undo", "btrfs installs with snapshots on", keys="rollback restore backup undo")
+        row = QHBoxLayout()
+        for text, fn in (("Take a snapshot now", lambda: self.run(["snapshots", "now", "--description", "taken in Auxo Settings"],
+                                                                     root=True, label="Snapshot taken")),
+                         ("Show snapshots", lambda: (self.logbtn.setChecked(True),
+                                                     self.run(["snapshots", "status"], root=True, label="Snapshots listed"))),
+                         ("Roll back…", self.rollback)):
+            b = QPushButton(text)
+            b.clicked.connect(fn)
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+
+        self.section(lay, "Maintenance", keys="clean disk space cache mirrors flatpak flathub drivers")
+        row = QHBoxLayout()
+        for text, args in (("Free up disk space", ["cleanup"]), ("Fastest mirror", ["mirrors"]),
+                           ("Add Flathub", ["flatpak", "on"]), ("Detect drivers", ["drivers"])):
+            b = QPushButton(text)
+            b.clicked.connect(lambda _=False, a=args, t=text: self.run(a, root=True, label=t))
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+
+        self.section(lay, "Apps", keys="install software programs games steam discord")
         note = QLabel("Tick what you want; everything comes from Void's repositories (Discord from its nonfree repo).")
         note.setObjectName("reach")
         lay.addWidget(note)
@@ -741,6 +926,204 @@ class Settings(QMainWindow):
         lay.addLayout(r)
         lay.addStretch(1)
         return w
+
+    def rollback(self):
+        n, ok = QInputDialog.getInt(self, "Roll back", "Snapshot number to go back to\n(click “Show snapshots” to see them):",
+                                    1, 1, 999999)
+        if not ok:
+            return
+        if QMessageBox.question(self, "Roll back", f"Replace your system with snapshot {n}?\n\nYour files in /home are kept, "
+                                "and the current system is saved so you can come back. Restart afterwards.") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        self.logbtn.setChecked(True)
+        self.run_prog("auxo-rollback", ["--yes", str(n)], root=True, label=f"Rolled back to {n} — restart to use it")
+
+    # ── Health ──
+    def page_health(self):
+        w, lay = self.page()
+        self.heading(lay, "Health", "Auxo checks the things that most often break a Linux install, and fixes them "
+                                    "for you. If you can't log in, can't get online or ran out of space, start here.")
+        self.section(lay, "Checks", keys="doctor fix login password broken problem repair")
+        self.health_box = QVBoxLayout()
+        lay.addLayout(self.health_box)
+        row = QHBoxLayout()
+        again = QPushButton("Check again")
+        again.clicked.connect(self.check_health)
+        self.fix_btn = QPushButton("Fix everything")
+        self.fix_btn.setObjectName("primary")
+        self.fix_btn.clicked.connect(lambda: self.run(["doctor", "--fix"], root=True, label="Repaired",
+                                                      done=lambda c: self.check_health()))
+        row.addWidget(self.fix_btn)
+        row.addWidget(again)
+        row.addStretch(1)
+        lay.addLayout(row)
+        lay.addStretch(1)
+        QTimer.singleShot(0, self.check_health)
+        return w
+
+    def check_health(self):
+        p = QProcess(self)
+        p.finished.connect(lambda *_: self._show_health(bytes(p.readAllStandardOutput()).decode(errors="replace")))
+        p.start(TWEAK, ["doctor", "--json"])
+        self._health_proc = p
+
+    def _show_health(self, out):
+        while self.health_box.count():
+            it = self.health_box.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        try:
+            checks = json.loads(out or "[]")
+        except ValueError:
+            checks = []
+        bad = [c for c in checks if c.get("problem")]
+        for c in checks:
+            row = QLabel()
+            row.setWordWrap(True)
+            row.setTextFormat(Qt.TextFormat.RichText)
+            if c.get("problem"):
+                row.setText(f"<span style='color:#fb7185'>✗</span>&nbsp; <b>{html.escape(c['title'])}</b><br>"
+                            f"<span style='color:#8b8ba0'>{html.escape(c['problem'])} — "
+                            f"{'fix: ' if c.get('fixable') else ''}{html.escape(c.get('hint', ''))}</span>")
+            else:
+                row.setText(f"<span style='color:#34d399'>✓</span>&nbsp; {html.escape(c['title'])}")
+            self.health_box.addWidget(row)
+        self.fix_btn.setEnabled(any(c.get("fixable") for c in bad))
+        if not checks:
+            self.health_box.addWidget(QLabel("Couldn't run the checks (is auxo-tweak installed?)"))
+        idx = [n for n, *_ in PAGES].index("Health")
+        it = self.nav.item(idx) if self.nav.count() > idx else None
+        if it:
+            it.setText(f"  Health  ·  {len(bad)} to fix" if bad else "  Health")
+
+    # ── Ask Auxo (local AI) ──
+    def page_ai(self):
+        w, lay = self.page()
+        self.heading(lay, "Ask Auxo", "Auxo AI runs on your own PC: free, private, and it works offline once it's set up. "
+                                      "It knows Auxo and your settings, and can run the fixes it suggests (you confirm first).")
+        self.section(lay, "Auxo AI", keys="ai assistant help chat question local llm ollama")
+        self.ai_setup = self.card()
+        v = QVBoxLayout(self.ai_setup)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.addWidget(QLabel("<b>Turn on Auxo AI</b> — one download (Ollama and a model), then it's yours."))
+        self.ai_model = QComboBox()
+        for key, (model, desc) in (("small", ("llama3.2:1b", "Small — about 1.3 GB, any PC with 8 GB of RAM")),
+                                   ("standard", ("llama3.2:3b", "Standard — about 2 GB, 8 GB of RAM or more")),
+                                   ("large", ("qwen3:8b", "Large — about 5 GB, 16 GB of RAM or a recent GPU"))):
+            self.ai_model.addItem(desc, key)
+        self.ai_model.setCurrentIndex(1)
+        r = QHBoxLayout()
+        r.addWidget(self.ai_model, 1)
+        on = QPushButton("Turn on")
+        on.setObjectName("primary")
+        on.clicked.connect(lambda: (self.logbtn.setChecked(True),
+                                    self.run(["ai", "on", "--model", self.ai_model.currentData()], root=True,
+                                             label="Auxo AI is ready", done=lambda c: self._ai_state())))
+        r.addWidget(on)
+        v.addLayout(r)
+        lay.addWidget(self.ai_setup)
+        self.chat_view = QTextBrowser()
+        self.chat_view.setObjectName("chat")
+        self.chat_view.setOpenLinks(False)
+        self.chat_view.anchorClicked.connect(lambda url: self.run_suggested(url.toString()))
+        self.chat_view.setMinimumHeight(340)
+        lay.addWidget(self.chat_view, 1)
+        r = QHBoxLayout()
+        self.ask = QLineEdit(placeholderText="Ask anything — “why is my wifi slow?”, “make my desktop look minimal”…")
+        self.ask.setObjectName("ask")
+        self.ask.returnPressed.connect(self.send_question)
+        send = QPushButton("Ask")
+        send.setObjectName("primary")
+        send.clicked.connect(self.send_question)
+        clear = QPushButton("New chat")
+        clear.clicked.connect(lambda: (self.chat.clear(), self.render_chat()))
+        r.addWidget(self.ask, 1)
+        r.addWidget(send)
+        r.addWidget(clear)
+        lay.addLayout(r)
+        self._ai_state()
+        return w
+
+    def _ai_state(self):
+        on = conf().get("AI") == "on"
+        self.ai_setup.setVisible(not on)
+        self.ask.setEnabled(on)
+        if not self.chat:
+            self.render_chat()
+
+    def render_chat(self, streaming=""):
+        a = accent_hex()[0]
+        parts = []
+        if not self.chat and not streaming:
+            tips = ["How do I install Steam?", "My laptop battery drains fast", "Make my desktop look minimal",
+                    "What does auxo-tweak doctor do?"]
+            parts.append("<p style='color:#8b8ba0'>Try: " + " · ".join(html.escape(t) for t in tips) + "</p>")
+        msgs = self.chat + ([{"role": "assistant", "content": streaming}] if streaming else [])
+        for m in msgs:
+            text = html.escape(m["content"])
+            if m["role"] == "user":
+                parts.append(f"<p><b style='color:{a}'>You</b><br>{text}</p>")
+            else:
+                text = re.sub(r"```[a-z]*\n?(.*?)```", lambda x: f"<pre>{x.group(1)}</pre>", text, flags=re.S)
+                text = re.sub(r"`([^`\n]+)`", r"<code>\1</code>", text).replace("\n", "<br>")
+                links = ""
+                if m is not msgs[-1] or not streaming:
+                    for cmd in self.suggested(m["content"]):
+                        links += f"<br><a href='{html.escape(cmd, quote=True)}' style='color:{a}'>▶ Run: {html.escape(cmd)}</a>"
+                parts.append(f"<p><b>Auxo AI</b><br>{text}{links}</p>")
+        self.chat_view.setHtml("".join(parts))
+        self.chat_view.verticalScrollBar().setValue(self.chat_view.verticalScrollBar().maximum())
+
+    @staticmethod
+    def suggested(text):
+        found = []
+        for m in re.finditer(r"(?m)^\s*(?:\$\s*)?(?:sudo\s+)?(auxo-tweak\s+[a-z][^\n`#]*)", text):
+            cmd = m.group(1).strip()
+            if cmd not in found:
+                found.append(cmd)
+        return found[:4]
+
+    def run_suggested(self, cmd):
+        try:
+            argv = shlex.split(cmd)[1:]
+        except ValueError:
+            return
+        if not argv:
+            return
+        root = argv[0] not in USER_CMDS
+        if QMessageBox.question(self, "Run this?", f"Auxo AI suggested:\n\n  {cmd}\n\n"
+                                f"{'This changes the system and asks for your password.' if root else 'This changes only your own settings.'}"
+                                "\nRun it?") != QMessageBox.StandardButton.Yes:
+            return
+        self.logbtn.setChecked(True)
+        self.run(argv, root=root, label=cmd, done=lambda c: self.reload_look() if argv[0] in USER_CMDS else None)
+
+    def send_question(self):
+        q = self.ask.text().strip()
+        if not q or (self.ai_proc and self.ai_proc.state() != QProcess.ProcessState.NotRunning):
+            return
+        self.ask.clear()
+        self.chat.append({"role": "user", "content": q})
+        self._answer = ""
+        self.render_chat("…")
+        p = self.ai_proc = QProcess(self)
+        p.readyReadStandardOutput.connect(self._ai_read)
+        p.finished.connect(self._ai_done)
+        p.start(AI, ["--plain", "--json"])
+        p.write(json.dumps(self.chat).encode())
+        p.closeWriteChannel()
+        self.status.setText("⏳ Auxo AI is thinking…")
+
+    def _ai_read(self):
+        self._answer += bytes(self.ai_proc.readAllStandardOutput()).decode(errors="replace")
+        self.render_chat(self._answer or "…")
+
+    def _ai_done(self, code, _st):
+        err = bytes(self.ai_proc.readAllStandardError()).decode(errors="replace").strip()
+        self.chat.append({"role": "assistant", "content": self._answer.strip() or err or "(no answer)"})
+        self.status.setText("✓ Auxo AI answered" if code == 0 else "Auxo AI couldn't answer — see the chat")
+        self.render_chat()
 
     def toggle(self, box, cmd, title, value):
         def undo(code):
@@ -773,12 +1156,21 @@ class Settings(QMainWindow):
         self.proc.start(PKEXEC, ["auxo-update", "-y"])
 
 
+PAGES = [("Look", "preferences-desktop-theme", "page_look"),
+         ("Windows & bar", "preferences-system-windows", "page_windows"),
+         ("Desktop", "preferences-desktop", "page_desktop"),
+         ("System", "preferences-system", "page_system"),
+         ("Health", "help-faq", "page_health"),
+         ("Ask Auxo", "dialog-information", "page_ai")]
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Auxo Settings")
     app.setDesktopFileName("auxo-settings")
     win = Settings()
-    page = {"look": 0, "windows": 1, "desktop": 2, "system": 3}.get((sys.argv[1:2] or [""])[0].lstrip("-"), 0)
+    page = {"look": 0, "windows": 1, "desktop": 2, "system": 3, "health": 4, "ai": 5}.get(
+        (sys.argv[1:2] or [""])[0].lstrip("-"), 0)
     win.nav.setCurrentRow(page)
     win.show()
     return app.exec()

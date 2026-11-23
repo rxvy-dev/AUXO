@@ -28,6 +28,8 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak repo nonfree|multilib    enable Void's extra repositories
   auxo-tweak service NAME on|off      bluetooth | cups | sshd | power-profiles
   auxo-tweak info                     show current Auxo settings
+  auxo-tweak ai on|off|status         Auxo AI, a free assistant that runs on your PC (--model small|standard|large)
+  auxo-tweak doctor [--fix]           find (and repair) common problems, like a login screen that rejects your password
 """
 import argparse
 import glob
@@ -441,6 +443,49 @@ def cmd_look(args):
                 look[k.strip()] = auxo_look.validate(k.strip(), v)
             except auxo_look.LookError as e:
                 raise AuxoError(str(e)) from None
+    elif args.action == "presets":
+        for k, (name, desc, _v) in auxo_look.PRESETS.items():
+            print(f"  {BOLD}{k:<9}{RESET} {desc}")
+        print(f"\n{DIM}use one: auxo-tweak look preset glass{RESET}")
+        return
+    elif args.action == "preset":
+        if len(args.items) != 1:
+            raise AuxoError(f"name one preset: {', '.join(auxo_look.PRESETS)}")
+        try:
+            look = auxo_look.preset(look, args.items[0])
+        except auxo_look.LookError as e:
+            raise AuxoError(str(e)) from None
+        args.items = list(auxo_look.PRESETS[args.items[0]][2])
+    elif args.action == "export":
+        out = args.items[0] if args.items else os.path.join(home, f"my-rice{auxo_look.RICE_EXT}")
+        text = auxo_look.rice_export(look, auxo_theme.current(), read_conf().get("DESKTOP", ""),
+                                     args.name or f"{user}'s Auxo rice")
+        if out == "-":
+            print(text, end="")
+            return
+        out = os.path.abspath(os.path.expanduser(out))
+        write_file(out, text, owner=user if os.geteuid() == 0 else None)
+        log(f"rice saved to {out} — share it, and others import it with: auxo-tweak look import {os.path.basename(out)}")
+        return
+    elif args.action == "import":
+        if len(args.items) != 1:
+            raise AuxoError("give the rice file: auxo-tweak look import my-rice.auxorice")
+        try:
+            changes, acc, desk, name = auxo_look.rice_import(open(R(os.path.abspath(os.path.expanduser(args.items[0])))).read())
+        except OSError as e:
+            raise AuxoError(f"can't read {args.items[0]}: {e.strerror}") from None
+        except auxo_look.LookError as e:
+            raise AuxoError(str(e)) from None
+        look.update(changes)
+        args.items = list(changes)
+        log(f"importing “{name}”")
+        if acc and acc != auxo_theme.current():
+            if os.geteuid() == 0:
+                cmd_accent(argparse.Namespace(name=acc, user=user, no_grub=False, no_initramfs=True))
+            else:
+                print(f"{DIM}this rice uses the {acc} accent: sudo auxo-tweak accent {acc}{RESET}")
+        if desk and desk in DESKTOPS and desk != read_conf().get("DESKTOP"):
+            print(f"{DIM}made on {DESKTOPS[desk]['name']}: sudo auxo-tweak desktop {desk}{RESET}")
     elif args.action == "reset":
         keys = args.items or list(auxo_look.DEFAULTS)
         for k in keys:
@@ -540,6 +585,12 @@ def cmd_snapshots(args):
             run(["snapper", "-c", "root", "list", "--columns", "number,date,description"], check=False)
         return
     require_root()
+    if args.state == "now":
+        if not os.path.exists(R("/etc/snapper/configs/root")):
+            raise AuxoError("snapshots are off — turn them on first: auxo-tweak snapshots on")
+        run(["snapper", "--no-dbus", "-c", "root", "create", "-d", args.description or "made by hand (Auxo)"])
+        log("snapshot taken — boot it from the GRUB menu, or make it your system with auxo-rollback")
+        return
     if args.state == "off":
         for sv in ("grub-btrfs", "snapperd"):
             sv_disable(sv, now=True)
@@ -899,6 +950,184 @@ def cmd_info(args):
         print(f"{BOLD}Look ({u}){RESET}  " + "  ".join(f"{k}={lk[k]}" for k in ("mode", "bar", "gaps", "rounding", "ui_font")))
 
 
+# ── Auxo AI: a local assistant (Ollama), free and offline once the model is downloaded ──
+AI_MODELS = {
+    "small": ("llama3.2:1b", "about 1.3 GB — any PC with 8 GB of RAM"),
+    "standard": ("llama3.2:3b", "about 2 GB — the default, 8 GB of RAM or more"),
+    "large": ("qwen3:8b", "about 5 GB — 16 GB of RAM or a recent graphics card"),
+}
+OLLAMA_SV = """#!/bin/sh
+# Auxo AI (Ollama) — written by auxo-tweak ai
+exec 2>&1
+export HOME=/var/lib/ollama OLLAMA_MODELS=/var/lib/ollama/models OLLAMA_HOST=127.0.0.1:11434
+exec chpst -u ollama:ollama /usr/local/bin/ollama serve
+"""
+
+
+def _ai_wait(seconds=30):
+    if DRY:
+        return True
+    import time
+    import urllib.request
+    for _ in range(seconds):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:11434/api/version", timeout=2).read()
+            return True
+        except OSError:
+            time.sleep(1)
+    return False
+
+
+def cmd_ai(args):
+    c = read_conf()
+    if args.state == "status":
+        on = sv_enabled("ollama")
+        print(f"Auxo AI : {'on' if on else 'off'}")
+        print(f"model   : {c.get('AI_MODEL', '-')}")
+        if not on:
+            print(f"{DIM}turn it on: sudo auxo-tweak ai on   (models: {', '.join(AI_MODELS)}){RESET}")
+        return
+    if args.state == "models":
+        for k, (m, d) in AI_MODELS.items():
+            print(f"  {BOLD}{k:<9}{RESET} {m:<14} {DIM}{d}{RESET}")
+        return
+    require_root()
+    if args.state == "off":
+        sv_disable("ollama", now=True)
+        if args.purge:
+            for pth in ("/usr/local/bin/ollama", "/usr/local/lib/ollama", "/var/lib/ollama", "/etc/sv/ollama"):
+                _rm(pth)
+        write_conf({"AI": "off"})
+        log("Auxo AI off" + (" and removed" if args.purge else " (models kept; --purge removes them)"))
+        return
+    model = AI_MODELS.get(args.model, (args.model,))[0] if args.model else c.get("AI_MODEL") or AI_MODELS["standard"][0]
+    if not online():
+        raise AuxoError("no internet connection — the first setup downloads Ollama and the model")
+    xbps_install("curl", "zstd")
+    if not os.path.exists(R("/usr/local/bin/ollama")) or args.state == "update":
+        arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(os.uname().machine)
+        if not arch:
+            raise AuxoError(f"Ollama has no build for {os.uname().machine}")
+        log("downloading Ollama (the engine that runs the model)")
+        run(["sh", "-c", f"curl -fL --progress-bar https://ollama.com/download/ollama-linux-{arch}.tar.zst"
+                         f" | tar --zstd -x -C {R('/usr/local')}"])
+    def _names(path):
+        try:
+            return {l.split(":")[0] for l in open(R(path))}
+        except OSError:
+            return set()
+    if "ollama" not in _names("/etc/passwd"):
+        groups = ",".join(g for g in ("video", "render") if g in _names("/etc/group"))
+        run(["useradd", "-r", "-d", "/var/lib/ollama", "-s", "/usr/bin/nologin"] + (["-G", groups] if groups else [])
+            + ["ollama"], check=False)
+    os.makedirs(R("/var/lib/ollama/models"), exist_ok=True)
+    run(["chown", "-R", "ollama:ollama", "/var/lib/ollama"], check=False)
+    write_file("/etc/sv/ollama/run", OLLAMA_SV, mode=0o755)
+    sv_enable("ollama", now=True)
+    if not _ai_wait():
+        raise AuxoError("Ollama didn't start — see: sudo sv status ollama; sudo tail /var/log/socklog/everything/current")
+    log(f"downloading the model {model} (one time; it then works offline)")
+    run(["/usr/local/bin/ollama", "pull", model], env={"OLLAMA_HOST": "127.0.0.1:11434"})
+    write_conf({"AI": "on", "AI_MODEL": model})
+    log("Auxo AI is ready: ask it anything with auxo-ai, or in Auxo Settings → Ask Auxo")
+
+
+# ── doctor: find (and with --fix, repair) the things that break Auxo installs ──
+def _doctor_checks():
+    """Each check: (id, title, problem or None, fix function or None, hint)."""
+    c = read_conf()
+    desk = c.get("DESKTOP", "")
+    d = DESKTOPS.get(desk, {})
+    out = []
+    cfg = R("/etc/greetd/config.toml")
+    greetd_on = sv_enabled("greetd")
+    if greetd_on and os.path.exists(cfg):
+        import re
+        m = re.search(r"(?m)^\s*vt\s*=\s*(\d+)", open(cfg).read())
+        vt = m.group(1) if m else "1"
+        clash = sv_enabled(f"agetty-tty{vt}")
+        out.append(("login-vt", "Login screen has its own console",
+                    f"the login screen and a text login both use tty{vt}, so typed passwords get mixed up" if clash else None,
+                    lambda: auxo_theme.apply_login(auxo_theme.current()),
+                    "moves the login screen to tty7"))
+    want = d.get("dm")
+    if desk and desk != "none" and want:
+        others = [x for x in DISPLAY_MANAGERS if x != want and sv_enabled(x)]
+        prob = (f"{want} (the login screen for {d['name']}) is off" if not sv_enabled(want) else
+                f"more than one login screen is on: {', '.join([want] + others)}" if others else None)
+        out.append(("login-manager", "One login screen, the right one", prob, lambda: set_display_manager(want),
+                    f"turns {want} on and the others off"))
+        miss = [x for x in GUI_SERVICES if not sv_enabled(x)]
+        out.append(("services", "Desktop services (D-Bus, elogind, NetworkManager)",
+                    f"not running at boot: {', '.join(miss)}" if miss else None,
+                    lambda: [sv_enable(x) for x in GUI_SERVICES], "turns them on"))
+    if sv_enabled("NetworkManager"):
+        both = [x for x in ("dhcpcd", "wpa_supplicant") if sv_enabled(x)]
+        out.append(("network", "Only NetworkManager manages the network",
+                    f"{', '.join(both)} also running, which fights NetworkManager for the connection" if both else None,
+                    lambda: [sv_disable(x) for x in both], "turns them off"))
+    if greetd_on:
+        try:
+            has = any(l.startswith("_greeter:") for l in open(R("/etc/passwd")))
+        except OSError:
+            has = True
+        out.append(("greeter-user", "Login screen account (_greeter)", None if has else "the _greeter account is missing",
+                    None, "reinstall greetd: sudo xbps-install -f greetd"))
+    try:
+        shadow = {l.split(":")[0]: l.split(":")[1] for l in open(R("/etc/shadow")) if l.count(":") > 2}
+        locked = [u for u in normal_users() if shadow.get(u, "x")[:1] in ("!", "*", "")]
+        out.append(("passwords", "Every user can log in", f"no usable password: {', '.join(locked)}" if locked else None,
+                    None, "set one with: sudo passwd " + (locked[0] if locked else "USER")))
+    except (OSError, IndexError):
+        pass
+    try:
+        groups = {l.split(":")[0]: l.strip().split(":")[3].split(",") for l in open(R("/etc/group")) if l.count(":") == 3}
+        nosudo = [u for u in normal_users() if u not in groups.get("wheel", [])]
+        out.append(("sudo", "Your user can use sudo", f"not in the wheel group: {', '.join(nosudo)}" if nosudo else None,
+                    (lambda: [run(["usermod", "-aG", "wheel", u], check=False) for u in nosudo]) if nosudo else None,
+                    "adds them to wheel"))
+    except (OSError, IndexError):
+        pass
+    st = os.statvfs(R("/"))
+    free = st.f_bavail * st.f_frsize / 2**30
+    out.append(("disk", "Free space on /", f"only {free:.1f} GB free" if free < 2 else None,
+                lambda: cmd_cleanup(argparse.Namespace(user=None, user_cache=False)), "runs auxo-tweak cleanup"))
+    news = []
+    for base, _dirs, files in os.walk(R("/etc")):
+        news += ["/" + os.path.relpath(os.path.join(base, f), R("/")) for f in files if ".new-" in f]
+    out.append(("configs", "No config updates waiting", f"{len(news)} new config file(s) from updates: {', '.join(news[:3])}"
+                if news else None, None, "compare each with the file without .new-…, then keep one"))
+    return out
+
+
+def cmd_doctor(args):
+    checks = _doctor_checks()
+    if args.json:
+        import json
+        print(json.dumps([{"id": i, "title": t, "problem": p, "fixable": bool(f), "hint": h} for i, t, p, f, h in checks]))
+        return
+    bad = [x for x in checks if x[2]]
+    for i, t, p, f, h in checks:
+        if p:
+            print(f"  {ansi('#fb7185')}✗{RESET} {t}: {p}\n      {DIM}{'fix: ' + h if f else h}{RESET}")
+        else:
+            print(f"  {ansi('#34d399')}✓{RESET} {t}")
+    if not bad:
+        log("everything looks good")
+        return
+    if not args.fix:
+        fixable = [x for x in bad if x[3]]
+        if fixable:
+            print(f"\n{DIM}repair with: sudo auxo-tweak doctor --fix{RESET}")
+        return
+    require_root()
+    for i, t, p, f, h in bad:
+        if f:
+            f()
+            log(f"fixed: {t}")
+    print(f"{DIM}reboot to be sure everything picks up the changes{RESET}")
+
+
 def cmd_session_apply(args):
     auxo_theme.session_apply(args.accent, once=args.once, rice=args.rice)
 
@@ -1038,7 +1267,9 @@ def main():
     s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
     s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "sway", "i3", "chrono"])
     s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
-    s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset"])
+    s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset", "presets", "preset",
+                                                                       "export", "import"])
+    s.add_argument("--name", help="export: the name shown when someone imports it")
     s.add_argument("items", nargs="*"); s.add_argument("--user"); s.add_argument("--json", action="store_true")
     s.add_argument("--no-apply", action="store_true", help="write the files but leave the running desktop alone"); s.set_defaults(fn=cmd_look)
     s = sub.add_parser("mode"); s.add_argument("mode", choices=["dark", "light"]); s.add_argument("--user")
@@ -1047,7 +1278,7 @@ def main():
     s.add_argument("--user"); s.add_argument("--no-apply", action="store_true"); s.set_defaults(fn=cmd_wallpaper)
     s = sub.add_parser("apps"); s.add_argument("names", nargs="*"); s.add_argument("--remove", action="store_true")
     s.set_defaults(fn=cmd_apps)
-    s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status"])
+    s = sub.add_parser("snapshots"); s.add_argument("state", choices=["on", "off", "status", "now"])
     s.add_argument("--no-grub", action="store_true"); s.add_argument("--no-now", action="store_true")
     s.add_argument("--description"); s.set_defaults(fn=cmd_snapshots)
     s = sub.add_parser("drivers"); s.add_argument("--no-initramfs", action="store_true")
@@ -1074,6 +1305,11 @@ def main():
     s = sub.add_parser("service"); s.add_argument("name", choices=list(SERVICES)); s.add_argument("state", choices=["on", "off"])
     s.set_defaults(fn=cmd_service)
     s = sub.add_parser("info"); s.set_defaults(fn=cmd_info)
+    s = sub.add_parser("ai"); s.add_argument("state", choices=["on", "off", "status", "models", "update"])
+    s.add_argument("--model", help="small, standard, large or any Ollama model name"); s.add_argument("--purge", action="store_true")
+    s.set_defaults(fn=cmd_ai)
+    s = sub.add_parser("doctor"); s.add_argument("--fix", action="store_true"); s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_doctor)
     s = sub.add_parser("session-apply"); s.add_argument("--accent", choices=list(ACCENTS)); s.add_argument("--once", action="store_true")
     s.add_argument("--rice", action="store_true", help="also apply the GNOME/Cinnamon/Xfce rice")
     s.set_defaults(fn=cmd_session_apply)

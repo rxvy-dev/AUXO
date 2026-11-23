@@ -1,0 +1,148 @@
+#!/usr/bin/env python3
+"""auxo-ai — Auxo AI, a free assistant that runs on your own PC (no account, no cloud).
+
+  auxo-ai                      chat in the terminal
+  auxo-ai "how do I turn on bluetooth?"
+  auxo-ai --plain --json       read the conversation as JSON on stdin (used by Auxo Settings)
+
+It knows Auxo: every auxo-tweak command, and your current settings and problems
+(from `auxo-tweak info` and `auxo-tweak doctor`), so its answers fit your system.
+Turn it on with: sudo auxo-tweak ai on
+"""
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+HOST = os.environ.get("OLLAMA_HOST", "127.0.0.1:11434")
+URL = f"http://{HOST}" if not HOST.startswith("http") else HOST
+TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
+
+
+def conf():
+    out = {}
+    try:
+        for line in open(os.environ.get("AUXO_ROOT", "").rstrip("/") + "/etc/auxo/auxo.conf"):
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.strip().split("=", 1)
+                out[k] = v.strip('"')
+    except OSError:
+        pass
+    return out
+
+
+def sh(*argv):
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=15).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def system_prompt():
+    import re
+    helptext = re.sub(r"\x1b\[[0-9;]*m", "", sh(TWEAK, "--help"))
+    info = re.sub(r"\x1b\[[0-9;]*m", "", sh(TWEAK, "info"))
+    problems = ""
+    try:
+        bad = [c for c in json.loads(sh(TWEAK, "doctor", "--json") or "[]") if c.get("problem")]
+        problems = "\n".join(f"- {c['title']}: {c['problem']} (fix: {c['hint']})" for c in bad) or "none found"
+    except ValueError:
+        problems = "unknown"
+    return f"""You are Auxo AI, the assistant built into Auxo Linux. You run locally on the user's PC.
+Auxo is based on Void Linux: runit services (not systemd), xbps packages (xbps-install, xbps-remove, xbps-query),
+no AUR (use Flatpak or xbps-src). Never suggest systemctl, apt, pacman or dnf.
+Prefer Auxo's own tools: auxo-tweak (below), Auxo Settings (the graphical app), auxo-update (safe update with a
+snapshot first), auxo-rollback (undo with a snapshot), auxo-fetch.
+Answer briefly and plainly, for someone who may be new to Linux. Put each command on its own line in a code block.
+If you're not sure, say so. Commands that change the system need sudo.
+
+auxo-tweak reference:
+{helptext[:3500]}
+
+This PC right now:
+{info[:1200]}
+kernel: {os.uname().release}
+Problems auxo-tweak doctor found: {problems}
+"""
+
+
+def chat(messages, model, stream_out, plain=False):
+    body = json.dumps({"model": model, "messages": messages, "stream": True}).encode()
+    req = urllib.request.Request(f"{URL}/api/chat", data=body, headers={"Content-Type": "application/json"})
+    reply = []
+    with urllib.request.urlopen(req, timeout=600) as r:
+        for line in r:
+            if not line.strip():
+                continue
+            part = json.loads(line)
+            if part.get("error"):
+                raise RuntimeError(part["error"])
+            piece = part.get("message", {}).get("content", "")
+            reply.append(piece)
+            stream_out.write(piece)
+            stream_out.flush()
+            if part.get("done"):
+                break
+    stream_out.write("\n")
+    return "".join(reply)
+
+
+def off_message():
+    return ("Auxo AI is off.\nTurn it on (one download, then it works offline):\n"
+            "  sudo auxo-tweak ai on\nor in Auxo Settings → Ask Auxo.")
+
+
+def main():
+    args = sys.argv[1:]
+    plain = "--plain" in args
+    use_json = "--json" in args
+    args = [a for a in args if a not in ("--plain", "--json")]
+    if args[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
+    model = conf().get("AI_MODEL") or "llama3.2:3b"
+    try:
+        urllib.request.urlopen(f"{URL}/api/version", timeout=3).read()
+    except (urllib.error.URLError, OSError):
+        print(off_message(), file=sys.stderr)
+        return 2
+    messages = [{"role": "system", "content": system_prompt()}]
+    acc = "" if plain else "\033[38;2;167;139;250m"
+    reset = "" if plain else "\033[0m"
+    try:
+        if use_json:
+            convo = json.load(sys.stdin)
+            messages += [m for m in convo if m.get("role") in ("user", "assistant")]
+            chat(messages, model, sys.stdout, plain)
+            return 0
+        if args:
+            messages.append({"role": "user", "content": " ".join(args)})
+            chat(messages, model, sys.stdout, plain)
+            return 0
+        print(f"{acc}▲ Auxo AI{reset} ({model}) — ask anything about your system. Ctrl+D to quit.")
+        while True:
+            try:
+                q = input(f"\n{acc}❯{reset} ").strip()
+            except EOFError:
+                print()
+                return 0
+            if not q:
+                continue
+            messages.append({"role": "user", "content": q})
+            print()
+            messages.append({"role": "assistant", "content": chat(messages, model, sys.stdout, plain)})
+    except KeyboardInterrupt:
+        print()
+        return 130
+    except (urllib.error.URLError, RuntimeError, OSError) as e:
+        msg = str(e)
+        if "not found" in msg and "model" in msg:
+            msg += f"\nDownload it with: sudo auxo-tweak ai on --model {model}"
+        print(f"Auxo AI error: {msg}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

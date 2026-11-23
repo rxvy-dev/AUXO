@@ -143,7 +143,9 @@ def greetd_config(accent, cmd=None):
         args.append(f"--cmd '{cmd}'")
     command = " ".join(args).replace('"', '\\"')
     return ("# written by auxo-tweak — text login (greetd + tuigreet)\n"
-            "[terminal]\nvt = 1\n\n"
+            # vt 7: Void runs agetty (text logins) on tty1-6. Sharing tty1 with it split every
+            # keystroke between the two, so passwords typed at the login screen came out wrong.
+            "[terminal]\nvt = 7\n\n"
             f'[default_session]\ncommand = "{command}"\nuser = "_greeter"\n')
 
 

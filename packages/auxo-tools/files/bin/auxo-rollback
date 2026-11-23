@@ -8,6 +8,7 @@
 #   auxo-rollback            pick a snapshot interactively
 #   auxo-rollback 42         roll back to snapshot 42
 #   auxo-rollback --list     list snapshots
+#   auxo-rollback --yes 42   no questions, no reboot (Auxo Settings asks first)
 #
 # Tip: if the system won't boot, pick "Auxo snapshots" in the GRUB menu,
 # boot the snapshot (read-only), then run auxo-rollback from there.
@@ -21,6 +22,8 @@ die() { printf '\e[31merror:\e[0m %s\n' "$*" >&2; exit 1; }
 list() { snapper -c root list --columns number,date,description | sed -n '3,$p'; }
 
 if [[ ${1:-} == --list ]]; then list; exit 0; fi
+YES=0
+if [[ ${1:-} == --yes || ${1:-} == -y ]]; then YES=1; shift; fi
 
 num=${1:-}
 if [[ -z $num ]]; then
@@ -42,8 +45,10 @@ snap="$top/@snapshots/$num/snapshot"
 
 desc=$(snapper -c root list --columns number,description | awk -F'|' -v n="$num" '$1+0==n {print $2}' | xargs)
 echo "Rolling back to #$num — ${desc:-no description}"
-read -rp "This replaces the current system (not /home). Continue? [y/N] " ans
-[[ ${ans,,} == y* ]] || exit 1
+if (( ! YES )); then
+  read -rp "This replaces the current system (not /home). Continue? [y/N] " ans
+  [[ ${ans,,} == y* ]] || exit 1
+fi
 
 stamp=$(date +%Y%m%d-%H%M%S)
 if [[ -d $top/@ ]]; then
@@ -54,5 +59,6 @@ btrfs subvolume snapshot "$snap" "$top/@"
 echo
 echo "Done. The old system is kept as @.before-rollback-$stamp (delete it with"
 echo "  btrfs subvolume delete  once you're happy)."
+if (( YES )); then echo "Restart to use it."; exit 0; fi
 read -rp "Reboot now? [Y/n] " ans
 [[ ${ans,,} == n* ]] || reboot

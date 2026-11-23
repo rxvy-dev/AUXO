@@ -340,6 +340,65 @@ printf '[general]\nterminal = alacritty\n' > "$A/.config/chrono/chrono.conf"
 "$T" look set bar=top --user alex --no-apply >/dev/null 2>&1
 check "Chrono: keeps your settings, follows the bar" "grep -q 'terminal = alacritty' $A/.config/chrono/chrono.conf && grep -q '^position = top' $A/.config/chrono/chrono.conf"
 
+echo "▲ login screen + doctor"
+check "greetd uses tty7, not agetty's tty1" "grep -q '^vt = 7' $ROOT/etc/greetd/config.toml"
+ln -sf /etc/sv/agetty-tty1 "$ROOT/etc/runit/runsvdir/default/agetty-tty1"
+sed -i 's/^vt = 7/vt = 1/' "$ROOT/etc/greetd/config.toml"; ln -sfn /etc/sv/greetd "$ROOT/etc/runit/runsvdir/default/greetd"
+out=$("$T" doctor 2>&1)
+check "doctor spots the tty1 clash"           "echo \"\$out\" | grep -q 'both use tty1'"
+check "doctor --json is valid"                "\"$T\" doctor --json | python3 -m json.tool >/dev/null"
+"$T" doctor --fix >/dev/null 2>&1
+check "doctor --fix moves the login screen"   "grep -q '^vt = 7' $ROOT/etc/greetd/config.toml && \"$T\" doctor --json | python3 -c 'import json,sys; c={x[\"id\"]:x for x in json.load(sys.stdin)}; sys.exit(c[\"login-vt\"][\"problem\"] is not None)'"
+sed -i 's/^vt = 7/vt = 1/' "$ROOT/etc/greetd/config.toml"
+( cd "$ROOT" && sed -n "/^case/,/^esac/p" "$HERE/packages/build-xbps.sh" | sed "s/\${ACTION:-\$1}/post/" | sh )
+check "package update repairs old installs"   "grep -q '^vt = 7' $ROOT/etc/greetd/config.toml"
+
+echo "▲ presets / sharing a rice / snapshots / AI"
+"$T" look preset retro --user alex --no-apply >/dev/null 2>&1
+check "preset retro: square, no blur, mono UI" "grep -q 'rounding=\"0\"' $LC/look.conf && grep -q 'blur=\"off\"' $LC/look.conf && grep -q 'ui_font=\"Fira Code\"' $LC/look.conf"
+check "unknown preset refused"                "! \"$T\" look preset nope --user alex --no-apply >/dev/null 2>&1"
+"$T" look export /home/alex/r.auxorice --name "Alex test" --user alex >/dev/null 2>&1
+check "export writes a rice file"             "grep -q '^name = Alex test' $A/r.auxorice && grep -q '^rounding = 0' $A/r.auxorice"
+"$T" look reset --user alex --no-apply >/dev/null 2>&1
+out=$("$T" look import /home/alex/r.auxorice --user alex --no-apply 2>&1)
+check "import brings the rice back"           "grep -q 'rounding=\"0\"' $LC/look.conf && echo \"\$out\" | grep -q 'Alex test'"
+printf 'hello\n' > "$A/bad.auxorice"
+check "a non-rice file is refused"            "! \"$T\" look import /home/alex/bad.auxorice --user alex --no-apply >/dev/null 2>&1"
+rm -rf "$ROOT/etc/snapper"
+check "snapshot now needs snapshots on"       "! \"$T\" snapshots now >/dev/null 2>&1"
+mkdir -p "$ROOT/etc/snapper/configs"; : > "$ROOT/etc/snapper/configs/root"
+check "snapshot now runs snapper create"      "\"$T\" snapshots now --description test 2>&1 | grep -q 'snapper --no-dbus -c root create -d test'"
+out=$("$T" ai on --model small 2>&1)
+check "ai on: Ollama into /usr/local"         "echo \"\$out\" | grep -q 'ollama.com/download/ollama-linux-amd64.tar.zst' && echo \"\$out\" | grep -q 'tar --zstd -x -C'"
+check "ai on: runit service as its own user"  "grep -q 'chpst -u ollama:ollama /usr/local/bin/ollama serve' $ROOT/etc/sv/ollama/run && enabled ollama"
+check "ai on: pulls the small model"          "echo \"\$out\" | grep -q 'ollama pull llama3.2:1b' && grep -q 'AI_MODEL=\"llama3.2:1b\"' $ROOT/etc/auxo/auxo.conf"
+"$T" ai off >/dev/null 2>&1
+check "ai off stops it"                       "! enabled ollama && grep -q 'AI=\"off\"' $ROOT/etc/auxo/auxo.conf"
+# auxo-ai against a stand-in Ollama server
+PORT=$((20000 + RANDOM % 20000))
+python3 - "$PORT" <<'PY' &
+import http.server, json, sys
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_GET(self):
+        self.send_response(200); self.end_headers(); self.wfile.write(b'{"version":"0"}')
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        ok = body["messages"][0]["role"] == "system" and "Void" in body["messages"][0]["content"]
+        self.send_response(200); self.end_headers()
+        for piece in (["Use ", "auxo-tweak service bluetooth on"] if ok else ["no system prompt"]):
+            self.wfile.write((json.dumps({"message": {"content": piece}, "done": False}) + "\n").encode())
+        self.wfile.write(b'{"done": true}\n')
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).handle_request(); 
+http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
+PY
+SRV=$!; sleep 0.6
+out=$(OLLAMA_HOST=127.0.0.1:$PORT AUXO_TWEAK="$T" timeout 20 "$PKG/bin/auxo-ai" --plain "bluetooth?" 2>&1)
+check "auxo-ai streams an answer with Auxo context" "echo \"\$out\" | grep -q 'Use auxo-tweak service bluetooth on'"
+kill $SRV 2>/dev/null
+out=$(OLLAMA_HOST=127.0.0.1:1 "$PKG/bin/auxo-ai" "hi" 2>&1); rc=$?
+check "auxo-ai explains how to turn it on"    "[ $rc = 2 ] && echo \"\$out\" | grep -q 'sudo auxo-tweak ai on'"
+
 echo "▲ app bundles"
 out=$("$T" apps 2>&1)
 check "apps lists the bundles"                "echo \"\$out\" | grep -q creative && echo \"\$out\" | grep -q dev"
@@ -355,7 +414,7 @@ check "info shows settings"                  "echo \"\$out\" | grep -q 'desktop 
 out=$(AUXO_ROOT=/ "$PKG/bin/auxo-fetch" --accent amber 2>&1)
 check "fetch prints os + accent"             "echo \"\$out\" | grep -q 'accent'"
 check "fetch --json is valid"                "AUXO_ROOT=/ \"$PKG/bin/auxo-fetch\" --json | python3 -m json.tool >/dev/null"
-check "no pacman/systemctl left in the tools" "! grep -rnIE 'pacman|systemctl|mkinitcpio|archiso' $PKG/bin $PKG/lib $PKG/etc --exclude-dir=__pycache__ | grep -q ."
+check "no pacman/systemctl left in the tools" "! grep -rnIE 'pacman|systemctl|mkinitcpio|archiso' $PKG/bin $PKG/lib $PKG/etc --exclude-dir=__pycache__ | grep -v 'Never suggest' | grep -q ."
 check "shell scripts parse"                  "bash -n $PKG/bin/auxo-update && bash -n $PKG/bin/auxo-rollback && sh -n $PKG/bin/auxo-branding && sh -n $PKG/bin/auxo-polkit-agent && bash -n $PKG/share/auxo/shell/prompt.bash"
 
 echo

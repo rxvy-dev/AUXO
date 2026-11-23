@@ -1251,7 +1251,9 @@ TWEAK = [
  ("auxo-tweak desktop NAME", "Install and switch to <code>plasma</code>, <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code>, <code>hyprland</code>, <code>sway</code>, <code>i3</code>, <code>chrono</code> or <code>none</code>. Add <code>--replace</code> to remove the live Plasma desktop."),
  ("auxo-tweak rice NAME", "Re-apply the Auxo rice: <code>hyprland</code>, <code>sway</code> or <code>i3</code> dotfiles (existing files are kept as <code>*.auxo-bak</code>), <code>gnome</code>, <code>xfce</code>, <code>cinnamon</code> or <code>chrono</code>. <code>kde</code> applies the Auxo global theme and puts the Auxo panel layout back."),
  ("auxo-tweak mode dark|light", "Light or dark, on every desktop."),
- ("auxo-tweak look [show|set|reset]", "Your own rice: <code>look set gaps=4 rounding=0 bar=bottom</code>. Settings: <code>mode</code>, <code>wallpaper</code>, <code>ui_font</code>, <code>mono_font</code>, <code>font_size</code>, <code>gaps</code>, <code>rounding</code>, <code>border</code>, <code>blur</code>, <code>transparency</code>, <code>animations</code>, <code>bar</code>. No password needed."),
+ ("auxo-tweak doctor [--fix]", "Check the login screen, services, network, accounts, sudo, disk space and config updates. <code>--fix</code> repairs what it can. Start here if something's wrong."),
+ ("auxo-tweak ai on|off|status", "Auxo AI, a free assistant that runs on your PC. <code>--model small|standard|large</code> (1.3, 2 or 5 GB). <code>off --purge</code> removes it."),
+ ("auxo-tweak look [show|set|reset]", "Your own rice: <code>look set gaps=4 rounding=0 bar=bottom</code>. Settings: <code>mode</code>, <code>wallpaper</code>, <code>ui_font</code>, <code>mono_font</code>, <code>font_size</code>, <code>gaps</code>, <code>rounding</code>, <code>border</code>, <code>blur</code>, <code>transparency</code>, <code>animations</code>, <code>bar</code>. <code>look preset NAME</code> (auxo, glass, minimal, cozy, retro, lite), <code>look export</code> / <code>look import FILE</code> to share a rice. No password needed."),
  ("auxo-tweak wallpaper FILE|accent", "Set the wallpaper on every desktop. <code>accent</code> goes back to the Auxo wallpaper in your colour."),
  ("auxo-tweak apps [BUNDLE…]", "Popular apps in one go: <code>browsers</code>, <code>media</code>, <code>creative</code>, <code>office</code>, <code>dev</code>, <code>containers</code>, <code>chat</code>, <code>terminal</code>, <code>fun</code>, <code>tools</code>. With no name, lists them. <code>--remove</code> takes a bundle off."),
  ("auxo-tweak kernel NAME", "Switch to <code>linux</code>, <code>linux-lts</code> or <code>linux-mainline</code>. It stays the default boot entry after updates."),
@@ -1262,7 +1264,7 @@ TWEAK = [
  ("auxo-tweak power balanced|performance|power-saver", "Set the power profile."),
  ("auxo-tweak firewall on|off|status", "ufw: block incoming connections, allow outgoing."),
  ("auxo-tweak dns cloudflare|quad9|google|auto", "DNS servers for every NetworkManager connection. <code>auto</code> goes back to your network's DNS."),
- ("auxo-tweak snapshots on|off|status", "Bootable btrfs snapshots with snapper and grub-btrfs."),
+ ("auxo-tweak snapshots on|off|status|now", "Bootable btrfs snapshots with snapper and grub-btrfs. <code>now</code> takes one straight away."),
  ("auxo-tweak gaming on|off|status", "Steam, GameMode, MangoHud, gamescope and gaming tweaks. Options: <code>--no-steam</code>, <code>--user NAME</code>, and <code>--purge</code> with <code>off</code>."),
  ("auxo-tweak flatpak on|status", "Install Flatpak and add Flathub."),
  ("auxo-tweak cleanup", "Clear the package cache, remove orphaned packages and old kernels."),
@@ -1274,7 +1276,7 @@ TWEAK = [
 tweak_table = "".join(cmdrow(c, d) for c, d in TWEAK)
 acc_list = "".join(f'<span class="accchip"><i style="background:linear-gradient(135deg,{a},{b})"></i>{n}</span>' for n, a, b in ACCENTS)
 
-DOC_NAV = [("start", "Getting started"), ("settings", "Auxo Settings"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("look", "Your look"), ("accents", "Accent colours"),
+DOC_NAV = [("start", "Getting started"), ("settings", "Auxo Settings"), ("tweak", "auxo-tweak"), ("desktops", "Desktops and rices"), ("look", "Your look"), ("ai", "Auxo AI"), ("accents", "Accent colours"),
            ("snapshots", "Snapshots and rollback"), ("updating", "Updating"), ("packages", "Packages and services"),
            ("nvidia", "NVIDIA"), ("performance", "Performance"), ("gaming", "Gaming"), ("motd", "auxo-motd"), ("cybervis", "Cybervis"), ("fetch", "auxo-fetch"),
            ("vm", "Virtual machines"), ("trouble", "Troubleshooting"), ("faq", "FAQ")]
@@ -1308,7 +1310,9 @@ docs = head("Auxo Linux documentation",
 <li><b>Look</b>: accent colour, light or dark, wallpaper (the Auxo ones, your <code>~/Pictures/Wallpapers</code>, or any image), interface and terminal fonts, animations.</li>
 <li><b>Windows &amp; bar</b>: gaps, rounded corners, borders, blur, transparency and the bar at the top or bottom, with a live preview. Each setting says which desktops it reaches.</li>
 <li><b>Desktop</b>: every desktop with a preview. Switch with one click, or re-apply the Auxo rice to the one you're using.</li>
-<li><b>System</b>: kernel, shell, power profile, DNS, NVIDIA, snapshots, firewall, zram, gaming mode, app bundles and updates.</li>
+<li><b>System</b>: kernel, shell, power profile, DNS, NVIDIA, snapshots (take, list, roll back), firewall, zram, gaming mode, services (Bluetooth, printing, SSH), maintenance, app bundles and updates.</li>
+<li><b>Health</b>: checks for the problems that most often break an install, with a <b>Fix everything</b> button.</li>
+<li><b>Ask Auxo</b>: Auxo AI, the assistant that runs on your PC (see below).</li>
 </ul>
 <p>It runs the same <code>auxo-tweak</code> commands as the terminal. Look settings are yours and need no password; system changes ask for it, and their progress shows at the bottom of the window.</p>
 
@@ -1338,8 +1342,19 @@ docs = head("Auxo Linux documentation",
 <span class="ta">❯</span> auxo-tweak look set gaps=4 rounding=0 border=1 blur=off bar=bottom
 <span class="ta">❯</span> auxo-tweak look set ui_font="Fira Sans" mono_font="Fira Code" font_size=11
 <span class="ta">❯</span> auxo-tweak wallpaper ~/Pictures/mountains.jpg
+<span class="ta">❯</span> auxo-tweak look preset lite        <span class="tm"># auxo, glass, minimal, cozy, retro, lite</span>
+<span class="ta">❯</span> auxo-tweak look export            <span class="tm"># ~/my-rice.auxorice, to share</span>
+<span class="ta">❯</span> auxo-tweak look import friend.auxorice
 <span class="ta">❯</span> auxo-tweak look reset</div>
 <p>They're saved in <code>~/.config/auxo/look.conf</code> and written into Hyprland, Sway, i3, Waybar, Polybar, picom, kitty, foot, Alacritty, GTK, Plasma, GNOME, Xfce, Cinnamon and Chrono. The Auxo configs load the look file last, so edit your own configs freely; only the look settings are overridden.</p>
+
+<h2 id="ai">Auxo AI</h2>
+<p>A free assistant that runs entirely on your PC: no account, no cloud, and it works offline once it's set up. It knows every <code>auxo-tweak</code> command plus your current settings and problems, so its answers fit your system. In Auxo Settings it can run the fixes it suggests; you confirm each one.</p>
+<div class="code"><span class="ta">❯</span> sudo auxo-tweak ai on                 <span class="tm"># standard model, about 2 GB</span>
+<span class="ta">❯</span> sudo auxo-tweak ai on --model small   <span class="tm"># about 1.3 GB, for 8 GB of RAM</span>
+<span class="ta">❯</span> auxo-ai "how do I install Steam?"
+<span class="ta">❯</span> auxo-ai                               <span class="tm"># chat</span></div>
+<p>It uses <a class="inl" href="https://ollama.com">Ollama</a> as a runit service on 127.0.0.1 only. <code>sudo auxo-tweak ai off --purge</code> removes it and the models.</p>
 
 <h2 id="accents">Accent colours</h2>
 <p>One setting colours the GRUB menu, the login screen, your prompt, terminals and bars, and changes the wallpaper straight away.</p>
@@ -1427,6 +1442,7 @@ docs = head("Auxo Linux documentation",
 <h2 id="trouble">Troubleshooting</h2>
 <div class="faq">
 <details><summary>The live session starts again after installing in a VM</summary><p>The VM is still booting from the image. Power off and remove it from the VM's optical drive.</p></details>
+<details><summary>The login screen says my password is wrong (but it's right)</summary><p>A bug in early 4.0 images: the login screen and a text login both listened on the same console, so your keystrokes got split between them. Press <b>Ctrl+Alt+F2</b>, log in there with your username and password (that works), then run <code>sudo sed -i 's/^vt = 1$/vt = 7/' /etc/greetd/config.toml</code> and <code>sudo reboot</code>. New images are fixed, and on newer versions <code>sudo auxo-tweak doctor --fix</code> does the same.</p></details>
 <details><summary>Black screen or a text console instead of the login screen</summary><p>Press <b>Ctrl+Alt+F2</b>, log in, and run <code>sudo sv status greetd elogind dbus</code> (or <code>gdm</code> for GNOME). Each should say <code>run</code>. Post the output in the Discord if one doesn't. With an NVIDIA card, run <code>auxo-tweak nvidia on</code> and reboot.</p></details>
 <details><summary>The system won't boot after an update</summary><p>Pick the snapshots entry in the GRUB menu, boot a snapshot from before the update, then run <code>auxo-rollback</code>. See <a class="inl" href="#snapshots">Snapshots and rollback</a>.</p></details>
 <details><summary>The USB stick won't boot</summary><p>Turn Secure Boot off in your firmware settings, and write the image in DD mode if you use Rufus.</p></details>

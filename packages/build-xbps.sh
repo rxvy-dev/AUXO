@@ -41,7 +41,12 @@ find "$d" -name '__pycache__' -prune -exec rm -rf {} +
 # never the build host (images are branded from mklive's post-setup script instead)
 cat > "$d/INSTALL" <<'SH'
 case "${ACTION:-$1}" in
-post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-branding || :; fi ;;
+post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-branding || :; fi
+      # 4.0 early installs: greetd shared tty1 with agetty, so passwords typed at the login screen
+      # came out wrong. Move Auxo's login screen to tty7 (takes effect at the next boot).
+      if grep -q '^# written by auxo-tweak' etc/greetd/config.toml 2>/dev/null; then
+        sed -i 's/^vt = 1$/vt = 7/' etc/greetd/config.toml
+      fi ;;
 esac
 SH
 

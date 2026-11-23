@@ -17,6 +17,21 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Fixed: "wrong password" at the login screen.** The login screen (greetd) and Void's text
+  login (agetty) both listened on tty1, so each got part of every keystroke and passwords came
+  out wrong. The login screen now has its own console (tty7). Already installed? Press Ctrl+Alt+F2,
+  log in there, run `sudo sed -i 's/^vt = 1$/vt = 7/' /etc/greetd/config.toml` and reboot
+  (updating auxo-tools or `sudo auxo-tweak doctor --fix` does the same).
+- `auxo-tweak doctor` (and **Health** in Auxo Settings): checks the login screen, services,
+  networking, accounts, sudo, disk space and pending config updates; `--fix` repairs them.
+- **Auxo AI**: a free assistant that runs on your PC (Ollama + a small model, your pick of
+  three sizes). `sudo auxo-tweak ai on`, then `auxo-ai` or **Ask Auxo** in Auxo Settings. It
+  knows Auxo's commands and your settings, and can run the fixes it suggests after you confirm.
+- Look **presets** (Auxo, Glass, Minimal, Cozy, Retro, Lite): `auxo-tweak look preset lite`.
+- **Share your rice**: `auxo-tweak look export` writes a `.auxorice` file; `look import` applies one.
+- Auxo Settings: search box, Services (Bluetooth, printing, SSH, power profiles), snapshots
+  (take one, list, roll back), maintenance (clean up, mirrors, Flathub, drivers).
+- `auxo-tweak snapshots now` and `auxo-rollback --yes N`.
 - **Auxo Settings** (`auxo-settings`, Super+I on the tiling desktops): a graphical app for
   everything below. Look (accent, light or dark, wallpaper, fonts, animations), Windows &
   bar (gaps, rounded corners, borders, blur, transparency, bar top or bottom, with a live
