@@ -52,8 +52,8 @@
   },
   "network": {
     "format-wifi": "  {essid}",
-    "format-ethernet": "󰈀 wired",
-    "format-disconnected": "󰖪 offline",
+    "format-ethernet": " wired",
+    "format-disconnected": " offline",
     "on-click": "kitty -e nmtui"
   },
   "bluetooth": {

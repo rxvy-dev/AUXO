@@ -396,6 +396,8 @@ check "base rice + Mac style on top"          "grep -q 'Mac style' $A/.config/hy
 check "menu bar + dock"                       "grep -q '\"name\": \"menubar\"' $A/.config/waybar/config.jsonc && grep -q '\"name\": \"dock\"' $A/.config/waybar/config.jsonc && grep -q 'wlr/taskbar' $A/.config/waybar/config.jsonc"
 check "Spotlight-style search on Super+Space" "grep -q 'bind = \$mod, Space, exec, pkill wofi || wofi --show drun --conf ~/.config/wofi/spotlight' $A/.config/hypr/style.conf && [ -f $A/.config/wofi/spotlight.css ]"
 check "▲ menu script is executable"           "[ -x $A/.config/waybar/auxo-menu.sh ]"
+check "wofi colours load (full path, not ../)" "grep -q '@import url(\"/home/alex/.config/auxo/colors.css\")' $A/.config/wofi/spotlight.css && grep -q '@import url(\"/home/alex/.config/auxo/colors.css\")' $A/.config/wofi/style.css"
+check "no Nerd-Font-only icons in the bars"   "! python3 -c \"import glob,sys; sys.exit(not any(0xF0000 <= ord(c) <= 0xFFFFF for p in glob.glob('$PKG/share/auxo/rices/*/waybar/*') for c in open(p, encoding='utf-8').read()))\""
 check "Mac look preset applied"               "grep -q 'gaps=\"10\"' $A/.config/auxo/look.conf && grep -q 'border=\"1\"' $A/.config/auxo/look.conf"
 check "style remembered"                      "grep -q 'RICE_HYPRLAND=\"hyprland-mac\"' $ROOT/etc/auxo/auxo.conf"
 "$T" look set bar=bottom --user alex --no-apply >/dev/null 2>&1

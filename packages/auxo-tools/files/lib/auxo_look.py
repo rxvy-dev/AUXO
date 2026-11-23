@@ -443,6 +443,22 @@ def set_waybar_position(file, bar):
     return False
 
 
+def fix_wofi_imports(home):
+    """wofi resolves a relative @import from the folder it was started in, not from the CSS file,
+    so the rices' `@import url("../auxo/colors.css")` found nothing and the launcher had no colours.
+    Point it at this user's colour file by its full path."""
+    import glob
+    out = []
+    for p in glob.glob(R(f"{home}/.config/wofi/*.css")):
+        text = open(p).read()
+        new = text.replace('@import url("../auxo/colors.css");', f'@import url("{home}/.config/auxo/colors.css");')
+        if new != text:
+            with open(p, "w") as f:
+                f.write(new)
+            out.append(os.path.relpath(p, R(home)))
+    return out
+
+
 def write_user(home, look, accent, desktop=None):
     """Write every look file for one user. Returns the list of files touched (relative to home)."""
     touched = []
@@ -452,6 +468,7 @@ def write_user(home, look, accent, desktop=None):
         touched.append(f".config/auxo/{name}")
     import auxo_monitors
     touched += auxo_monitors.write(home)
+    touched += fix_wofi_imports(home)
     for rel, line in HOOKS + auxo_monitors.HOOKS:
         if ensure_line(f"{home}/{rel}", line):
             touched.append(rel)

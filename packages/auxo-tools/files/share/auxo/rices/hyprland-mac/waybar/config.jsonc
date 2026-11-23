@@ -52,8 +52,8 @@
     },
     "network": {
       "format-wifi": "",
-      "format-ethernet": "󰈀",
-      "format-disconnected": "󰖪",
+      "format-ethernet": "",
+      "format-disconnected": "",
       "tooltip-format": "{essid} {ipaddr}",
       "on-click": "kitty -e nmtui"
     },

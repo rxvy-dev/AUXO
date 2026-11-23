@@ -1,7 +1,7 @@
 #!/bin/sh
 # The ▲ menu in the Mac-style menu bar (like the Apple menu)
 choice=$(printf '%s\n' "About this PC" "Auxo Settings…" "App bundles…" "Software update…" "Displays…" \
-  "Lock screen" "Log out" "Restart" "Shut down" | wofi --dmenu --prompt "Auxo" --width 280 --height 330 \
+  "Lock screen" "Log out" "Restart" "Shut down" | wofi --dmenu --prompt "Auxo" --width 280 --height 420 \
   --location 1 --xoffset 6 --yoffset 34 --cache-file /dev/null)
 case "$choice" in
   "About this PC")      kitty --hold -e auxo-fetch ;;

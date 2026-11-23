@@ -25,6 +25,10 @@
   written into the Hyprland, Sway and i3 rices. Hyprland now uses each monitor's highest
   refresh rate by default (144 Hz monitors were stuck at 60).
 - `auxo-keys` (Super+/ on Hyprland, Sway, i3): every keyboard shortcut in plain words, searchable.
+- Fixed: the app launcher (wofi) on Hyprland and Sway had no Auxo colours: wofi resolves
+  `@import` from the folder it's started in, so the colour file was never found. The import
+  now uses the full path. Two Waybar icons came from Nerd Fonts (not installed) and showed as
+  broken characters; they're Font Awesome icons now.
 - Fixed: Hyprland's idle screen-off and workspace scrolling used a newer Hyprland syntax than the
   0.49 that Void users get, so they did nothing.
  Void ships PipeWire switched off, and Auxo never turned it on. Every

@@ -11,7 +11,7 @@
   "sway/window": { "max-length": 50 },
   "clock": { "format": "{:%a %d %b  %H:%M}", "tooltip-format": "<tt>{calendar}</tt>" },
   "pulseaudio": { "format": "{icon} {volume}%", "format-muted": " muted", "format-icons": { "default": ["", "", ""] }, "on-click": "pavucontrol" },
-  "network": { "format-wifi": "  {essid}", "format-ethernet": "󰈀 wired", "format-disconnected": "󰖪 offline", "on-click": "foot nmtui" },
+  "network": { "format-wifi": "  {essid}", "format-ethernet": " wired", "format-disconnected": " offline", "on-click": "foot nmtui" },
   "bluetooth": { "format": "", "format-connected": " {num_connections}", "on-click": "blueman-manager" },
   "cpu": { "format": " {usage}%", "interval": 3 },
   "memory": { "format": " {percentage}%", "interval": 5 },
