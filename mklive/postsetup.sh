@@ -9,3 +9,30 @@ run auxo-branding
 # system-wide Auxo defaults (accent, GRUB theme, KDE global theme, MOTD) — the live
 # user is created at boot by mklive and picks them up from /etc/xdg
 run auxo-tweak accent violet --no-grub --no-initramfs || true
+
+# ── keep the ISO under 2 GB (one download, no split parts) ──
+# 1. A small initramfs: mklive builds it with dracut -N, which packs firmware for every graphics
+#    and network card. The live USB needs neither before it mounts its own image; drivers load
+#    from the full system right after. (The installer deletes this file, so installed systems
+#    build their initramfs the normal way.)
+mkdir -p "$ROOTFS/etc/dracut.conf.d"
+cat > "$ROOTFS/etc/dracut.conf.d/90-auxo-live.conf" <<'CONF'
+# Auxo live ISO only — removed by the installer
+omit_dracutmodules+=" drm nfs iscsi nbd nvdimm "
+CONF
+if [ -z "${AUXO_KEEP_INITRD_NET:-}" ]; then
+  echo 'omit_dracutmodules+=" network network-manager kernel-network-modules qemu-net "' \
+    >> "$ROOTFS/etc/dracut.conf.d/90-auxo-live.conf"
+fi
+# 2. Firmware for datacenter network cards (servers only; no desktop or laptop uses these).
+#    `sudo xbps-install -f linux-firmware-network` puts them back if you ever need them.
+fw="$ROOTFS/usr/lib/firmware"
+for f in mellanox liquidio qed qlogic netronome cxgb3 cxgb4 bnx2x myri10ge* vxge slicoss tehuti tigon 3com \
+         hfi1_* "ql2*.bin*" "cbfw*.bin*" "ct2fw*.bin*" "ctfw*.bin*" "phanfw.bin*" ixp4xx intel/ice; do
+  rm -rf "$fw"/$f
+done
+# 3. Docs and man pages for other languages (English stays; man works as normal)
+rm -rf "$ROOTFS"/usr/share/doc/* "$ROOTFS"/usr/share/gtk-doc
+for d in "$ROOTFS"/usr/share/man/*/; do
+  case "$(basename "$d")" in man[0-9n]*) ;; *) rm -rf "$d" ;; esac
+done

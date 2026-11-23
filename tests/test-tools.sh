@@ -86,7 +86,7 @@ check "installs hyprland + session base"     "echo \"\$out\" | grep -E 'xbps-ins
 check "skips packages already installed"     "! echo \"\$out\" | grep -E 'xbps-install -y .* konsole( |$)' >/dev/null"
 check "enables dbus, elogind, NetworkManager" "enabled dbus && enabled elogind && enabled NetworkManager"
 check "dhcpcd handed over to NetworkManager" "! enabled dhcpcd"
-check "removes the live Plasma"              "echo \"\$out\" | grep -q 'xbps-remove -y -R kde-plasma'"
+check "removes the live Plasma"              "echo \"\$out\" | grep -q 'xbps-remove -y -R plasma-desktop'"
 check "greetd on, sddm off"                  "enabled greetd && ! enabled sddm"
 check "rice copied: hyprland.conf (0.49 syntax)" "grep -q 'source = ~/.config/auxo/colors-hyprland.conf' $ROOT/home/alex/.config/hypr/hyprland.conf"
 check "rice uses the polkit launcher"        "grep -q 'exec-once = auxo-polkit-agent' $ROOT/home/alex/.config/hypr/hyprland.conf"
@@ -296,7 +296,10 @@ else
   echo "  (no C compiler — skipping the cybervis build)"
 fi
 rm -rf "$ST"
-check "ISO ships cybervis + a CJK font"      "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx cybervis && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx noto-fonts-cjk-sans"
+check "ISO ships cybervis, not the CJK font"  "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx cybervis && ! sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx noto-fonts-cjk-sans"
+check "ISO has Plasma without the meta package" "! sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx kde-plasma && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx plasma-desktop"
+check "ISO Plasma list = auxo-tweak's (offline install)" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS; import re; iso=set(re.sub(r'#.*','',open('$HERE/mklive/packages.txt').read()).split()); sys.exit(not all(p in iso for p in DESKTOPS['plasma']['packages']))\""
+check "live initramfs config is removed on install" "grep -q '90-auxo-live.conf' $HERE/installer/auxo_install/plan.py && grep -q '90-auxo-live.conf' $HERE/mklive/postsetup.sh"
 check "package list has no stray comments"   "! sed 's/#.*//' $HERE/mklive/packages.txt | xargs | grep -q '#'"
 check "ISO build installs a compiler"        "grep -q 'xbps-install -y .* gcc' $HERE/scripts/build-iso-inner.sh"
 

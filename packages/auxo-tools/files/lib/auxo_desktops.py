@@ -13,6 +13,12 @@ GUI_BASE = ["dbus", "elogind", "polkit", "NetworkManager", "pipewire", "wireplum
             "python3-pyqt6", "python3-pyqt6-gui", "python3-pyqt6-widgets"]
 GUI_SERVICES = ["dbus", "elogind", "NetworkManager"]
 
+# Plasma without the kde-plasma meta package (which adds a 254 MB wallpaper pack, Oxygen and
+# extras). The live ISO ships exactly this list (mklive/packages.txt), so Plasma installs offline.
+PLASMA_CORE = ["plasma-desktop", "plasma-workspace-x11", "plasma-nm", "plasma-pa", "powerdevil", "bluedevil",
+               "kscreen", "kinfocenter", "kwallet-pam", "ksshaskpass", "kwrited", "sddm-kcm", "plasma-thunderbolt",
+               "kf6-kded", "upower", "udisks2"]
+
 COMMON_WM = [
     "Thunar", "thunar-archive-plugin", "gvfs", "pavucontrol", "network-manager-applet",
     "blueman", "brightnessctl", "playerctl", "font-awesome6", "papirus-icon-theme",
@@ -42,7 +48,7 @@ HYPRLAND_REPO = "https://raw.githubusercontent.com/Makrennel/hyprland-void/repos
 DESKTOPS = {
     "plasma": {
         "name": "KDE Plasma",
-        "packages": GUI_BASE + ["kde-plasma", "dolphin", "konsole", "kate", "ark", "spectacle",
+        "packages": GUI_BASE + PLASMA_CORE + ["dolphin", "konsole", "kate", "ark", "spectacle",
                                 "xdg-desktop-portal-kde", "kde-gtk-config", "breeze-gtk", "greetd", "tuigreet"],
         "dm": "greetd",
         "session": "plasma",
@@ -122,7 +128,8 @@ DESKTOPS = {
 }
 
 # What the live ISO's desktop ships; removed when the user installs a different desktop.
-LIVE_PLASMA = ["kde-plasma", "dolphin", "konsole", "kate", "ark", "spectacle", "xdg-desktop-portal-kde"]
+LIVE_PLASMA = [p for p in PLASMA_CORE if p not in ("upower", "udisks2")] + [
+    "kde-plasma", "dolphin", "konsole", "kate", "ark", "spectacle", "xdg-desktop-portal-kde"]
 
 # Void kernel meta packages (each pulls in a versioned linuxX.Y package).
 KERNELS = {

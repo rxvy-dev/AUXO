@@ -26,7 +26,7 @@ RSYNC_EXCLUDES = ["/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "
 LIVE_FILES = ["/etc/auxo/live", "/etc/xdg/autostart/auxo-live-welcome.desktop",
               "/usr/share/applications/auxo-install.desktop", "/etc/profile.d/auxo-live.sh",
               "/etc/sudoers.d/99-void-live", "/etc/polkit-1/rules.d/void-live.rules",
-              "/etc/sddm.conf", "/etc/default/live.conf"]
+              "/etc/sddm.conf", "/etc/default/live.conf", "/etc/dracut.conf.d/90-auxo-live.conf"]
 
 
 @dataclass
@@ -119,9 +119,15 @@ def _locale(cfg):
             out.append(line)
         if not found:
             out.append(f"{cfg.locale} UTF-8")
-        return [Write(path, "\n".join(out) + "\n"),
+        acts = [Write(path, "\n".join(out) + "\n"),
                 Write(f"{ctx.target}/etc/locale.conf", f"LANG={cfg.locale}\nLC_COLLATE=C\n"),
                 Cmd(chroot(ctx.target, "xbps-reconfigure", "-f", "glibc-locales"), soft=True)]
+        if cfg.locale[:2] in ("ja", "zh", "ko"):
+            # the CJK font (88 MB) isn't on the ISO any more: fetch it for these languages (needs internet;
+            # soft, so an offline install still finishes and the font can be added later)
+            acts.append(Cmd(chroot(ctx.target, "xbps-install", "-Sy", "noto-fonts-cjk-sans"), soft=True,
+                            desc="Japanese/Chinese/Korean font"))
+        return acts
     return Py(fn, f"locale {cfg.locale}")
 
 

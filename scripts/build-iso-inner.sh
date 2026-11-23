@@ -22,6 +22,17 @@ if [[ ! -d $MK/.git ]]; then git clone "$MKLIVE_REPO" "$MK"; fi
 git config --global --add safe.directory "$MK"   # the checkout may belong to the host user
 git -C "$MK" fetch --quiet origin
 git -C "$MK" checkout --quiet "$MKLIVE_REF"
+# smaller ISO: 1 MB squashfs blocks + the x86 filter (xz) compress the live system ~5-8% better
+# than mklive's defaults. Patched after checkout so a plain mklive update can't silently undo it.
+sed -i 's|-comp "${SQUASHFS_COMPRESSION}"|-comp "${SQUASHFS_COMPRESSION}" -b 1M -Xbcj x86|' "$MK/mklive.sh"
+grep -q -- '-b 1M -Xbcj x86' "$MK/mklive.sh" || echo "warning: couldn't tune mklive's squashfs options" >&2
+# Void's autoinstaller (unused by Auxo) needs networking in the initramfs; without it the live
+# initramfs can drop network + GPU firmware (see mklive/postsetup.sh) and shrink by ~200 MB
+sed -i 's|--force-add "vmklive autoinstaller"|--force-add "vmklive"|' "$MK/mklive.sh"
+if ! grep -q -- '--force-add "vmklive"' "$MK/mklive.sh"; then
+  echo "warning: mklive's dracut call changed; keeping networking in the live initramfs" >&2
+  export AUXO_KEEP_INITRD_NET=1
+fi
 
 # mklive copies the overlay with "cp -p", which keeps the *source* owner on existing
 # folders like /etc and /usr. Give it a root-owned copy so the image stays root-owned.
@@ -55,4 +66,6 @@ if [[ -n ${HOST_UID:-} ]]; then  # hand the results (not the mklive checkout) ba
   chown -R "$HOST_UID:${HOST_GID:-$HOST_UID}" "$OUT/repo"
 fi
 step "Done: out/$ISO"
+size=$(stat -c%s "$OUT/$ISO")
+printf 'ISO size: %s MB%s\n' "$((size/1048576))" "$( ((size > 2000000000)) && echo '  (over 2 GB: the release will be split)')"
 ls -lh "$OUT/$ISO"
