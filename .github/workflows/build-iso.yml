@@ -40,6 +40,19 @@ jobs:
           sudo chown -R "$USER" out
           ls -lh out
 
+      - name: Check the ISO size (1.5–2 GB, one download)
+        run: |
+          iso=$(ls out/auxo-linux-*.iso); size=$(stat -c%s "$iso"); mb=$((size / 1000000))
+          echo "### ISO size: ${mb} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$size" -gt 2000000000 ]; then
+            echo "::error::The ISO is ${mb} MB, over the 2 GB limit (GitHub release files must be under 2 GB). Trim mklive/packages.txt."
+            exit 1
+          elif [ "$size" -lt 1500000000 ]; then
+            echo "::warning::The ISO is ${mb} MB, under the 1.5 GB target. Fine to ship."
+          else
+            echo "ISO is ${mb} MB: inside the 1.5–2 GB target"
+          fi
+
       - name: Enable KVM for the VM test
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -71,15 +84,8 @@ jobs:
         run: |
           cd out
           iso=$(ls auxo-linux-*.iso)
-          # release assets are limited to 2 GiB → split large ISOs
-          if [ "$(stat -c%s "$iso")" -gt 2000000000 ]; then
-            split -b 1900M -d "$iso" "$iso.part"
-            files="$iso.part* $iso.sha256"
-            note="Download all parts, then: cat $iso.part* > $iso && sha256sum -c $iso.sha256"
-          else
-            files="$iso $iso.sha256"
-            note="Verify with: sha256sum -c $iso.sha256"
-          fi
+          files="$iso $iso.sha256"     # under 2 GB: checked by the size step above
+          note="Verify with: sha256sum -c $iso.sha256"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \
               || gh release upload "${GITHUB_REF_NAME}" $files --clobber
