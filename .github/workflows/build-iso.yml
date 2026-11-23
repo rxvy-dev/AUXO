@@ -91,7 +91,7 @@ jobs:
               || gh release upload "${GITHUB_REF_NAME}" $files --clobber
           else
             # a new tag per build: with immutable releases, a tag name can't be reused once released
-            tag="nightly-$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+            tag="nightly-$(date -u +%Y.%m.%d-%H%M)-${GITHUB_SHA::7}"   # time too: a rebuild of the same commit gets its own tag
             gh release create "$tag" $files --target "$GITHUB_SHA" --latest \
               --title "Auxo Linux $(date -u +%Y-%m-%d) (${GITHUB_SHA::7})" \
               --notes "Built from main by GitHub Actions and booted in a VM before upload. Newest build is always at https://github.com/rxvy-dev/AUXO/releases/latest — $note"
