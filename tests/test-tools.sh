@@ -399,6 +399,7 @@ check "monitors --json is valid"              "env -u WAYLAND_DISPLAY -u DISPLAY
 # Sway and i3 allow comments only on their own line: "include x   # note" is an error and the
 # monitor file is skipped (a real bug in 4.0). Same for one-line { a; b } blocks.
 check "Sway/i3 configs: no comments after a command" "! grep -nE '^[[:space:]]*[^#[:space:]].*[[:space:]]#[[:space:]]' $PKG/share/auxo/rices/sway/sway/config $PKG/share/auxo/rices/i3/i3/config"
+check "Hyprland configs: no one-line { … } blocks"   "! grep -nE '\\{[^}]*\\}' $PKG/share/auxo/rices/hyprland*/hypr/*.conf"
 check "Sway/i3 configs: no one-line { a; b } blocks" "! grep -nE '\\{[^}]*;[^}]*\\}' $PKG/share/auxo/rices/sway/sway/config $PKG/share/auxo/rices/i3/i3/config"
 check "monitor include lines are exact"       "grep -qx 'include ~/.config/auxo/monitors-sway' $PKG/share/auxo/rices/sway/sway/config && grep -qx 'include ~/.config/auxo/monitors-i3' $PKG/share/auxo/rices/i3/i3/config"
 if command -v sway >/dev/null 2>&1; then
