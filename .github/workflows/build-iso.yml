@@ -36,6 +36,7 @@ jobs:
           python3 tests/test-summit.py
           python3 tests/test-settings.py
           python3 tests/test-monitor.py
+          python3 tests/test-overview.py
 
       - name: Get Auxo's Hyprland packages (newest build-hyprland release)
         env:

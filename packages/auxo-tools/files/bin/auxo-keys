@@ -28,7 +28,7 @@ WORDS = {
     "split v": "Next window opens below", "togglegroup": "Tabs (group windows)", "layout tabbed": "Tabs (group windows)",
 }
 DIRS = {"l": "left", "r": "right", "u": "up", "d": "down", "left": "left", "right": "right", "up": "up", "down": "down"}
-APPS = [("auxo-gamemode", "Gaming mode on / off"), ("auxo-monitor", "System Monitor (task manager)"), ("auxo-clipboard", "Clipboard history"), ("clipmenu", "Clipboard history"), ("hyprctl reload", "Reload config"), ("rofimoji", "Emoji picker"),
+APPS = [("auxo-gamemode", "Gaming mode on / off"), ("auxo-monitor", "System Monitor (task manager)"), ("auxo-overview", "Overview: all windows"), ("auxo-clipboard", "Clipboard history"), ("clipmenu", "Clipboard history"), ("hyprctl reload", "Reload config"), ("rofimoji", "Emoji picker"),
         ("auxo-launcher --style windows", "Start menu"), ("auxo-launcher", "Applications"),
         ("auxo-control --style windows", "Quick settings"), ("auxo-control", "Control Center"),
         ("i3-nagbar", "Log out (asks first)"), ("swaynag", "Log out (asks first)"), ("auxo-settings", "Auxo Settings"), ("auxo-keys", "This list of shortcuts"), ("auxo-tweak", "auxo-tweak menu"),

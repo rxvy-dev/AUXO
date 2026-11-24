@@ -52,7 +52,7 @@ bindsym Ctrl+Shift+Escape exec --no-startup-id auxo-monitor
 bindsym $mod+Shift+v exec --no-startup-id clipmenu
 bindsym Mod1+F4 kill
 bindsym $mod+j layout toggle split
-bindsym $mod+Tab focus next
+bindsym $mod+Tab exec --no-startup-id auxo-overview
 bindsym Mod1+Tab focus next
 bindsym $mod+m move scratchpad
 bindsym $mod+s scratchpad show
@@ -60,6 +60,7 @@ bindsym $mod+Shift+s move scratchpad
 bindsym $mod+period exec --no-startup-id rofimoji --action copy --skin-tone neutral
 bindsym $mod+Print exec --no-startup-id maim | xclip -selection clipboard -t image/png
 for_window [class="(?i)^auxo-(launcher|control)"] floating enable, border none
+for_window [class="(?i)^auxo-overview"] fullscreen enable
 
 bindsym $mod+Left focus left
 bindsym $mod+Right focus right

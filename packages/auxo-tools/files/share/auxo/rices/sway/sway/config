@@ -61,13 +61,14 @@ bindsym $mod+g exec auxo-gamemode
 bindsym Ctrl+Shift+Escape exec auxo-monitor
 bindsym Mod1+F4 kill
 bindsym $mod+j layout toggle split
-bindsym $mod+Tab focus next
+bindsym $mod+Tab exec auxo-overview
 bindsym Mod1+Tab focus next
 bindsym $mod+m move scratchpad
 bindsym $mod+s scratchpad show
 bindsym $mod+Shift+s move scratchpad
 bindsym $mod+Print exec grim - | wl-copy
 for_window [app_id="^auxo-(launchpad|control|start|quick)$"] floating enable, border none
+for_window [app_id="^auxo-overview$"] fullscreen enable
 
 bindsym $mod+Left focus left
 bindsym $mod+Right focus right

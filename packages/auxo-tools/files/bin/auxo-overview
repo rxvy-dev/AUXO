@@ -1,0 +1,316 @@
+#!/usr/bin/env python3
+"""auxo-overview — every open window at a glance (Super+Tab on every Auxo rice).
+
+Windows on the screen show as live thumbnails, the rest as their app icon, grouped by
+workspace. Type to filter, arrows + Enter or click to jump to a window, × or middle-click
+to close one, the workspace buttons to switch, Esc (or Super+Tab again) to leave.
+"""
+import os
+import sys
+import tempfile
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+import auxo_shell as S  # noqa: E402
+import auxo_windows as W  # noqa: E402
+
+from PyQt6.QtCore import QRect, QRectF, QSize, Qt, pyqtSignal  # noqa: E402
+from PyQt6.QtGui import QColor, QFont, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap  # noqa: E402
+from PyQt6.QtWidgets import (QApplication, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,  # noqa: E402
+                             QScrollArea, QVBoxLayout, QWidget)
+
+CARD_W, THUMB_H = 300, 170
+
+
+class Card(QWidget):
+    """One window: thumbnail (or icon), title and app name."""
+    activated = pyqtSignal(object)
+    closed = pyqtSignal(object)
+
+    def __init__(self, win, pixmap, accent, light):
+        super().__init__()
+        self.win, self.pix, self.accent, self.light = win, pixmap, QColor(accent), light
+        self.selected = self.hover = False
+        self.setFixedSize(CARD_W, THUMB_H + 54)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMouseTracking(True)
+        self.setToolTip(win["title"])
+
+    def close_rect(self):
+        return QRectF(self.width() - 34, 8, 26, 26)
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        thumb = QRectF(4, 4, self.width() - 8, THUMB_H)
+        path = QPainterPath()
+        path.addRoundedRect(thumb, 12, 12)
+        p.fillPath(path, QColor(255, 255, 255, 30) if not self.light else QColor(0, 0, 0, 18))
+        if self.pix is not None and not self.pix.isNull():
+            scaled = self.pix.scaled(thumb.size().toSize(), Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
+            r = QRectF(0, 0, scaled.width(), scaled.height())
+            r.moveCenter(thumb.center())
+            clip = QPainterPath()
+            clip.addRoundedRect(r, 10, 10)
+            p.save()
+            p.setClipPath(clip)
+            p.drawPixmap(r.toRect(), scaled)
+            p.restore()
+        else:
+            icon = QIcon.fromTheme(self.win["app"].lower(), QIcon.fromTheme("application-x-executable"))
+            ir = QRect(0, 0, 72, 72)
+            ir.moveCenter(thumb.center().toPoint())
+            icon.paint(p, ir)
+        if self.selected or self.hover:
+            p.setPen(QPen(self.accent, 3 if self.selected else 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawPath(path)
+        if self.hover:
+            cr = self.close_rect()
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(0, 0, 0, 150))
+            p.drawEllipse(cr)
+            p.setPen(QPen(QColor("white"), 2))
+            c = cr.center()
+            p.drawLine(int(c.x() - 5), int(c.y() - 5), int(c.x() + 5), int(c.y() + 5))
+            p.drawLine(int(c.x() + 5), int(c.y() - 5), int(c.x() - 5), int(c.y() + 5))
+        fg = QColor("#1d1d26") if self.light else QColor("#f2f2f7")
+        f = QFont(self.font())
+        f.setBold(True)
+        f.setPointSizeF(10.5)
+        p.setFont(f)
+        p.setPen(fg)
+        fm = p.fontMetrics()
+        p.drawText(QRectF(8, THUMB_H + 12, self.width() - 16, 20), Qt.AlignmentFlag.AlignLeft,
+                   fm.elidedText(self.win["title"] or self.win["app"], Qt.TextElideMode.ElideRight, self.width() - 16))
+        f.setBold(False)
+        f.setPointSizeF(9)
+        p.setFont(f)
+        muted = QColor(fg)
+        muted.setAlpha(150)
+        p.setPen(muted)
+        p.drawText(QRectF(8, THUMB_H + 32, self.width() - 16, 18), Qt.AlignmentFlag.AlignLeft, self.win["app"])
+        p.end()
+
+    def enterEvent(self, _e):
+        self.hover = True
+        self.update()
+
+    def leaveEvent(self, _e):
+        self.hover = False
+        self.update()
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.MiddleButton or (e.button() == Qt.MouseButton.LeftButton
+                                                         and self.close_rect().contains(e.position())):
+            self.closed.emit(self.win)
+        elif e.button() == Qt.MouseButton.LeftButton:
+            self.activated.emit(self.win)
+
+
+class Overview(QWidget):
+    def __init__(self, wm, shot=None):
+        super().__init__()
+        self.wm = wm
+        mode, pal, font = S.look()
+        self.light = mode == "light"
+        self.accent = pal.get("accent", "#a78bfa")
+        self.setWindowTitle("Overview")
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        fg = "#1d1d26" if self.light else "#f2f2f7"
+        self.setStyleSheet(f"""
+            QWidget {{ color: {fg}; font-family: "{font}"; background: transparent; }}
+            QLineEdit {{ background: {'rgba(255,255,255,0.75)' if self.light else 'rgba(255,255,255,0.10)'};
+                         border: 1px solid {'rgba(0,0,0,0.08)' if self.light else 'rgba(255,255,255,0.16)'};
+                         border-radius: 14px; padding: 10px 18px; font-size: 16px; }}
+            QLabel#ws {{ font-size: 15px; font-weight: 700; padding-top: 10px; }}
+            QLabel#empty {{ font-size: 16px; }}
+            QPushButton {{ background: {'rgba(255,255,255,0.6)' if self.light else 'rgba(255,255,255,0.08)'};
+                           border: 1px solid transparent; border-radius: 12px; padding: 8px 16px; font-weight: 600; }}
+            QPushButton:hover {{ border-color: {self.accent}; }}
+            QPushButton:checked {{ background: {self.accent}; color: {'#ffffff' if self.light else '#0b0b10'}; }}
+            QScrollBar:vertical {{ width: 0; }}
+        """)
+        self.windows = [w for w in wm.windows() if w["app"] not in ("auxo-overview", "Overview")
+                        and w["title"] != "Overview"]
+        self.workspaces, self.active_ws = wm.workspaces()
+        self.shot = shot
+        self.ratio = 1.0
+        if shot is not None and not shot.isNull():
+            geo = QGuiApplication.primaryScreen().virtualGeometry() if QGuiApplication.primaryScreen() else None
+            if geo and geo.width():
+                self.ratio = shot.width() / geo.width()
+                self.origin = (geo.x(), geo.y())
+        root = QVBoxLayout(self)
+        root.setContentsMargins(60, 40, 60, 30)
+        root.setSpacing(16)
+        top = QHBoxLayout()
+        top.addStretch(1)
+        self.ws_buttons = []
+        for name in self.workspaces:
+            n = sum(1 for w in self.windows if w["workspace"] == name)
+            b = QPushButton(f"{name}" + (f"  ·  {n}" if n else ""))
+            b.setCheckable(True)
+            b.setChecked(name == self.active_ws)
+            b.clicked.connect(lambda _c, name=name: self.go(name))
+            top.addWidget(b)
+            self.ws_buttons.append(b)
+        top.addStretch(1)
+        root.addLayout(top)
+        srow = QHBoxLayout()
+        srow.addStretch(1)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Type to find a window")
+        self.search.setFixedWidth(440)
+        self.search.textChanged.connect(self.build)
+        self.search.returnPressed.connect(self.activate_selected)
+        srow.addWidget(self.search)
+        srow.addStretch(1)
+        root.addLayout(srow)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.body = QWidget()
+        self.grid = QVBoxLayout(self.body)
+        self.grid.setSpacing(6)
+        scroll.setWidget(self.body)
+        root.addWidget(scroll, 1)
+        hint = QLabel("Click or Enter: go to window   ·   × or middle-click: close   ·   Esc: back")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        c = QColor(fg)
+        hint.setStyleSheet(f"color: rgba({c.red()},{c.green()},{c.blue()},0.55); font-size: 12px;")
+        root.addWidget(hint)
+        self.cards, self.index = [], 0
+        self.build()
+        self.search.setFocus()
+
+    def thumb(self, w):
+        if not w["visible"] or self.shot is None or self.shot.isNull() or w["w"] <= 0:
+            return None
+        ox, oy = getattr(self, "origin", (0, 0))
+        r = QRect(int((w["x"] - ox) * self.ratio), int((w["y"] - oy) * self.ratio),
+                  int(w["w"] * self.ratio), int(w["h"] * self.ratio))
+        return QPixmap.fromImage(self.shot.copy(r))
+
+    def build(self, *_a):
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear(item.layout())
+        q = self.search.text().lower().strip()
+        shown = [w for w in self.windows if not q or q in w["title"].lower() or q in w["app"].lower()]
+        self.cards = []
+        order = self.workspaces + sorted({w["workspace"] for w in shown} - set(self.workspaces))
+        cols = max(1, (self.width() - 120) // (CARD_W + 18)) if self.width() > 400 else 4
+        for name in order:
+            group = [w for w in shown if w["workspace"] == name]
+            if not group:
+                continue
+            title = QLabel(f"Workspace {name}" if name not in ("scratchpad",) and not name.startswith("special")
+                           else "Minimised")
+            title.setObjectName("ws")
+            self.grid.addWidget(title)
+            g = QGridLayout()
+            g.setHorizontalSpacing(18)
+            g.setVerticalSpacing(12)
+            for i, w in enumerate(group):
+                card = Card(w, self.thumb(w), self.accent, self.light)
+                card.activated.connect(self.activate)
+                card.closed.connect(self.close_window)
+                g.addWidget(card, i // cols, i % cols, Qt.AlignmentFlag.AlignLeft)
+                self.cards.append(card)
+            g.setColumnStretch(cols, 1)
+            self.grid.addLayout(g)
+        if not self.cards:
+            empty = QLabel("No windows" if not q else f"No window matches “{self.search.text()}”")
+            empty.setObjectName("empty")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.grid.addWidget(empty)
+        self.grid.addStretch(1)
+        self.index = 0
+        self.mark()
+
+    def _clear(self, lay):
+        while lay.count():
+            item = lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def mark(self):
+        for i, c in enumerate(self.cards):
+            c.selected = i == self.index
+            c.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(240, 240, 245, 215) if self.light else QColor(8, 8, 12, 205))
+        p.end()
+
+    def keyPressEvent(self, e):
+        k = e.key()
+        if k == Qt.Key.Key_Escape:
+            self.close()
+        elif k in (Qt.Key.Key_Right, Qt.Key.Key_Tab, Qt.Key.Key_Down) and self.cards:
+            self.index = (self.index + 1) % len(self.cards)
+            self.mark()
+        elif k in (Qt.Key.Key_Left, Qt.Key.Key_Backtab, Qt.Key.Key_Up) and self.cards:
+            self.index = (self.index - 1) % len(self.cards)
+            self.mark()
+        elif k in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.activate_selected()
+        else:
+            super().keyPressEvent(e)
+
+    def activate_selected(self):
+        if self.cards:
+            self.activate(self.cards[self.index].win)
+
+    def activate(self, w):
+        self.close()
+        self.wm.focus(w["id"])
+
+    def close_window(self, w):
+        self.wm.close(w["id"])
+        self.windows = [x for x in self.windows if x["id"] != w["id"]]
+        self.build()
+
+    def go(self, name):
+        self.close()
+        self.wm.go_workspace(name)
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.cards:
+            self.build()
+
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    if S.close_running("auxo-overview"):        # Super+Tab again: close it
+        return 0
+    wm = W.detect()
+    if not wm:
+        print("auxo-overview: works on Hyprland, Sway and i3", file=sys.stderr)
+        return 1
+    shot_path = os.path.join(tempfile.gettempdir(), f"auxo-overview-{os.getuid()}.jpg")
+    have_shot = W.screenshot(shot_path, wm)        # before our window covers the screen
+    app = QApplication(sys.argv[:1])
+    app.setDesktopFileName("auxo-overview")
+    shot = QImage(shot_path) if have_shot else None
+    try:
+        os.unlink(shot_path)
+    except OSError:
+        pass
+    w = Overview(wm, shot)
+    w.showFullScreen()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
