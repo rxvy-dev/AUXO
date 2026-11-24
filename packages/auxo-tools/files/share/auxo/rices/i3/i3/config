@@ -61,7 +61,7 @@ bindsym $mod+s scratchpad show
 bindsym $mod+Shift+s move scratchpad
 bindsym $mod+period exec --no-startup-id rofimoji --action copy --skin-tone neutral
 bindsym $mod+Print exec --no-startup-id maim | xclip -selection clipboard -t image/png
-for_window [class="(?i)^auxo-(launcher|control)"] floating enable, border none
+for_window [class="(?i)^auxo-(launcher|control|sound)"] floating enable, border none
 for_window [class="(?i)^auxo-overview"] fullscreen enable
 
 bindsym $mod+Left focus left

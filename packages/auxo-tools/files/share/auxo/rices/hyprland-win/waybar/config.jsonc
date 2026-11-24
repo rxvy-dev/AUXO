@@ -109,7 +109,7 @@
       ]
     },
     "tooltip-format": "{volume}%",
-    "on-click": "auxo-control --style windows",
+    "on-click": "auxo-sound --style windows",
     "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
   },

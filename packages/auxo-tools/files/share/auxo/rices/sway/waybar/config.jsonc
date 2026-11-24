@@ -46,7 +46,7 @@
         "\uf028"
       ]
     },
-    "on-click": "pavucontrol"
+    "on-click": "auxo-sound"
   },
   "network": {
     "format-wifi": "\uf1eb  {essid}",

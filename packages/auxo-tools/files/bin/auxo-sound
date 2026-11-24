@@ -1,0 +1,213 @@
+#!/usr/bin/env python3
+"""auxo-sound — the sound menu of the Auxo rices: click the volume icon on the bar.
+
+  auxo-sound                  Auxo / Mac style (glass, top-right)
+  auxo-sound --style windows  Windows style (bottom-right, above the taskbar)
+
+Pick your speakers or headphones, set the volume and mute, pick your microphone, and set
+the volume of each app that's playing. Click it again (or Esc, or click elsewhere) to close.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+from PyQt6.QtCore import Qt, QTimer  # noqa: E402
+from PyQt6.QtGui import QColor, QIcon  # noqa: E402
+from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,  # noqa: E402
+                             QToolButton, QVBoxLayout, QWidget)
+
+import auxo_shell as S  # noqa: E402
+from auxo_audio import Audio  # noqa: E402
+from auxo_glass import GlassPanel, glass_css, place  # noqa: E402
+
+FA = "Font Awesome 6 Free"
+G_SPEAKER, G_MUTE, G_HEAD, G_MIC, G_MICOFF, G_CHECK, G_SLIDERS = ("", "", "", "", "",
+                                                                   "", "")
+
+
+def rgba(hex_colour, a):
+    c = QColor(hex_colour)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{a})"
+
+
+class Sound(GlassPanel):
+    def __init__(self, style="mac", audio=None):
+        self.audio = audio or Audio()
+        mode, pal, font = S.look()
+        light = mode == "light"
+        win = style == "windows"
+        super().__init__("auxo-sound", 10 if win else 26, style, light)
+        fg, mut = ("#1d1d24", "#55555f") if light else ("#f2f2f7", "#a8a8b8")
+        acc = pal["accent"]
+        self.setStyleSheet(f"""
+            * {{ font-family: "{font}"; color: {fg}; font-size: 13px; background: transparent; }}
+            QLabel#head {{ font-weight: 700; font-size: 14px; }}
+            QLabel#sect {{ font-weight: 600; color: {mut}; font-size: 11px; }}
+            QLabel#muted {{ color: {mut}; font-size: 11px; }}
+            QToolButton#glyph {{ font-family: "{FA}"; font-weight: 900; font-size: 15px; border: none;
+                                 border-radius: 15px; padding: 6px; }}
+            QToolButton#glyph:hover {{ background: {rgba(fg, 0.08)}; }}
+            QToolButton#glyph:checked {{ color: #ef4444; }}
+            QPushButton#device {{ border: none; border-radius: 9px; padding: 7px 10px; text-align: left; }}
+            QPushButton#device:hover {{ background: {rgba(fg, 0.07)}; }}
+            QPushButton#device:checked {{ background: {rgba(acc, 0.16)}; font-weight: 600; }}
+            QWidget#box {{ border-radius: {14 if not win else 6}px; background: {('#fbfbfb' if light else '#2d2d2d') if win else 'transparent'}; }}
+            {glass_css(light, 14, "QWidget#box") if not win else ""}
+            QSlider::groove:horizontal {{ height: {6 if not win else 4}px; background: {rgba(fg, 0.15)}; border-radius: 3px; }}
+            QSlider::sub-page:horizontal {{ background: {acc}; border-radius: 3px; }}
+            QSlider::handle:horizontal {{ background: {'#ffffff' if not win else acc}; width: 16px; margin: -6px 0;
+                                         border-radius: 8px; border: 1px solid {rgba('#000000', 0.15)}; }}
+        """)
+        self.setFixedWidth(360)
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(16, 16, 16, 14)
+        self.lay.setSpacing(10)
+        head = QHBoxLayout()
+        t = QLabel("Sound")
+        t.setObjectName("head")
+        head.addWidget(t)
+        head.addStretch(1)
+        self.lay.addLayout(head)
+        self.body = QVBoxLayout()
+        self.body.setSpacing(10)
+        self.lay.addLayout(self.body)
+        self.sliders = {}            # key → slider being dragged (don't overwrite it on refresh)
+        self.refresh()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh_if_idle)
+        self.timer.start(1500)
+
+    # ── building blocks ──
+    def _box(self):
+        w = QWidget()
+        w.setObjectName("box")
+        v = QVBoxLayout(w)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(6)
+        self.body.addWidget(w)
+        return v
+
+    def _section(self, lay, text):
+        s = QLabel(text.upper())
+        s.setObjectName("sect")
+        lay.addWidget(s)
+
+    def _slider_row(self, lay, key, glyph_on, glyph_off, volume, muted, on_volume, on_mute, label=None):
+        if label:
+            lab = QLabel(label)
+            lab.setObjectName("muted")
+            lay.addWidget(lab)
+        row = QHBoxLayout()
+        b = QToolButton()
+        b.setObjectName("glyph")
+        b.setCheckable(True)
+        b.setChecked(muted)
+        b.setText(glyph_off if muted else glyph_on)
+        b.setToolTip("Unmute" if muted else "Mute")
+        b.toggled.connect(lambda m: (b.setText(glyph_off if m else glyph_on), on_mute(m)))
+        row.addWidget(b)
+        s = QSlider(Qt.Orientation.Horizontal)
+        s.setRange(0, 100)
+        s.setValue(min(100, volume))
+        pct = QLabel(f"{volume}%")
+        pct.setObjectName("muted")
+        pct.setFixedWidth(38)
+        pct.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        s.valueChanged.connect(lambda v: (pct.setText(f"{v}%"), on_volume(v)))
+        s.sliderPressed.connect(lambda: self.sliders.__setitem__(key, s))
+        s.sliderReleased.connect(lambda: self.sliders.pop(key, None))
+        row.addWidget(s, 1)
+        row.addWidget(pct)
+        lay.addLayout(row)
+        return s, b
+
+    def _device_list(self, lay, devices, kind, glyph):
+        if len(devices) < 2:
+            return
+        for d in devices:
+            b = QPushButton()
+            b.setObjectName("device")
+            b.setCheckable(True)
+            b.setChecked(d["default"])
+            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            b.setText(("✓  " if d["default"] else "     ") + d["label"])
+            b.clicked.connect(lambda _c, name=d["name"]: (self.audio.set_default(kind, name), self.refresh()))
+            lay.addWidget(b)
+
+    # ── content ──
+    def refresh_if_idle(self):
+        if not self.sliders:
+            self.refresh()
+
+    def refresh(self):
+        new = (self.audio.outputs(), self.audio.inputs(), self.audio.apps())
+        if getattr(self, "state", None) == new:
+            return                              # nothing changed: no rebuild, no flicker
+        while self.body.count():
+            item = self.body.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        outs, ins, apps = new
+        self.state = new
+        box = self._box()
+        self._section(box, "Output")
+        out = next((o for o in outs if o["default"]), outs[0] if outs else None)
+        if out:
+            g = G_HEAD if out["headphones"] else G_SPEAKER
+            self.out_slider, self.out_mute = self._slider_row(
+                box, "out", g, G_MUTE, out["volume"], out["muted"],
+                lambda v, n=out["name"]: self.audio.set_volume("sink", n, v),
+                lambda m, n=out["name"]: self.audio.set_mute("sink", n, m), label=out["label"])
+            self._device_list(box, outs, "sink", g)
+        else:
+            lab = QLabel("No speakers or headphones found. Is PipeWire running? (auxo-tweak doctor)")
+            lab.setWordWrap(True)
+            lab.setObjectName("muted")
+            box.addWidget(lab)
+        mic = next((i for i in ins if i["default"]), ins[0] if ins else None)
+        if mic:
+            box = self._box()
+            self._section(box, "Microphone")
+            self.mic_slider, self.mic_mute = self._slider_row(
+                box, "mic", G_MIC, G_MICOFF, mic["volume"], mic["muted"],
+                lambda v, n=mic["name"]: self.audio.set_volume("source", n, v),
+                lambda m, n=mic["name"]: self.audio.set_mute("source", n, m), label=mic["label"])
+            self._device_list(box, ins, "source", G_MIC)
+        box = self._box()
+        self._section(box, "Apps")
+        if apps:
+            for a in apps:
+                label = a["label"] + (f" · {a['detail']}" if a["detail"] and a["detail"] != a["label"] else "")
+                self._slider_row(box, f"app{a['index']}", G_SPEAKER, G_MUTE, a["volume"], a["muted"],
+                                 lambda v, i=a["index"]: self.audio.set_volume("app", i, v),
+                                 lambda m, i=a["index"]: self.audio.set_mute("app", i, m),
+                                 label=label[:60])
+        else:
+            lab = QLabel("Nothing is playing")
+            lab.setObjectName("muted")
+            box.addWidget(lab)
+        self.adjustSize()
+        self.setFixedHeight(self.layout().sizeHint().height())
+
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    if S.close_running("auxo-sound"):            # clicked again: close it
+        return 0
+    style = "windows" if "windows" in sys.argv else "mac"
+    app = QApplication(sys.argv[:1])
+    app.setDesktopFileName("auxo-sound")
+    w = Sound(style)
+    w.show()
+    if style == "windows":
+        place(w, "auxo-sound", "bottom-right", bar=52)
+    else:
+        place(w, "auxo-sound", "top-right", bar=36)
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

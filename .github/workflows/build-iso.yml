@@ -39,6 +39,7 @@ jobs:
           python3 tests/test-overview.py
           sh tests/test-wallpaper.sh
           python3 tests/test-store.py
+          python3 tests/test-sound.py
 
       - name: Get Auxo's Hyprland packages (newest build-hyprland release)
         env:

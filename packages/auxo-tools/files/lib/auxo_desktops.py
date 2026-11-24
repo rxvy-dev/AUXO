@@ -20,7 +20,7 @@ PLASMA_CORE = ["plasma-desktop", "plasma-workspace-x11", "plasma-nm", "plasma-pa
                "kf6-kded", "upower", "udisks2"]
 
 COMMON_WM = [
-    "Thunar", "thunar-archive-plugin", "gvfs", "pavucontrol", "network-manager-applet",
+    "Thunar", "thunar-archive-plugin", "gvfs", "pulseaudio-utils", "network-manager-applet",
     "blueman", "brightnessctl", "playerctl", "power-profiles-daemon", "font-awesome6", "papirus-icon-theme",
     "breeze-gtk", "breeze-icons", "adwaita-icon-theme", "greetd", "tuigreet", "polkit-gnome",
 ]

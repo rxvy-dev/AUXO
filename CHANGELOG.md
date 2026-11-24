@@ -17,6 +17,9 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Sound menu** (click the volume icon on the bar): pick speakers or headphones, volume and mute,
+  your microphone, and a volume slider for every app that's playing. Replaces pavucontrol on the
+  Hyprland, Sway and i3 rices; Liquid Glass on the Mac style, Windows-style above the taskbar.
 - **Fixed: the cursor was almost invisible on Hyprland.** No cursor theme was set, so Hyprland used a faint fallback; Hyprland, Sway, i3, GTK and X11 apps now all use Adwaita (repaired on update).
 - **Auxo App Store** (App Store in your menu, or `auxo-store`): hand-picked apps by category
   (Popular, Games, Create, Work, Chat & media, Tools), search across Void and Flathub, one-click
