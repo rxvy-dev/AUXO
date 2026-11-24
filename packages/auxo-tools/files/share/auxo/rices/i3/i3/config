@@ -18,6 +18,8 @@ exec_always --no-startup-id ~/.config/polybar/launch.sh
 exec --no-startup-id pipewire
 # clipboard history (Super+Shift+V)
 exec --no-startup-id clipmenud
+# day & night wallpaper when picked in Auxo Settings → Look (video needs Wayland)
+exec --no-startup-id auxo-wallpaper
 exec --no-startup-id picom -b
 exec --no-startup-id dunst
 exec --no-startup-id nm-applet

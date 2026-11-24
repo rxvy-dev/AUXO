@@ -26,6 +26,8 @@ input type:touchpad {
 exec pipewire
 exec waybar
 exec mako
+# live wallpaper (video / day & night) when picked in Auxo Settings → Look
+exec auxo-wallpaper
 # clipboard history (Super+Shift+V)
 exec wl-paste --watch cliphist store
 exec nm-applet --indicator

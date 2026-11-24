@@ -17,6 +17,15 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Gaming mode** (Super+G, or the button in the Control Center / Quick settings): blur, shadows,
+  animations and gaps off, notifications held, performance power profile; off puts it all back.
+- **System Monitor** (Ctrl+Shift+Esc): CPU per core, memory, GPU, network, temperatures, disks,
+  and every app with End task / Force quit.
+- **Window overview** (Super+Tab): every window by workspace, live thumbnails, type to filter,
+  click to jump, × to close. Alt+Tab is still "next window".
+- **Live wallpapers** (Auxo Settings → Look → Live wallpaper): a video or GIF as the wallpaper, or
+  Day & night (new Lagoon night wallpaper) that fades between two pictures at set times.
+- **The same keys on every rice**: Hyprland in all three styles, Sway and i3 share one key map.
 - **Fixed: Hyprland didn't install.** Void doesn't package Hyprland, and the community repo Auxo
   used (hyprland-void) stopped being rebuilt in May 2025; Void has since moved on (libjxl 0.12,
   libdisplay-info 0.3 and its own newer hyprutils), so those packages no longer installed. Auxo now

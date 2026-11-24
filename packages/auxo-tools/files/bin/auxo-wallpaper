@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""auxo-wallpaper — live wallpapers for Auxo's Hyprland, Sway and i3 rices.
+
+  auxo-wallpaper                       start at login (the rices run this): whatever you picked
+  auxo-wallpaper video FILE            a video or GIF as the wallpaper (silent, looping; Wayland)
+  auxo-wallpaper daynight DAY NIGHT [--day 07:00] [--night 19:00]
+                                       one picture by day, another at night, with a fade
+  auxo-wallpaper still                 back to your normal wallpaper (Auxo Settings → Look)
+  auxo-wallpaper status
+
+Runs as you; no password. Settings live in ~/.config/auxo/wallpaper-live.conf.
+"""
+import os
+import shlex
+import shutil
+import signal
+import subprocess
+import sys
+import time
+
+HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
+CONF = os.path.join(HOME, ".config/auxo/wallpaper-live.conf")
+STILL = os.path.join(HOME, ".config/auxo/wallpaper.png")
+RUN = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+PIDFILE = os.path.join(RUN, "auxo-wallpaper.pid")
+HELPERS = ("mpvpaper", "swww-daemon", "hyprpaper")
+
+
+def read_conf(path=CONF):
+    conf = {"MODE": "still"}
+    try:
+        for line in open(path):
+            k, _, v = line.strip().partition("=")
+            if k and not k.startswith("#"):
+                conf[k] = shlex.split(v)[0] if v.strip() else ""
+    except (OSError, ValueError):
+        pass
+    return conf
+
+
+def write_conf(conf, path=CONF):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("# written by auxo-wallpaper (Auxo Settings → Look → Live wallpaper)\n")
+        for k, v in conf.items():
+            f.write(f"{k}={shlex.quote(str(v))}\n")
+
+
+def session():
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return "hyprland"
+    if os.environ.get("SWAYSOCK"):
+        return "sway"
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return "wayland"
+    return "x11" if os.environ.get("DISPLAY") else None
+
+
+def quiet(argv, wait=True):
+    try:
+        if wait:
+            return subprocess.run(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10).returncode
+        return subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def is_day(now, day_at, night_at):
+    """True between day_at and night_at (HH:MM), handling night_at < day_at too."""
+    def mins(s):
+        h, _, m = s.partition(":")
+        return int(h) * 60 + int(m or 0)
+    t, d, n = now.tm_hour * 60 + now.tm_min, mins(day_at), mins(night_at)
+    return d <= t < n if d < n else not (n <= t < d)
+
+
+def seconds_to_next_switch(now, day_at, night_at):
+    def mins(s):
+        h, _, m = s.partition(":")
+        return int(h) * 60 + int(m or 0)
+    t = now.tm_hour * 60 + now.tm_min
+    waits = [((mins(x) - t) % 1440) or 1440 for x in (day_at, night_at)]
+    return min(waits) * 60 - now.tm_sec
+
+
+def stop_others():
+    """Stop a previous auxo-wallpaper and the helpers it started."""
+    try:
+        pid = int(open(PIDFILE).read().strip())
+        if pid != os.getpid():
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, ValueError):
+        pass
+    for h in HELPERS:
+        quiet(["pkill", "-x", h])
+
+
+def show_still(sess, image=None):
+    """Your normal wallpaper (or `image`), with whatever the session uses."""
+    img = image or STILL
+    if sess == "hyprland":
+        if image and shutil.which("swww"):
+            swww(img)
+            return
+        quiet(["hyprpaper"], wait=False)
+    elif sess in ("sway", "wayland"):
+        if image and shutil.which("swww"):
+            swww(img)
+        elif sess == "sway":
+            quiet(["swaymsg", f"output * bg {shlex.quote(img)} fill"])
+    elif sess == "x11":
+        quiet(["feh", "--bg-fill", img])
+
+
+def swww(img):
+    if quiet(["swww", "query"]) != 0:
+        quiet(["swww-daemon"], wait=False)
+        for _ in range(30):
+            if quiet(["swww", "query"]) == 0:
+                break
+            time.sleep(0.1)
+    quiet(["swww", "img", img, "--transition-type", "fade", "--transition-duration", "2"])
+
+
+def run_daemon():
+    sess = session()
+    conf = read_conf()
+    mode = conf.get("MODE", "still")
+    stop_others()
+    with open(PIDFILE, "w") as f:
+        f.write(str(os.getpid()))
+    if mode == "video" and conf.get("VIDEO") and sess in ("hyprland", "sway", "wayland"):
+        if shutil.which("mpvpaper"):
+            # replaces this process: mpvpaper is the wallpaper now
+            os.execvp("mpvpaper", ["mpvpaper", "-o", "no-audio --loop-file=inf --panscan=1.0 --hwdec=auto",
+                                   "-p", "*", conf["VIDEO"]])
+        notify("Video wallpapers need mpvpaper: sudo xbps-install mpvpaper")
+    elif mode == "daynight" and conf.get("DAY") and conf.get("NIGHT"):
+        day_at, night_at = conf.get("DAY_AT", "07:00"), conf.get("NIGHT_AT", "19:00")
+        shown = None
+        while True:
+            now = time.localtime()
+            want = conf["DAY"] if is_day(now, day_at, night_at) else conf["NIGHT"]
+            if want != shown:
+                show_still(sess, want)
+                shown = want
+            time.sleep(min(300, max(30, seconds_to_next_switch(now, day_at, night_at))))
+    show_still(sess)
+    return 0
+
+
+def notify(text):
+    quiet(["notify-send", "-a", "Auxo", "Live wallpaper", text])
+
+
+def restart():
+    quiet([sys.executable, os.path.abspath(__file__)], wait=False)
+
+
+def main(argv):
+    if not argv:
+        return run_daemon()
+    cmd = argv[0]
+    conf = read_conf()
+    if cmd in ("-h", "--help"):
+        print(__doc__.strip())
+    elif cmd == "status":
+        print(conf.get("MODE", "still"), *(v for k, v in conf.items() if k != "MODE"))
+    elif cmd == "still":
+        write_conf({"MODE": "still"})
+        restart()
+    elif cmd == "video" and len(argv) >= 2:
+        f = os.path.abspath(os.path.expanduser(argv[1]))
+        if not os.path.isfile(f):
+            print(f"auxo-wallpaper: no such file: {f}", file=sys.stderr)
+            return 1
+        if session() == "x11":
+            print("auxo-wallpaper: video wallpapers need Hyprland or Sway (Wayland)", file=sys.stderr)
+            return 1
+        write_conf({"MODE": "video", "VIDEO": f})
+        restart()
+    elif cmd == "daynight" and len(argv) >= 3:
+        day, night = (os.path.abspath(os.path.expanduser(x)) for x in argv[1:3])
+        for f in (day, night):
+            if not os.path.isfile(f):
+                print(f"auxo-wallpaper: no such file: {f}", file=sys.stderr)
+                return 1
+        opts = dict(zip(argv[3::2], argv[4::2]))
+        write_conf({"MODE": "daynight", "DAY": day, "NIGHT": night, "DAY_AT": opts.get("--day", "07:00"),
+                    "NIGHT_AT": opts.get("--night", "19:00")})
+        restart()
+    else:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

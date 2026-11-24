@@ -25,7 +25,7 @@ COMMON_WM = [
     "breeze-gtk", "breeze-icons", "greetd", "tuigreet", "polkit-gnome",
 ]
 WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy", "cliphist", "rofimoji",
-              "gammastep",
+              "gammastep", "swww", "mpvpaper",
               "qt6-wayland", "qt5-wayland", "xdg-desktop-portal-gtk"]
 X11 = ["xorg-minimal", "xinit", "xorg-fonts", "xrandr", "xsetroot"]
 

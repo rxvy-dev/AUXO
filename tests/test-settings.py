@@ -60,7 +60,7 @@ pk = os.path.join(bindir, "fake-pkexec")
 open(pk, "w").write(f'#!/bin/sh\nshift\necho "root $@" >> {calls}\n')
 os.chmod(pk, 0o755)
 os.environ.update(QT_QPA_PLATFORM="offscreen", AUXO_ROOT=root, AUXO_HOME=home, AUXO_LIB=f"{PKG}/lib",
-                  AUXO_TWEAK=fake, AUXO_PKEXEC=pk, AUXO_AI=ai)
+                  AUXO_TWEAK=fake, AUXO_PKEXEC=pk, AUXO_AI=ai, AUXO_WALLPAPER=fake)
 sys.path.insert(0, f"{PKG}/lib")
 import importlib.machinery  # noqa: E402
 import importlib.util  # noqa: E402
@@ -218,6 +218,20 @@ win.run_suggested("auxo-tweak service bluetooth on"); wait_proc()
 check("running a suggestion uses pkexec", "root service bluetooth on" in log())
 win.run_suggested("auxo-tweak look preset glass"); wait_proc()
 check("look suggestions run without a password", "\nlook preset glass" in "\n" + log())
+
+# live wallpaper (auxo-wallpaper): the fake records the call like auxo-tweak's
+win.live_mode.setCurrentIndex(win.live_mode.findData("daynight"))
+check("Day & night shows its pictures and times", not win.live_dn_row.isHidden() and win.live_video_row.isHidden()
+      and "auxo-lagoon-night.jpg" in win.live_night_btn.text())
+win.live_apply.click(); wait_proc()
+check("Day & night runs auxo-wallpaper (no password)", "daynight /usr/share/wallpapers/auxo-lagoon.jpg "
+      "/usr/share/wallpapers/auxo-lagoon-night.jpg --day 07:00 --night 19:00" in log() and "root daynight" not in log())
+win.live_mode.setCurrentIndex(win.live_mode.findData("video"))
+win.live_apply.click()
+check("Video asks for a file first", "Choose a video first" in win.status.text())
+win.live_video_file = "/home/x/Videos/rain.mp4"
+win.live_apply.click(); wait_proc()
+check("Video runs auxo-wallpaper video FILE", "video /home/x/Videos/rain.mp4" in log())
 
 desk = subprocess.run(["desktop-file-validate", f"{PKG}/applications/auxo-settings.desktop"], capture_output=True,
                       text=True) if shutil.which("desktop-file-validate") else None

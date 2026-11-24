@@ -33,6 +33,7 @@ from auxo_desktops import DESKTOPS, KERNELS, SHELLS  # noqa: E402
 
 ROOT = os.environ.get("AUXO_ROOT", "/").rstrip("/")
 TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
+LIVE_WALL = os.environ.get("AUXO_WALLPAPER", "auxo-wallpaper")
 PKEXEC = os.environ.get("AUXO_PKEXEC", "pkexec")
 ME = pwd.getpwuid(os.getuid()).pw_name
 HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
@@ -710,6 +711,60 @@ class Settings(QMainWindow):
         prow.addStretch(1)
         lay.addLayout(prow)
 
+        # live wallpaper: a video, or a picture by day and another at night (auxo-wallpaper)
+        self.section(lay, "Live wallpaper", "Hyprland and Sway: a video or GIF as your wallpaper, or one picture by "
+                     "day and another at night. i3: day & night only.")
+        live = self.live_conf()
+        lrow = QHBoxLayout()
+        self.live_mode = QComboBox()
+        for key, text in (("still", "Off: the wallpaper above"), ("video", "Video or GIF"), ("daynight", "Day & night")):
+            self.live_mode.addItem(text, key)
+        self.live_mode.setCurrentIndex(max(0, self.live_mode.findData(live.get("MODE", "still"))))
+        lrow.addWidget(self.live_mode)
+        lrow.addStretch(1)
+        lay.addLayout(lrow)
+        self.live_video_row = QWidget()
+        vr = QHBoxLayout(self.live_video_row)
+        vr.setContentsMargins(0, 0, 0, 0)
+        self.live_video = QLabel(os.path.basename(live.get("VIDEO", "")) or "No video picked")
+        vbtn = QPushButton("Choose a video…")
+        vbtn.clicked.connect(self.choose_live_video)
+        vr.addWidget(self.live_video, 1)
+        vr.addWidget(vbtn)
+        lay.addWidget(self.live_video_row)
+        self.live_dn_row = QWidget()
+        dg = QGridLayout(self.live_dn_row)
+        dg.setContentsMargins(0, 0, 0, 0)
+        wd = f"{ROOT}/usr/share/wallpapers"
+        self.live_day = live.get("DAY") or "/usr/share/wallpapers/auxo-lagoon.jpg"
+        self.live_night = live.get("NIGHT") or "/usr/share/wallpapers/auxo-lagoon-night.jpg"
+        self.live_day_btn = QPushButton("Day: " + os.path.basename(self.live_day))
+        self.live_night_btn = QPushButton("Night: " + os.path.basename(self.live_night))
+        self.live_day_btn.clicked.connect(lambda: self.choose_live_pic("day"))
+        self.live_night_btn.clicked.connect(lambda: self.choose_live_pic("night"))
+        from PyQt6.QtWidgets import QTimeEdit
+        from PyQt6.QtCore import QTime
+        self.live_day_at = QTimeEdit(QTime.fromString(live.get("DAY_AT", "07:00"), "HH:mm"))
+        self.live_night_at = QTimeEdit(QTime.fromString(live.get("NIGHT_AT", "19:00"), "HH:mm"))
+        for te in (self.live_day_at, self.live_night_at):
+            te.setDisplayFormat("HH:mm")
+        dg.addWidget(self.live_day_btn, 0, 0)
+        dg.addWidget(QLabel("from"), 0, 1)
+        dg.addWidget(self.live_day_at, 0, 2)
+        dg.addWidget(self.live_night_btn, 1, 0)
+        dg.addWidget(QLabel("from"), 1, 1)
+        dg.addWidget(self.live_night_at, 1, 2)
+        dg.setColumnStretch(0, 1)
+        lay.addWidget(self.live_dn_row)
+        arow = QHBoxLayout()
+        self.live_apply = QPushButton("Use it")
+        self.live_apply.clicked.connect(self.apply_live_wallpaper)
+        arow.addWidget(self.live_apply)
+        arow.addStretch(1)
+        lay.addLayout(arow)
+        self.live_mode.currentIndexChanged.connect(self.live_mode_changed)
+        self.live_mode_changed()
+
         self.section(lay, "Fonts", auxo_look.REACH["ui_font"])
         g = QGridLayout()
         g.addWidget(QLabel("Interface"), 0, 0)
@@ -812,6 +867,52 @@ class Settings(QMainWindow):
         for lbl, k in self.slider_labels:
             lbl.setText(f"{self.look[k]} px")
         self.restyle()
+
+    def live_conf(self):
+        conf_, path = {}, os.path.join(HOME, ".config/auxo/wallpaper-live.conf")
+        try:
+            import shlex
+            for line in open(path):
+                k, _, v = line.strip().partition("=")
+                if k and not k.startswith("#"):
+                    conf_[k] = shlex.split(v)[0] if v.strip() else ""
+        except (OSError, ValueError):
+            pass
+        return conf_
+
+    def live_mode_changed(self, *_a):
+        mode = self.live_mode.currentData()
+        self.live_video_row.setVisible(mode == "video")
+        self.live_dn_row.setVisible(mode == "daynight")
+
+    def choose_live_video(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Choose a video wallpaper", os.path.join(HOME, "Videos"),
+                                           "Videos and GIFs (*.mp4 *.webm *.mkv *.mov *.gif)")
+        if f:
+            self.live_video_file = f
+            self.live_video.setText(os.path.basename(f))
+
+    def choose_live_pic(self, which):
+        f, _ = QFileDialog.getOpenFileName(self, f"Choose the {which} wallpaper", os.path.join(HOME, "Pictures"),
+                                           "Images (*.png *.jpg *.jpeg *.webp *.bmp)")
+        if f:
+            setattr(self, f"live_{which}", f)
+            getattr(self, f"live_{which}_btn").setText(f"{which.capitalize()}: {os.path.basename(f)}")
+
+    def apply_live_wallpaper(self):
+        mode = self.live_mode.currentData()
+        if mode == "video":
+            f = getattr(self, "live_video_file", None) or self.live_conf().get("VIDEO")
+            if not f:
+                self.status.setText("Choose a video first")
+                return
+            args = ["video", f]
+        elif mode == "daynight":
+            args = ["daynight", self.live_day, self.live_night, "--day", self.live_day_at.time().toString("HH:mm"),
+                    "--night", self.live_night_at.time().toString("HH:mm")]
+        else:
+            args = ["still"]
+        self.run_prog(LIVE_WALL, args, label="Live wallpaper", shown="auxo-wallpaper")
 
     def choose_wallpaper(self):
         f, _ = QFileDialog.getOpenFileName(self, "Choose a wallpaper", os.path.join(HOME, "Pictures"),

@@ -4,6 +4,7 @@
   python3 scripts/make-wallpapers.py [OUTDIR]   (default: packages/auxo-tools/files/share/wallpapers)
 
 auxo-lagoon.jpg  bright sky with glassy ribbons (Mac-style, Liquid Glass)
+auxo-lagoon-night.jpg  the same lagoon at night (Day & night live wallpaper)
 auxo-bloom.jpg   soft folded petals in blue-grey (Windows-style)
 Needs numpy and Pillow.
 """
@@ -65,6 +66,33 @@ def lagoon():
     save(img * vig[..., None], "auxo-lagoon.jpg")
 
 
+def lagoon_night():
+    # deep night sky, a low violet glow, dimmer glassy ribbons and a few stars
+    img = mix(col("#050a1f")[None, None], col("#1b2a5c")[None, None], smooth(v * 1.2))
+    glow = np.exp(-(((u - 0.72) / 0.3) ** 2 + ((v - 0.82) / 0.2) ** 2))
+    img = mix(img, col("#5b3fa8")[None, None], glow * 0.45)
+    ribbons = [(0.58, 0.10, 2.1, 0.0, "#2f6fd6", 0.45), (0.66, 0.085, 1.6, 1.7, "#3a4fc0", 0.42),
+               (0.75, 0.075, 2.6, 3.1, "#6d4cd6", 0.38), (0.84, 0.07, 1.9, 0.8, "#1f9e9a", 0.4),
+               (0.93, 0.065, 2.3, 2.4, "#2448a8", 0.5)]
+    for center, thick, freq, phase, tint, alpha in ribbons:
+        mid = center + 0.05 * np.sin(u * np.pi * freq + phase) + 0.02 * np.sin(u * np.pi * freq * 2.7 + phase * 1.3)
+        d = (v - mid) / thick
+        body = np.exp(-d ** 2 * 1.6) * (d > -1.2)
+        edge = np.exp(-((d + 0.75) / 0.12) ** 2)
+        img = mix(img, col(tint)[None, None], body * alpha)
+        img = mix(img, col("#b9c8ff")[None, None], edge * 0.3)
+    stars = np.zeros((H, W), np.float32)
+    n = 420
+    sx, sy = rng.integers(0, W, n), (rng.random(n) ** 1.6 * H * 0.55).astype(int)
+    stars[sy, sx] = rng.random(n) * 0.9 + 0.1
+    from PIL import ImageFilter
+    s = Image.fromarray((stars * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(1.1))
+    s = np.asarray(s, np.float32) / 255 * 2.4
+    img = mix(img, col("#ffffff")[None, None], np.clip(s, 0, 1) * (1 - smooth(v * 1.6)))
+    vig = 1 - 0.18 * (((u - 0.5) * 1.4) ** 2 + ((v - 0.45) * 1.2) ** 2)
+    save(img * vig[..., None], "auxo-lagoon-night.jpg")
+
+
 def bloom():
     img = mix(col("#e4e9ef")[None, None], col("#a9b8c8")[None, None], smooth(v * 0.9 + u * 0.15))
     cx, cy = 0.5, 0.5
@@ -95,4 +123,5 @@ def bloom():
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     lagoon()
+    lagoon_night()
     bloom()
