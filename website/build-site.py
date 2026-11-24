@@ -854,7 +854,7 @@ bento = f"""
 """
 
 compare_rows = [
-    ("Installer", "Text installer with a review screen", "void-installer, then set up by hand"),
+    ("Installer", "Graphical or text installer with a review screen", "void-installer, then set up by hand"),
     ("Desktop at first boot", "Ready, themed, configured", "You install and configure it"),
     ("GPU drivers", "Detected and installed", "You pick and install them"),
     ("Snapshots", "Before every update, bootable from GRUB", "Set up yourself if you want them"),
@@ -939,7 +939,7 @@ HERO_SHOT = (f'<figure class="heroshot tui" aria-label="The Auxo Linux 4.0 insta
              f'<div class="shotwrap"><img src="{TUI["welcome"]}" alt="The welcome page of the Auxo Linux 4.0 text installer" loading="eager"></div></figure>')
 
 home = head("Auxo Linux — Void Linux, set up the way you want it",
-            "Auxo Linux is a rolling distro built on Void Linux. Pick your desktop, kernel, shell and accent colour in a fast text installer, and change any of them later with one command.",
+            "Auxo Linux is a rolling distro built on Void Linux. Pick your desktop, kernel, shell and accent colour in a graphical installer, and change any of them later with one command.",
             "https://auxolinux.com/") + nav("home") + f"""
 <main id="main"><div class="tfbar" id="give"><div class="wrap"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 4.5 6.7 4.5c2.2 0 3.6 1.2 4.4 2.4h1.8c.8-1.2 2.2-2.4 4.4-2.4 3.7 0 5.8 3.9 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg><span><b>Auxo is free.</b> Help finish Terry Fox's Marathon of Hope: give to cancer research instead.</span><a href="https://terryfox.org/?form=GENERAL" target="_blank" rel="noopener">Donate to the Terry Fox Foundation →</a></div></div>{alertbar()}
 <section class="khero v7">{RIDGE.replace('class="ridge"','class="hridge"')}<div class="wrap hgrid">
@@ -967,7 +967,7 @@ home = head("Auxo Linux — Void Linux, set up the way you want it",
 <section id="features"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">01</span> Why Auxo</p><h2>Void, without the evening of setup</h2></div><p>Everything you'd normally configure by hand after installing Void, done during install and still yours to change.</p></div>
   <div class="cards5">
-    <div class="rv">{IC['time']}<h3>Ready in minutes</h3><p>A guided text installer sets up your desktop, drivers, snapshots and dual boot in one go.</p></div>
+    <div class="rv">{IC['time']}<h3>Ready in minutes</h3><p>A guided installer sets up your desktop, drivers, snapshots and dual boot in one go.</p></div>
     <div class="rv">{IC['base']}<h3>Still pure Void</h3><p>Official Void repositories, xbps, runit and the Void docs all work as normal.</p></div>
     <div class="rv">{IC['swap']}<h3>Change anything later</h3><p><b>Auxo Settings</b> or <code>auxo-tweak</code> swaps your desktop, look, kernel, shell or accent without reinstalling.</p></div>
     <div class="rv">{IC['undo']}<h3>Undo bad updates</h3><p>Every <code>auxo-update</code> takes a btrfs snapshot you can boot from GRUB and roll back to.</p></div>
@@ -990,7 +990,7 @@ home = head("Auxo Linux — Void Linux, set up the way you want it",
 <section id="how"><div class="wrap">
   <div class="sec-head"><div><p class="eyebrow"><span class="n">03</span> How it works</p><h2>Install once. Change anything. Undo mistakes.</h2></div><p>Three tools cover the whole life of your system. <a class="inl" href="{DOCS}">Full command reference →</a></p></div>
   <div class="how3">
-    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A keyboard-driven text installer. Pick your desktop, accent, kernel, shell and extras. It shows you a summary and changes nothing until you press Install.</p>
+    <div class="rv"><span class="num">1</span><h3>Install</h3><p>A graphical installer (or a keyboard-driven text one). Pick your desktop, accent, kernel, shell and extras. It shows you a summary and changes nothing until you press Install.</p>
       <div class="term"><pre><span class="tm"># in the live session</span>
 <span class="ta">❯</span> sudo auxo-installer
 <span class="tg">✓</span> Auxo is installed</pre></div></div>
@@ -1166,7 +1166,7 @@ dl = head("Get Auxo Linux — Download",
   <div class="sec-head"><div><p class="eyebrow"><span class="n">02</span> Step two</p><h2>Download the image</h2></div><p>Images are hosted on the Internet Archive. Use the torrent if the direct download is slow.</p></div>
   <div class="dlsec rv" id="installer">
     <div class="top"><div><p class="eyebrow">Auxo Linux 4.0 · Void Linux</p><h2>PCs, live USB and virtual machines</h2><p>Write it to a USB stick or attach it to a VM, boot it, and try Auxo live or install it.</p></div><a class="doclink" href="#usb">Make a USB stick →</a></div>
-    <div class="dltable">{dlrow(VOID, "Auxo Linux 4.0", "Live KDE Plasma session with the Auxo text installer")}</div>
+    <div class="dltable">{dlrow(VOID, "Auxo Linux 4.0", "Live KDE Plasma session with the Auxo installer")}</div>
   </div>
   <div class="legacy rv" id="arch">
     <div class="top"><div><p class="eyebrow">Discontinued</p><h2>Auxo 3 (Arch Linux) <span class="dtag">No longer updated</span></h2>
@@ -1192,7 +1192,7 @@ dl = head("Get Auxo Linux — Download",
     <div class="card rv" id="install"><h3>Install Auxo</h3><p>Boot the USB stick or VM, then:</p>
       <ol class="steps">
         <li><span>Choose <b>Auxo Linux</b> in the boot menu. The live KDE Plasma desktop starts.</span></li>
-        <li><span>Click <b>Install Auxo Linux</b> in the welcome app, or run <code>sudo auxo-installer</code> in a terminal. For Wi-Fi, press <b>N</b> on the installer's first page.</span></li>
+        <li><span>Click <b>Install Auxo Linux</b> in the welcome app. For Wi-Fi, use <b>Connect to Wi-Fi</b> on the installer's first page. Prefer the keyboard? Run <code>sudo auxo-installer</code> in a terminal for the text installer.</span></li>
         <li><span>Use the arrow keys, type to search, <b>Enter</b> to pick and <b>Esc</b> to go back. Choose your keyboard, language, time zone and disk: erase a disk, or use partitions you made to dual boot.</span></li>
         <li><span>Choose your desktop, accent colour, kernel and shell, create your account, and tick any extras.</span></li>
         <li><span>Check the summary and press <b>Install</b>. Nothing on your disk changes before this step.</span></li>

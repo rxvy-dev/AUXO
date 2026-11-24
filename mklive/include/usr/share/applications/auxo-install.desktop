@@ -3,6 +3,11 @@ Type=Application
 Name=Install Auxo Linux
 Comment=Install Auxo on this computer
 Icon=auxo-logo
-Exec=konsole --fullscreen -e sudo auxo-installer
+Exec=auxo-installer --gui
 Terminal=false
 Categories=System;
+Actions=text;
+
+[Desktop Action text]
+Name=Text installer
+Exec=konsole --fullscreen -e sudo auxo-installer --tui

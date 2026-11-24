@@ -7,7 +7,7 @@
 <p align="center">
   <b>Void Linux, set up the way you want it.</b><br>
   A rolling distro on a Void base with runit and xbps. Pick your desktop, kernel, shell and accent
-  colour in a retro text installer, then change any of them later with one command. No reinstall.
+  colour in a graphical installer (or a retro text one), then change any of them later with one command. No reinstall.
 </p>
 
 <p align="center">
@@ -28,8 +28,9 @@
 Auxo is Void underneath: Void's repositories, `xbps`, runit and the Void docs all work as normal.
 On top it adds:
 
-- **`auxo-installer`**, a full-screen text installer (keyboard, language, time zone, disk, desktop,
-  accent, kernel, shell, account, extras) that shows a summary and changes nothing until you press Install
+- **`auxo-installer`**, a graphical installer (keyboard, language, time zone, disk, desktop and Hyprland style,
+  accent, kernel, shell, account, extras) that shows a summary and changes nothing until you press Install.
+  The same installer runs as a full-screen text installer with `sudo auxo-installer`
 - **`auxo-tweak`**, which changes any of those choices after install. The installer calls the same
   commands, so changing something later gives the same result as a fresh install
 - **Auxo Settings**, a graphical app for the same things: accent, light or dark, wallpaper, fonts,
@@ -60,7 +61,7 @@ auxo-rollback --list                  # list snapshots
 
 | | |
 |---|---|
-| **Text installer** | Retro, keyboard-driven and fast. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Works offline (installs Plasma); other desktops download what they need. |
+| **Installer** | Graphical, with your disks drawn as bars, desktop and Hyprland-style previews, live accent colours and a summary page; or retro, keyboard-driven text (`sudo auxo-installer`). Both use one install engine. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Works offline (installs Plasma); other desktops download what they need. |
 | **9 desktop choices, all riced** | KDE Plasma 6 with the **Auxo global theme** (the live desktop, installs offline), Hyprland, Sway, i3, GNOME, Xfce and Cinnamon with **Auxo rices**, [Chrono](https://github.com/rxvy-dev/chrono) (rxvy's own Wayland desktop, built from source with an Auxo theme), or no desktop. Hyprland comes from the [hyprland-void](https://github.com/Makrennel/hyprland-void) community repo, since Void doesn't package it. |
 | **One accent, everywhere** | 7 accents applied to the GRUB theme, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
 | **Your own rice** | One set of look settings (light/dark, wallpaper, interface and terminal fonts, gaps, rounded corners, borders, blur, transparency, animations, bar top or bottom) applied to every desktop, from Auxo Settings or `auxo-tweak look`. Saved in `~/.config/auxo/look.conf`; your own config edits stay. |
@@ -88,7 +89,7 @@ auxo-rollback --list                  # list snapshots
 | `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |
 | `auxo-motd` | The greeting in each new terminal: your accent logo, uptime, disk, when you last updated, and a tip. `--off` / `--on` |
 | `auxo-welcome` | First-run hub. In the live session it opens the installer; on an installed system it offers accent, drivers, snapshots and updates. |
-| `auxo-installer` | The text installer (`installer/`), shipped on the live ISO only. |
+| `auxo-installer` | The installer (`installer/`): graphical in the live desktop, text with `sudo`. Shipped on the live ISO only. |
 | `cybervis` | [Cybervis](https://github.com/rxvy-dev/cybervis), a terminal visualizer (matrix rain, plasma, fire, warp…), compiled into its own package from `packages/cybervis/`. |
 
 Full command reference: **[auxolinux.com/docs](https://auxolinux.com/docs/)**
@@ -137,6 +138,8 @@ then runs Void's own ISO builder, [void-mklive](https://github.com/void-linux/vo
 ```bash
 ./tests/test-tools.sh            # auxo-tweak against a fake Void root (commands are printed, not run)
 python3 tests/test-installer.py  # installer plans + a full walkthrough of the real TUI in a virtual terminal
+python3 tests/test-installer-gui.py  # the graphical installer offscreen, through to a dry-run install
+python3 tests/test-shell.py      # Launchpad / Start menu / Control Center offscreen
 python3 tests/test-settings.py   # Auxo Settings offscreen: every page, clicks, the commands it runs
 ./scripts/smoke-test.sh out/*.iso   # boots the real ISO headless and takes a screenshot
 ```

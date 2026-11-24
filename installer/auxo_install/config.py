@@ -49,6 +49,10 @@ EXTRAS = {
     "discord": "Discord (from Flathub)",
 }
 DEFAULT_EXTRAS = ["snapshots", "zram", "drivers", "gaming", "discord"]
+# Hyprland styles: the rices `auxo-tweak rice` applies on top of the Auxo Hyprland rice
+STYLES = {"auxo": ("Auxo", "Floating bar, tiling with gaps", "hyprland"),
+          "mac": ("Mac", "Liquid Glass menu bar, dock, Control Center", "hyprland-mac"),
+          "windows": ("Windows", "Taskbar, Start menu, Quick settings", "hyprland-win")}
 
 
 @dataclass
@@ -63,6 +67,7 @@ class InstallConfig:
     format_efi: bool = False       # manual mode: format the EFI partition (only if it's new)
     filesystem: str = "btrfs"
     desktop: str = "plasma"
+    style: str = "auxo"            # Hyprland only: auxo | mac | windows (the rice's look)
     accent: str = "violet"
     kernel: str = "linux"
     shell: str = "zsh"
@@ -115,6 +120,8 @@ def validate(cfg, efi=True):
             errs.append("Pick the EFI system partition.")
         if cfg.root_part and cfg.root_part == cfg.efi_part:
             errs.append("The root and EFI partitions must be different.")
+    if cfg.style not in STYLES:
+        errs.append(f"Unknown style {cfg.style}.")
     if cfg.filesystem not in FILESYSTEMS:
         errs.append(f"Unknown filesystem {cfg.filesystem}.")
     return errs

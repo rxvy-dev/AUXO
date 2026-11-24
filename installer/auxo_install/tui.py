@@ -10,7 +10,7 @@ import subprocess
 import sys
 import textwrap
 
-from .config import InstallConfig, KEYBOARDS, LOCALES, FILESYSTEMS, EXTRAS, validate_user, validate
+from .config import InstallConfig, KEYBOARDS, LOCALES, FILESYSTEMS, EXTRAS, STYLES, validate_user, validate
 from . import disks as disklib
 from .plan import build_plan, describe, Env, ONLINE_DESKTOPS
 from .runner import Context, execute, InstallError, LOG
@@ -495,8 +495,18 @@ class TUI:
             tag = "needs internet" if k in ONLINE_DESKTOPS else "installs offline"
             items.append((k, d["name"], tag, True))
         intro = None if self.env.online else ["You're offline: desktops that need internet are swapped for Plasma."]
-        self.cfg.desktop = self.menu("Desktop", items, self.cfg.desktop, intro=intro,
-                                     describe=lambda k: DESKTOP_INFO.get(k, ""))
+        while True:
+            self.cfg.desktop = self.menu("Desktop", items, self.cfg.desktop, intro=intro,
+                                         describe=lambda k: DESKTOP_INFO.get(k, ""))
+            if self.cfg.desktop != "hyprland":
+                return
+            try:
+                self.cfg.style = self.menu("Hyprland style", [(k, v[0], v[1], True) for k, v in STYLES.items()],
+                                           self.cfg.style, intro=["How Hyprland looks. Change it any time in "
+                                                                  "Auxo Settings → Desktop → Style."])
+                return
+            except Back:
+                continue
 
     def page_look(self):
         items = [(k, k, v[0], True) for k, v in ACCENTS.items()]
@@ -558,7 +568,10 @@ class TUI:
                 continue
             top, left, height, width = self.body
             y = top
-            friendly = {"Desktop": DESKTOPS.get(self.cfg.desktop, {}).get("name", self.cfg.desktop),
+            dname = DESKTOPS.get(self.cfg.desktop, {}).get("name", self.cfg.desktop)
+            if self.cfg.desktop == "hyprland":
+                dname += f" — {STYLES[self.cfg.style][0]} style"
+            friendly = {"Desktop": dname,
                         "Language": dict(LOCALES).get(self.cfg.locale, self.cfg.locale),
                         "Keyboard": dict(KEYBOARDS).get(self.cfg.keyboard, self.cfg.keyboard)}
             for label, value in describe(self.cfg, self.env):

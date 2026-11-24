@@ -149,6 +149,16 @@ cfg2b = InstallConfig(disk="/dev/sda", username="sam", password="pw")          #
 _, _, notes_b, L_b = dry_run(cfg2b, Env(efi=True, online=False))
 check("Steam + Discord skipped offline, with how to add them", not has(L_b, "gaming on") and not has(L_b, "apps discord")
       and any("sudo auxo-tweak apps discord" in n for n in notes_b))
+check("no Hyprland style when Plasma stands in", not has(L, "auxo-tweak rice"))
+for style, rice in (("mac", "hyprland-mac"), ("windows", "hyprland-win")):
+    c = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland", style=style)
+    _, _, _, Ls = dry_run(c, Env(efi=True, online=True))
+    check(f"Hyprland {style} style: auxo-tweak rice {rice} after the desktop", has(Ls, f"auxo-tweak rice {rice} --user sam")
+          and [l for l in Ls if "auxo-tweak desktop hyprland" in l or "auxo-tweak rice" in l][-1].endswith(f"rice {rice} --user sam"))
+c = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland")
+check("Auxo style: no extra rice", not has(dry_run(c, Env(efi=True, online=True))[3], "auxo-tweak rice"))
+check("unknown style refused", any("style" in e for e in validate(InstallConfig(disk="/dev/sda", username="sam",
+                                                                                password="pw", style="beos"))))
 check("BIOS: 1 MiB bios_grub partition", has(L, "-n1:0:+1M -t1:ef02 -c1:BIOS"))
 check("BIOS: no EFI formatting or mounting", not has(L, "mkfs.vfat") and not has(L, "/boot/efi"))
 check("BIOS: GRUB into the disk", has(L, "grub-install --target=i386-pc --recheck /dev/sda"))
@@ -207,7 +217,7 @@ def tui_walkthrough(shots_dir=None):
     if pid == 0:
         fcntl.ioctl(sys.stdout.fileno(), termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
         os.execvpe(sys.executable, [sys.executable, os.path.join(HERE, "installer/auxo-installer"),
-                                    "--dry-run", "--offline"], env)
+                                    "--dry-run", "--offline", "--tui"], env)
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
     shots = []
 

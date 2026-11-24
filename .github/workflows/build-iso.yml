@@ -28,10 +28,12 @@ jobs:
       - name: Run the tests
         run: |
           pip install --quiet pyte PyQt6
+          # Qt (offscreen) needs these for the GUI tests: Settings, installer, launcher, control center
+          sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 libglib2.0-0t64 >/dev/null 2>&1 || sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 >/dev/null 2>&1 || true
           ./tests/test-tools.sh
           python3 tests/test-installer.py
+          python3 tests/test-installer-gui.py
           python3 tests/test-summit.py
-          sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 libglib2.0-0t64 >/dev/null 2>&1 || sudo apt-get install -y -qq libegl1 libxkbcommon0 libfontconfig1 >/dev/null 2>&1 || true
           python3 tests/test-settings.py
 
       - name: Build the ISO in a Void container (void-mklive)

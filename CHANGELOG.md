@@ -17,6 +17,13 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Graphical installer**: Install Auxo Linux in the live session now opens a graphical installer:
+  your disks drawn as bars (what's on them now, and what Auxo will make of them), dual boot with
+  existing partitions, desktop cards with Hyprland style previews (Auxo, Mac, Windows), accent
+  colours that re-theme the installer as you pick, a password-strength meter, a summary page and a
+  progress page with every step and the full log. It runs the same tested install engine as the
+  text installer (as root, in the background), so both install exactly the same system.
+  `sudo auxo-installer` still opens the text installer, which also asks for the Hyprland style now.
 - **Mac-style Hyprland, in Liquid Glass**: a glass menu bar on top (▲ menu, app name, status
   icons), a glass dock, Spotlight-style search on Super+Space, an Applications panel with search
   and categories (Super+A or the dock's grid icon) and a Control Center (Wi-Fi, Bluetooth, Focus,

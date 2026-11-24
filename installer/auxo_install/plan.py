@@ -12,6 +12,7 @@ import os
 import re
 from dataclasses import dataclass, field
 
+from .config import STYLES
 from .disks import part_path
 
 TARGET = "/mnt/target"
@@ -321,6 +322,8 @@ def build_plan(cfg, env):
         acts.append(tweak(T, "desktop", "plasma", *u))
     else:
         acts.append(tweak(T, "desktop", desktop, "--replace", *u))
+    if desktop == "hyprland" and cfg.style != "auxo":
+        acts.append(tweak(T, "rice", STYLES[cfg.style][2], *u))
     if "drivers" in extras:
         acts.append(tweak(T, "drivers", "--prune", "--no-initramfs"))
     for x in ("zram",):
@@ -376,7 +379,8 @@ def describe(cfg, env):
         disk = f"ERASE {cfg.disk} — everything on it is deleted"
     else:
         disk = f"{cfg.root_part} as /" + (f", {cfg.efi_part} as EFI" if env.efi else "")
-    return [("Disk", disk), ("Filesystem", cfg.filesystem), ("Desktop", cfg.desktop), ("Accent", cfg.accent),
+    return [("Disk", disk), ("Filesystem", cfg.filesystem), ("Desktop", cfg.desktop + (f" ({STYLES[cfg.style][0]} style)"
+                                                                  if cfg.desktop == "hyprland" else "")), ("Accent", cfg.accent),
             ("Kernel", cfg.kernel), ("Shell", cfg.shell), ("User", f"{cfg.username} ({cfg.fullname or '-'})"),
             ("Computer", cfg.hostname), ("Keyboard", cfg.keyboard), ("Language", cfg.locale),
             ("Time zone", cfg.timezone), ("Extras", ", ".join(cfg.extras) or "none"),

@@ -88,7 +88,7 @@ class Welcome(QMainWindow):
             inst = QPushButton("  Install Auxo Linux")
             inst.setObjectName("primary")
             inst.setMinimumHeight(64)
-            inst.clicked.connect(lambda: terminal("sudo auxo-installer"))
+            inst.clicked.connect(lambda: subprocess.Popen(["auxo-installer", "--gui"]))
             v.addWidget(inst)
             items = [
                 ("📶  Connect to Wi-Fi / network", lambda: self.net()),

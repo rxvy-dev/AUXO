@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """auxo-installer — install Auxo Linux from the live system.
 
-  sudo auxo-installer                     the text installer
+  auxo-installer                          the graphical installer (in the live desktop)
+  sudo auxo-installer                     the text installer (or: auxo-installer --tui)
   auxo-installer --dry-run                walk through it without touching any disk
   sudo auxo-installer --config my.json    unattended install from a saved config
   auxo-installer --dry-run --config my.json --no-tui   print every step and exit
@@ -23,15 +24,38 @@ from auxo_install.plan import build_plan, Env, TARGET  # noqa: E402
 from auxo_install.runner import Context, execute, InstallError  # noqa: E402
 
 
+def has_display():
+    return bool(os.environ.get("WAYLAND_DISPLAY") or os.environ.get("DISPLAY"))
+
+
+def emit(tag, value):
+    """One progress event for the graphical installer: @@tag <json>."""
+    print(f"@@{tag} {json.dumps(value)}", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="auxo-installer", description="Install Auxo Linux.")
     ap.add_argument("--dry-run", action="store_true", help="print commands instead of running them")
     ap.add_argument("--config", help="JSON file with the answers (see InstallConfig)")
     ap.add_argument("--no-tui", action="store_true", help="with --config: run without the interface")
+    ap.add_argument("--gui", action="store_true", help="the graphical installer (default in a desktop session)")
+    ap.add_argument("--tui", action="store_true", help="the text installer")
+    ap.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)  # machine-readable, for the GUI
     ap.add_argument("--target", default=TARGET, help=argparse.SUPPRESS)
     ap.add_argument("--offline", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--bios", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args()
+
+    # the graphical installer runs as you (Qt as root on Wayland is trouble); it starts the install
+    # itself as root with --no-tui --progress. sudo auxo-installer keeps the text installer.
+    if args.gui or (not args.tui and not args.no_tui and os.geteuid() != 0 and has_display()):
+        try:
+            from auxo_install import gui
+        except ImportError as e:
+            if args.gui:
+                sys.exit(f"auxo-installer: the graphical installer needs PyQt6 ({e}); try: sudo auxo-installer")
+        else:
+            sys.exit(gui.main(dry_run=args.dry_run, config=args.config, bios=args.bios, offline=args.offline))
 
     if os.geteuid() != 0 and not args.dry_run:
         os.execvp("sudo", ["sudo", sys.executable, os.path.realpath(__file__), *sys.argv[1:]])
@@ -54,12 +78,29 @@ def main():
             print("\n".join("✗ " + e for e in errs), file=sys.stderr)
             sys.exit(2)
         steps, notes = build_plan(cfg, env)
-        ctx = Context(env.target, dry_run=args.dry_run, on_line=print)
+        if args.progress:
+            sys.stdout.reconfigure(line_buffering=True)
+            emit("steps", [s.title for s in steps])
+            emit("notes", notes)
+            last = [-1.0]
+
+            def pct(p):
+                if p >= 1 or p - last[0] >= 0.002:     # throttle: rsync reports many times a second
+                    last[0] = p
+                    emit("pct", round(p, 4))
+            hooks = {"on_step": lambda i, s: emit("step", i), "on_progress": pct}
+        else:
+            hooks = {}
+        ctx = Context(env.target, dry_run=args.dry_run, on_line=lambda s: print(s, flush=True))
         try:
-            notes += execute(steps, ctx)
-        except InstallError as e:
+            notes += execute(steps, ctx, **hooks)
+        except (InstallError, OSError) as e:
+            if args.progress:
+                emit("error", str(e))
             print(f"\n✗ {e}", file=sys.stderr)
             sys.exit(1)
+        if args.progress:
+            emit("done", notes)
         for n in notes:
             print("• " + n)
         return
