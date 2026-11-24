@@ -42,6 +42,8 @@ MONS = json.dumps({"source": "hyprland", "desktop": "hyprland", "saved": {}, "de
      "scale": 1, "rotate": "0", "vrr": False, "modes": ["2560x1440@144", "2560x1440@60", "1920x1080@60"]},
     {"name": "HDMI-A-1", "desc": "Dell", "enabled": True, "width": 1920, "height": 1080, "refresh": 60, "x": 0, "y": 0,
      "scale": 1, "rotate": "0", "vrr": False, "modes": ["1920x1080@60"]}]})
+GPU = ('{"gpus": ["NVIDIA GeForce RTX 5080 [10de:2c02]"], "nvidia": "NVIDIA GeForce RTX 5080", "fits": "nvidia", '
+       '"installed": [], "modeset": false, "hybrid": false, "prime": false}')
 DOCTOR = ('[{"id": "login-vt", "title": "Login screen has its own console", "problem": "shares tty1", '
           '"fixable": true, "hint": "moves it"}, {"id": "disk", "title": "Free space on /", "problem": null, '
           '"fixable": true, "hint": ""}]')
@@ -49,6 +51,7 @@ open(fake, "w").write("#!/bin/sh\n"
                       f'echo "$@" >> {calls}\n'
                       f"if [ \"$1 $2\" = \"doctor --json\" ]; then echo '{DOCTOR}'; exit 0; fi\n"
                       f"if [ \"$1 $2\" = \"monitors --json\" ]; then echo '{MONS}'; exit 0; fi\n"
+                      f"if [ \"$1 $2 $3\" = \"nvidia status --json\" ]; then echo '{GPU}'; exit 0; fi\n"
                       'echo ":: working"\n')
 os.chmod(fake, 0o755)
 ai = os.path.join(bindir, "fake-ai")
@@ -219,6 +222,14 @@ check("running a suggestion uses pkexec", "root service bluetooth on" in log())
 win.run_suggested("auxo-tweak look preset glass"); wait_proc()
 check("look suggestions run without a password", "\nlook preset glass" in "\n" + log())
 
+check("Graphics: names the card and its driver", "RTX 5080" in win.gpu_label.text() and "<b>nvidia</b>" in win.gpu_label.text()
+      and "nouveau" in win.gpu_label.text())
+setup = [b for b in win.gpu_buttons if b.text() == "Set up the NVIDIA driver"]
+check("Graphics: one-click NVIDIA setup button", len(setup) == 1)
+setup[0].click(); wait_proc()
+check("…runs auxo-tweak nvidia on with your password", "root nvidia on" in log())
+check("old 'Gaming mode' switch renamed (Super+G is Gaming mode)", any(b.text() == "Gaming setup"
+                                                                      for b in win.findChildren(QCheckBox)))
 # live wallpaper (auxo-wallpaper): the fake records the call like auxo-tweak's
 win.live_mode.setCurrentIndex(win.live_mode.findData("daynight"))
 check("Day & night shows its pictures and times", not win.live_dn_row.isHidden() and win.live_video_row.isHidden()

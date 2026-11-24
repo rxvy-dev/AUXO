@@ -8,6 +8,7 @@ with the normal graphical prompt (`pkexec auxo-tweak …`) and show their progre
 import html
 import json
 import os
+import subprocess
 import pwd
 import re
 import shlex
@@ -1266,6 +1267,7 @@ class Settings(QMainWindow):
         self.heading(lay, "System", "Kernel, shell, drivers and the switches you'd otherwise need a terminal for. "
                                     "These ask for your password.")
         c = conf()
+        self.graphics_section(lay)
 
         def combo_row(title, items, current, cmd, reach=None):
             self.section(lay, title, reach)
@@ -1291,11 +1293,11 @@ class Settings(QMainWindow):
         self.section(lay, "Switches")
         grid = QGridLayout()
         grid.setHorizontalSpacing(24)
-        toggles = [("NVIDIA driver", "NVIDIA", ["nvidia"], "the right driver for your card (or back to nouveau)"),
-                   ("Snapshots", "SNAPSHOTS", ["snapshots"], "a bootable btrfs snapshot before every update"),
+        toggles = [("Snapshots", "SNAPSHOTS", ["snapshots"], "a bootable btrfs snapshot before every update"),
                    ("Firewall", "FIREWALL", ["firewall"], "block incoming connections"),
                    ("zram swap", "ZRAM", ["zram"], "compressed swap in RAM"),
-                   ("Gaming mode", "GAMING", ["gaming"], "Steam, GameMode, MangoHud, gamescope + tweaks")]
+                   ("Gaming setup", "GAMING", ["gaming"], "installs Steam, GameMode, MangoHud, gamescope + tweaks "
+                    "(Gaming mode itself is Super+G)")]
         for i, (title, key, cmd, desc) in enumerate(toggles):
             box = QCheckBox(title)
             box.setChecked(c.get(key, "off") not in ("off", "", "nouveau", "0", "no"))
@@ -1374,6 +1376,61 @@ class Settings(QMainWindow):
         lay.addLayout(r)
         lay.addStretch(1)
         return w
+
+    def gpu_status(self):
+        try:
+            r = subprocess.run([TWEAK, "nvidia", "status", "--json"], capture_output=True, text=True, timeout=8)
+            return json.loads(r.stdout.strip().splitlines()[-1])
+        except (OSError, ValueError, IndexError, subprocess.TimeoutExpired):
+            return None
+
+    def graphics_section(self, lay):
+        self.section(lay, "Graphics card", keys="gpu nvidia amd intel driver graphics card nouveau prime")
+        st = self.gpu_status()
+        box = QVBoxLayout()
+        self.gpu_label = QLabel()
+        self.gpu_label.setWordWrap(True)
+        self.gpu_label.setTextFormat(Qt.TextFormat.RichText)
+        box.addWidget(self.gpu_label)
+        row = QHBoxLayout()
+        self.gpu_buttons = []
+        if not st:
+            self.gpu_label.setText("Couldn't read your graphics card (lspci). <i>auxo-tweak nvidia status</i> in a "
+                                   "terminal shows it.")
+        else:
+            cards = "<br>".join(f"<b>{g}</b>" for g in st.get("gpus", [])) or "<b>No graphics card found</b>"
+            if not st.get("nvidia"):
+                note = "Its driver is open source and comes with Linux: nothing to install."
+            elif st.get("fits") == "nouveau":
+                note = "This NVIDIA card is too old for NVIDIA's driver; the open-source nouveau driver is used."
+            elif st.get("installed"):
+                note = (f"✓ NVIDIA's driver is set up (<b>{', '.join(st['installed'])}</b>), with Wayland support. "
+                        "Games and Hyprland use it.")
+            else:
+                pkg = st.get("fits")
+                note = (f"Using the open-source nouveau driver: slow, and no gaming. NVIDIA's driver for this card is "
+                        f"<b>{pkg}</b>{' (open kernel modules)' if pkg == 'nvidia' else ''}. One click sets it up, "
+                        "with Wayland, Steam's 32-bit libraries and every installed kernel. Restart afterwards.")
+            self.gpu_label.setText(f"{cards}<br><span style='opacity:.75'>{note}</span>")
+            if st.get("nvidia") and st.get("fits") not in (None, "nouveau"):
+                if st.get("installed"):
+                    b = QPushButton("Switch back to nouveau")
+                    b.clicked.connect(lambda: self.run(["nvidia", "off"], root=True, label="Back to nouveau"))
+                else:
+                    b = QPushButton("Set up the NVIDIA driver")
+                    b.setObjectName("primary")
+                    b.clicked.connect(lambda: self.run(["nvidia", "on"], root=True, label="Setting up the NVIDIA driver"))
+                row.addWidget(b)
+                self.gpu_buttons.append(b)
+            if st.get("hybrid") and not st.get("prime"):
+                b = QPushButton("Laptop with two GPUs: add prime-run")
+                b.setToolTip("Run a game on the NVIDIA GPU with: prime-run <program> (Steam: prime-run %command%)")
+                b.clicked.connect(lambda: self.run(["nvidia", "prime"], root=True, label="Adding prime-run"))
+                row.addWidget(b)
+                self.gpu_buttons.append(b)
+        row.addStretch(1)
+        box.addLayout(row)
+        lay.addLayout(box)
 
     def rollback(self):
         n, ok = QInputDialog.getInt(self, "Roll back", "Snapshot number to go back to\n(click “Show snapshots” to see them):",

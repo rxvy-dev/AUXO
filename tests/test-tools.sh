@@ -471,6 +471,13 @@ gm on; check "Gaming mode on: effects off, DND, performance" "[ \"\$(gm status)\
 : > "$GM/calls"; gm
 check "Gaming mode toggles off and restores"   "[ \"\$(gm status)\" = off ] && grep -q 'hyprctl reload' $GM/calls && grep -q 'makoctl mode -r do-not-disturb' $GM/calls && grep -q 'powerprofilesctl set balanced' $GM/calls"
 rm -rf "$GM"
+"$T" rice hyprland --user alex >/dev/null 2>&1
+check "Hyprland: no NVIDIA variables without the NVIDIA driver" "grep -q 'source = ~/.config/auxo/hyprland-gpu.conf' $A/.config/hypr/hyprland.conf && ! grep -q '^env = .*nvidia' $A/.config/hypr/hyprland.conf && ! grep -q '^env' $A/.config/auxo/hyprland-gpu.conf"
+AUXO_TEST_GPU="10de:2c02 NVIDIA GeForce RTX 5080" "$T" nvidia on >/dev/null 2>&1
+check "nvidia on: Hyprland gets NVIDIA's settings" "grep -q '__GLX_VENDOR_LIBRARY_NAME,nvidia' $A/.config/auxo/hyprland-gpu.conf && grep -q 'no_hardware_cursors = true' $A/.config/auxo/hyprland-gpu.conf"
+check "RTX 50 cards get the current driver"  "AUXO_TEST_GPU='10de:2c02 RTX 5080' \"$T\" nvidia status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(d[\"fits\"] != \"nvidia\")'"
+"$T" nvidia off >/dev/null 2>&1
+check "nvidia off: NVIDIA settings removed again" "! grep -q '^env' $A/.config/auxo/hyprland-gpu.conf"
 check "same keys on every rice (3 Hyprland styles, Sway, i3)" "python3 $HERE/tests/keymap-parity.py >/dev/null"
 check "no self-killing 'pkill -f X || X' launchers"  "! grep -rnE 'pkill -f [^|]*\\|\\|' $PKG/share/auxo/rices $PKG/bin"
 check "press-again closes only the app, not its shell" "python3 -c \"

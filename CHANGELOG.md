@@ -25,6 +25,11 @@
   click to jump, × to close. Alt+Tab is still "next window".
 - **Live wallpapers** (Auxo Settings → Look → Live wallpaper): a video or GIF as the wallpaper, or
   Day & night (new Lagoon night wallpaper) that fades between two pictures at set times.
+- **Graphics card in Auxo Settings → System**: names your GPU, says which driver it needs, and sets
+  up NVIDIA's driver in one click (Wayland, Steam's 32-bit libraries, every kernel), or adds
+  prime-run on laptops with two GPUs.
+- **Fixed: OpenGL and video decoding on AMD/Intel under Hyprland.** NVIDIA-only variables were set
+  for everyone; they now only apply when the NVIDIA driver is set up (repaired on update).
 - **The same keys on every rice**: Hyprland in all three styles, Sway and i3 share one key map.
 - **Fixed: Hyprland didn't install.** Void doesn't package Hyprland, and the community repo Auxo
   used (hyprland-void) stopped being rebuilt in May 2025; Void has since moved on (libjxl 0.12,

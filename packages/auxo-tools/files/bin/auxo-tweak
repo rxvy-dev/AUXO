@@ -271,6 +271,7 @@ def apply_rice(name, user):
         raise AuxoError(f"no rice named {name}")
     dst = R(f"{home}/.config")
     if name == "hyprland":
+        hypr_gpu_conf(user)             # hyprland.conf sources it: must exist
         # Void's Hyprland reads hyprland.conf; park a Lua config from the Arch-based Auxo
         old = R(f"{home}/.config/hypr/hyprland.lua")
         if os.path.exists(old):
@@ -742,6 +743,27 @@ def cmd_repo(args):
     log(f"Void {args.name} repository enabled")
 
 
+HYPR_GPU_NVIDIA = """# written by auxo-tweak nvidia on: what Hyprland needs on the NVIDIA driver
+env = LIBVA_DRIVER_NAME,nvidia
+env = __GLX_VENDOR_LIBRARY_NAME,nvidia
+env = NVD_BACKEND,direct
+env = GBM_BACKEND,nvidia-drm
+cursor {
+    no_hardware_cursors = true
+}
+"""
+HYPR_GPU_NONE = "# written by auxo-tweak: no GPU-specific settings needed (NVIDIA ones appear here after nvidia on)\n"
+
+
+def hypr_gpu_conf(user, nvidia=None):
+    """~/.config/auxo/hyprland-gpu.conf: NVIDIA's Hyprland settings only when its driver is set up."""
+    if nvidia is None:
+        nvidia = read_conf().get("NVIDIA", "nouveau") not in ("nouveau", "")
+    home = home_of(user)
+    write_file(f"{home}/.config/auxo/hyprland-gpu.conf", HYPR_GPU_NVIDIA if nvidia else HYPR_GPU_NONE)
+    chown(f"{home}/.config/auxo", user, recursive=True)
+
+
 def nvidia_on(branch=None):
     """Install the right proprietary NVIDIA driver (from Void's nonfree repo)."""
     branch = branch or nvidia_branch()
@@ -763,6 +785,8 @@ def nvidia_on(branch=None):
         except AuxoError:
             warn("32-bit NVIDIA libraries not installed (needed by Steam/Wine)")
     write_conf({"NVIDIA": branch})
+    for u in normal_users():
+        hypr_gpu_conf(u, nvidia=True)
 
 
 def cmd_drivers(args):
@@ -831,6 +855,16 @@ exec "$@"
 
 def cmd_nvidia(args):
     branch = nvidia_branch()
+    if args.state == "status" and getattr(args, "json", False):
+        import json
+        all_gpus = gpu_info()
+        nv = [g for g in all_gpus if g[0] == "10de"]
+        have_pkg = [p for p in ("nvidia", "nvidia580", "nvidia470") if installed(p)]
+        print(json.dumps({"gpus": [g[2] for g in all_gpus], "nvidia": nv[0][2] if nv else None, "fits": branch,
+                          "installed": have_pkg, "modeset": os.path.exists(R("/etc/modprobe.d/auxo-nvidia.conf")),
+                          "hybrid": bool(nv) and any(g[0] in ("8086", "1002") for g in all_gpus),
+                          "prime": os.path.exists(R("/usr/local/bin/prime-run"))}))
+        return
     if args.state == "status":
         gpus = [g for g in gpu_info() if g[0] == "10de"]
         print(f"  GPU         {gpus[0][2] if gpus else 'no NVIDIA GPU'}")
@@ -849,6 +883,8 @@ def cmd_nvidia(args):
         xbps_remove(*[p for p in ("nvidia", "nvidia580", "nvidia470") if installed(p)])
         _rm("/etc/modprobe.d/auxo-nvidia.conf")
         write_conf({"NVIDIA": "nouveau"})
+        for u in normal_users():
+            hypr_gpu_conf(u, nvidia=False)
         regen_initramfs()
         log("back to nouveau (open source) — reboot to use it")
     elif args.state == "prime":
@@ -1500,7 +1536,8 @@ def main():
     s = sub.add_parser("drivers"); s.add_argument("--no-initramfs", action="store_true")
     s.add_argument("--prune", action="store_true", help="remove drivers for hardware that isn't present")
     s.set_defaults(fn=cmd_drivers)
-    s = sub.add_parser("nvidia"); s.add_argument("state", choices=["status", "on", "off", "prime"]); s.set_defaults(fn=cmd_nvidia)
+    s = sub.add_parser("nvidia"); s.add_argument("state", choices=["status", "on", "off", "prime"])
+    s.add_argument("--json", action="store_true"); s.set_defaults(fn=cmd_nvidia)
     s = sub.add_parser("scheduler"); s.add_argument("name", choices=list(SCHEDULERS) + ["list", "status", "off"])
     s.add_argument("--mode", choices=list(SCX_MODES), default="auto"); s.set_defaults(fn=cmd_scheduler)
     s = sub.add_parser("power"); s.add_argument("profile", choices=["balanced", "performance", "power-saver"])

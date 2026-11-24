@@ -50,6 +50,23 @@ post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-bra
       # 4.0 Sway/i3 configs: a comment after "include …monitors" (Sway and i3 only allow comments
       # on their own line) made them skip your monitor settings, and Sway's one-line touchpad
       # block was rejected. Repair the copies in home folders.
+      # Hyprland: NVIDIA-only variables were set for everyone and broke OpenGL / video decoding on
+      # AMD and Intel. They live in ~/.config/auxo/hyprland-gpu.conf now (NVIDIA only).
+      nv=$(sed -n 's/^NVIDIA="\{0,1\}\([a-z0-9]*\).*/\1/p' etc/auxo/auxo.conf 2>/dev/null)
+      for f in home/*/.config/hypr/hyprland.conf; do
+        [ -f "$f" ] && grep -q '^# NVIDIA (harmless elsewhere)$' "$f" || continue
+        sed -i -e '/^# NVIDIA (harmless elsewhere)$/d' -e '/^env = LIBVA_DRIVER_NAME,nvidia$/d' \
+               -e '/^env = NVD_BACKEND,direct$/d' \
+               -e 's|^env = __GLX_VENDOR_LIBRARY_NAME,nvidia$|source = ~/.config/auxo/hyprland-gpu.conf|' "$f"
+        g="${f%/hypr/hyprland.conf}/auxo/hyprland-gpu.conf"
+        mkdir -p "$(dirname "$g")"
+        if [ -n "$nv" ] && [ "$nv" != nouveau ]; then
+          printf 'env = LIBVA_DRIVER_NAME,nvidia\nenv = __GLX_VENDOR_LIBRARY_NAME,nvidia\nenv = NVD_BACKEND,direct\nenv = GBM_BACKEND,nvidia-drm\ncursor {\n    no_hardware_cursors = true\n}\n' > "$g"
+        else
+          echo '# no GPU-specific settings needed' > "$g"
+        fi
+        chown --reference="$(dirname "$f")" "$(dirname "$g")" "$g" 2>/dev/null
+      done
       # Mac/Windows styles: "pkill -f auxo-launcher || auxo-launcher" killed its own shell, so the
       # Start menu / Launchpad / Control Center never opened. The apps toggle themselves now.
       for f in home/*/.config/hypr/style.conf home/*/.config/waybar/config.jsonc; do
