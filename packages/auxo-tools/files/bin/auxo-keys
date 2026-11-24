@@ -22,12 +22,16 @@ WORDS = {
     "Full screen", "reload": "Reload config", "restart": "Restart i3", "layout toggle split": "Flip split direction",
     "focus mode_toggle": "Switch focus tiled / floating", "sticky toggle": "Pin window on every workspace",
     "scratchpad show": "Show scratchpad", "move scratchpad": "Send window to scratchpad",
+    "focus next": "Next window", "workspace prev": "Previous workspace", "workspace next": "Next workspace", "layoutmsg, preselect r": "Next window opens to the right",
+    "layoutmsg, preselect d": "Next window opens below", "splith": "Next window opens to the right",
+    "split h": "Next window opens to the right", "splitv": "Next window opens below",
+    "split v": "Next window opens below", "togglegroup": "Tabs (group windows)", "layout tabbed": "Tabs (group windows)",
 }
 DIRS = {"l": "left", "r": "right", "u": "up", "d": "down", "left": "left", "right": "right", "up": "up", "down": "down"}
-APPS = [("auxo-clipboard", "Clipboard history"), ("rofimoji", "Emoji picker"),
+APPS = [("auxo-clipboard", "Clipboard history"), ("clipmenu", "Clipboard history"), ("hyprctl reload", "Reload config"), ("rofimoji", "Emoji picker"),
         ("auxo-launcher --style windows", "Start menu"), ("auxo-launcher", "Applications"),
         ("auxo-control --style windows", "Quick settings"), ("auxo-control", "Control Center"),
-        ("i3-nagbar", "Log out (asks first)"), ("auxo-settings", "Auxo Settings"), ("auxo-keys", "This list of shortcuts"), ("auxo-tweak", "auxo-tweak menu"),
+        ("i3-nagbar", "Log out (asks first)"), ("swaynag", "Log out (asks first)"), ("auxo-settings", "Auxo Settings"), ("auxo-keys", "This list of shortcuts"), ("auxo-tweak", "auxo-tweak menu"),
         ("hyprlock", "Lock screen"), ("swaylock", "Lock screen"), ("i3lock", "Lock screen"),
         ("--show drun", "App launcher"), ("-show drun", "App launcher"), ("grim -g", "Screenshot of an area"),
         ("maim -s", "Screenshot of an area"), ("grim", "Screenshot"), ("maim", "Screenshot"),

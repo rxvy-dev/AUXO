@@ -47,9 +47,25 @@ bindsym $mod+t exec $term -e auxo-tweak
 bindsym $mod+Shift+v exec auxo-clipboard
 bindsym $mod+period exec rofimoji --selector wofi --action copy --skin-tone neutral
 bindsym $mod+Shift+c reload
+bindsym $mod+Shift+r reload
 bindsym $mod+Shift+e exec swaynag -t warning -m 'Leave Sway?' -B 'Yes' 'swaymsg exit'
 bindsym Print exec grim -g "$(slurp)" - | swappy -f -
 floating_modifier $mod normal
+
+# same keys as every Auxo rice (Hyprland in all 3 styles, Sway, i3)
+bindsym $mod+space exec $menu
+bindsym $mod+a exec auxo-launcher --style mac
+bindsym $mod+c exec auxo-control --style mac
+bindsym $mod+comma exec auxo-settings
+bindsym Mod1+F4 kill
+bindsym $mod+j layout toggle split
+bindsym $mod+Tab focus next
+bindsym Mod1+Tab focus next
+bindsym $mod+m move scratchpad
+bindsym $mod+s scratchpad show
+bindsym $mod+Shift+s move scratchpad
+bindsym $mod+Print exec grim - | wl-copy
+for_window [app_id="^auxo-(launchpad|control|start|quick)$"] floating enable, border none
 
 bindsym $mod+Left focus left
 bindsym $mod+Right focus right
@@ -61,9 +77,7 @@ bindsym $mod+Shift+Up move up
 bindsym $mod+Shift+Down move down
 bindsym $mod+b splith
 bindsym $mod+n splitv
-bindsym $mod+s layout stacking
 bindsym $mod+w layout tabbed
-bindsym $mod+space layout toggle split
 
 bindsym $mod+1 workspace number 1
 bindsym $mod+2 workspace number 2
@@ -84,6 +98,11 @@ bindsym $mod+Shift+7 move container to workspace number 7
 bindsym $mod+Shift+8 move container to workspace number 8
 bindsym $mod+Shift+9 move container to workspace number 9
 
+bindsym XF86AudioPlay exec playerctl play-pause
+bindsym XF86AudioNext exec playerctl next
+bindsym XF86AudioPrev exec playerctl previous
+bindsym --whole-window $mod+button4 workspace prev
+bindsym --whole-window $mod+button5 workspace next
 bindsym XF86AudioRaiseVolume exec wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+
 bindsym XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
 bindsym XF86AudioMute exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle

@@ -447,7 +447,7 @@ check "Liquid Glass: vibrant blur + glass panels" "grep -q 'vibrancy' $A/.config
 echo "▲ Windows-style Hyprland rice"
 "$T" rice hyprland-win --user alex >/dev/null 2>&1
 check "taskbar at the bottom with Start"      "grep -q '\"custom/start\"' $A/.config/waybar/config.jsonc && grep -q '\"position\": \"bottom\"' $A/.config/waybar/config.jsonc"
-check "Super opens Start, Alt+F4 closes"      "grep -q 'bindr = SUPER, SUPER_L, exec' $A/.config/hypr/style.conf && grep -q 'ALT, F4, killactive' $A/.config/hypr/style.conf"
+check "Super opens Start, Super+A too, Alt+F4 closes" "grep -q 'bindr = SUPER, SUPER_L, exec, auxo-launcher --style windows' $A/.config/hypr/style.conf && grep -q 'bind = \$mod, A, exec, auxo-launcher --style windows' $A/.config/hypr/style.conf && grep -q 'ALT, F4, killactive' $A/.config/hypr/hyprland.conf"
 check "Windows preset + Bloom wallpaper"      "grep -q 'rounding=\"8\"' $A/.config/auxo/look.conf && readlink $A/.config/auxo/wallpaper.png | grep -q auxo-bloom"
 check "style remembered (win)"                "grep -q 'RICE_HYPRLAND=\"hyprland-win\"' $ROOT/etc/auxo/auxo.conf"
 python3 - "$A/.config/waybar/config.jsonc" <<'PY' && ok=1 || ok=0
@@ -456,7 +456,7 @@ json.loads(re.sub(r"^\s*//.*$", "", open(sys.argv[1]).read(), flags=re.M))
 PY
 check "Windows waybar config is valid JSON"   "[ $ok = 1 ]"
 check "bar icons are real glyphs (not blank)" "python3 -c \"import glob,json,re,sys; sys.exit(not all(any(0xF000 <= ord(c) <= 0xF8FF for c in json.dumps(json.loads(re.sub(r'^\\\\s*//.*\$','',open(p).read(),flags=re.M)),ensure_ascii=False)) for p in glob.glob('$PKG/share/auxo/rices/*/waybar/config.jsonc')))\""
-check "Windows: Super+V is clipboard history"  "grep -q 'unbind = \$mod, V' $A/.config/hypr/style.conf && grep -q 'bind = \$mod, V, exec, auxo-clipboard' $A/.config/hypr/style.conf"
+check "Windows: keeps the shared keys (V floats, Shift+V clipboard)" "! grep -qE 'unbind = \$mod, (V|D)$|unbind = \$mod SHIFT, S' $A/.config/hypr/style.conf && grep -q 'bind = \$mod SHIFT, V, exec, auxo-clipboard' $A/.config/hypr/hyprland.conf"
 check "clipboard history kept on every Wayland rice" "grep -q 'wl-paste --watch cliphist store' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'wl-paste --watch cliphist store' $PKG/share/auxo/rices/sway/sway/config"
 check "Super+Shift+V / Super+. on Hyprland and Sway" "grep -q 'SHIFT, V, exec, auxo-clipboard' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'mod+period exec rofimoji' $PKG/share/auxo/rices/sway/sway/config"
 check "cliphist, rofimoji, gammastep installed with the WMs" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import WAYLAND_WM as W; sys.exit(not {'cliphist','rofimoji','gammastep'} <= set(W))\""
@@ -464,6 +464,7 @@ check "auxo-clipboard parses"                  "sh -n $PKG/bin/auxo-clipboard"
 out=$(env -u WAYLAND_DISPLAY -u DISPLAY AUXO_HOME="$A" "$PKG/bin/auxo-keys" --wm hyprland --print 2>&1)
 check "auxo-keys names them"                   "echo \"\$out\" | grep -q 'Clipboard history' && echo \"\$out\" | grep -q 'Emoji picker' && echo \"\$out\" | grep -q 'Start menu'"
 # `pkill -f X || X` kills the shell running it (its command line contains X): the menu never opened
+check "same keys on every rice (3 Hyprland styles, Sway, i3)" "python3 $HERE/tests/keymap-parity.py >/dev/null"
 check "no self-killing 'pkill -f X || X' launchers"  "! grep -rnE 'pkill -f [^|]*\\|\\|' $PKG/share/auxo/rices $PKG/bin"
 check "press-again closes only the app, not its shell" "python3 -c \"
 import os, sys, tempfile, subprocess; sys.path.insert(0, '$PKG/lib'); import auxo_shell as S

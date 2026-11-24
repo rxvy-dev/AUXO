@@ -112,7 +112,7 @@ DESKTOPS = {
     },
     "i3": {
         "name": "i3 (Auxo rice)",
-        "packages": GUI_BASE + X11 + ["i3", "i3lock", "xss-lock", "polybar", "rofi", "picom", "dunst",
+        "packages": GUI_BASE + X11 + ["i3", "i3lock", "xss-lock", "polybar", "rofi", "picom", "dunst", "clipmenu", "rofimoji",
                                       "feh", "alacritty", "maim", "xclip"] + COMMON_WM,
         "dm": "greetd",
         "session": "i3",
