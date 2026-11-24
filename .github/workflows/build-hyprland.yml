@@ -45,6 +45,23 @@ jobs:
           xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current -n \
             hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland | tail -25
 
+      - name: Check Auxo's three Hyprland styles with Hyprland itself
+        run: |
+          xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current hyprland python3 >/dev/null
+          Hyprland --version | head -1
+          fail=0
+          for style in hyprland hyprland-mac hyprland-win; do
+            FR=$(mktemp -d); mkdir -p "$FR/etc/auxo" "$FR/home/t" "$FR/usr/share/auxo"
+            echo "t:x:1000:1000::/home/t:/bin/sh" > "$FR/etc/passwd"; echo 'DESKTOP="hyprland"' > "$FR/etc/auxo/auxo.conf"
+            ln -s /src/packages/auxo-tools/files/share/auxo/rices "$FR/usr/share/auxo/rices"
+            AUXO_ROOT=$FR AUXO_DRY_RUN=1 AUXO_LIB=/src/packages/auxo-tools/files/lib \
+              python3 /src/packages/auxo-tools/files/bin/auxo-tweak rice "$style" --user t >/dev/null
+            out=$(HOME=$FR/home/t XDG_RUNTIME_DIR=$(mktemp -d) Hyprland --verify-config -c "$FR/home/t/.config/hypr/hyprland.conf" 2>&1)
+            echo "── $style"; echo "$out" | tail -15
+            echo "$out" | grep -qi "config ok" || { echo "::error::Hyprland rejects the $style config"; fail=1; }
+          done
+          exit $fail
+
       - name: Publish (a "hyprland-DATE-SHA" pre-release; the ISO build picks the newest)
         env:
           GH_TOKEN: ${{ github.token }}
