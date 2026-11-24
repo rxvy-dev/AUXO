@@ -17,6 +17,9 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Auxo App Store** (App Store in your menu, or `auxo-store`): hand-picked apps by category
+  (Popular, Games, Create, Work, Chat & media, Tools), search across Void and Flathub, one-click
+  install/remove, your installed apps, and Update everything. Adds Flathub for you in one click.
 - **Gaming mode** (Super+G, or the button in the Control Center / Quick settings): blur, shadows,
   animations and gaps off, notifications held, performance power profile; off puts it all back.
 - **System Monitor** (Ctrl+Shift+Esc): CPU per core, memory, GPU, network, temperatures, disks,

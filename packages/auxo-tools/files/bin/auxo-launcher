@@ -26,7 +26,8 @@ from auxo_glass import GlassPanel, glass_css, place  # noqa: E402
 
 PINNED_FILE = os.path.join(S.HOME, ".config/auxo/pinned")
 DEFAULT_PINNED = ["firefox.desktop", "org.xfce.thunar.desktop", "thunar.desktop", "kitty.desktop", "foot.desktop",
-                  "steam.desktop", "com.discordapp.Discord.desktop", "auxo-settings.desktop", "auxo-welcome.desktop",
+                  "steam.desktop", "com.discordapp.Discord.desktop", "auxo-store.desktop", "auxo-settings.desktop",
+                  "auxo-monitor.desktop", "auxo-welcome.desktop",
                   "org.gnome.Calculator.desktop", "mpv.desktop", "libreoffice-writer.desktop", "gimp.desktop",
                   "org.kde.krita.desktop", "obs.desktop", "code-oss.desktop", "vscode.desktop", "btop.desktop"]
 

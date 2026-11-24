@@ -1,0 +1,490 @@
+#!/usr/bin/env python3
+"""auxo-store — the Auxo App Store: apps from Void and Flathub in one place.
+
+  auxo-store              Discover: hand-picked apps by category
+  auxo-store SEARCH       open with a search
+  auxo-store --installed  your apps
+
+Installing a Void package asks for your password (pkexec); Flathub apps install through
+flatpak, which asks when it needs to.
+"""
+import os
+import shlex
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+import auxo_shell as S  # noqa: E402
+from auxo_store import Store  # noqa: E402
+
+from PyQt6.QtCore import QProcess, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal  # noqa: E402
+from PyQt6.QtGui import QColor, QIcon, QPainter  # noqa: E402
+from PyQt6.QtWidgets import (QApplication, QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel,  # noqa: E402
+                             QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QStackedWidget,
+                             QVBoxLayout, QWidget)
+
+PKEXEC = os.environ.get("AUXO_PKEXEC", "pkexec")
+TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
+
+
+def rgba(hex_colour, a):
+    c = QColor(hex_colour)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{a})"
+
+
+class Worker(QThread):
+    """Runs a slow query (search, refresh) off the window's thread."""
+    done = pyqtSignal(object)
+
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def run(self):
+        try:
+            self.done.emit(self.fn())
+        except Exception as e:  # noqa: BLE001 — shown in the status line, never a crash
+            self.done.emit(e)
+
+
+class Icon(QLabel):
+    def __init__(self, name, size=48, label=None):
+        super().__init__()
+        self.label_text = label
+        self.setFixedSize(size, size)
+        icon = QIcon.fromTheme(name)
+        if icon.isNull():
+            icon = QIcon.fromTheme(name.split(".")[-1].lower())
+        pix = icon.pixmap(QSize(size, size)) if not icon.isNull() else None
+        if pix is None or pix.isNull():
+            pix = self.letter_tile(label or name, size)
+        self.setPixmap(pix)
+
+    @staticmethod
+    def letter_tile(name, size):
+        """No icon in the theme: a coloured tile with the app's first letter."""
+        from PyQt6.QtGui import QFont, QPixmap
+        label = (name.split(".")[-1] if "." in name and " " not in name else name) or "?"
+        hues = [265, 190, 150, 30, 330, 210, 0, 45]
+        c = QColor.fromHsv(hues[sum(map(ord, label)) % len(hues)], 150, 220)
+        pix = QPixmap(size, size)
+        pix.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pix)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(c)
+        p.drawRoundedRect(QRectF(2, 2, size - 4, size - 4), size * 0.24, size * 0.24)
+        f = QFont()
+        f.setBold(True)
+        f.setPixelSize(int(size * 0.46))
+        p.setFont(f)
+        p.setPen(QColor("white"))
+        p.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, label[0].upper())
+        p.end()
+        return pix
+
+
+class AppCard(QFrame):
+    action = pyqtSignal(object, str)       # app, "install" | "remove" | "open"
+
+    def __init__(self, app):
+        super().__init__()
+        self.app = app
+        self.setObjectName("appcard")
+        self.setFixedHeight(96)
+        h = QHBoxLayout(self)
+        h.setContentsMargins(14, 12, 14, 12)
+        h.setSpacing(12)
+        h.addWidget(Icon(app["icon"], label=app["name"]), 0, Qt.AlignmentFlag.AlignTop)
+        col = QVBoxLayout()
+        col.setSpacing(2)
+        top = QHBoxLayout()
+        name = QLabel(app["name"])
+        name.setObjectName("appname")
+        top.addWidget(name)
+        chip = QLabel({"void": "Void", "flathub": "Flathub", "auxo": "Auxo"}[app["source"]])
+        chip.setObjectName("chip_" + app["source"])
+        top.addWidget(chip)
+        top.addStretch(1)
+        col.addLayout(top)
+        summary = QLabel(app["summary"])
+        summary.setObjectName("summary")
+        summary.setWordWrap(True)
+        col.addWidget(summary, 1)
+        h.addLayout(col, 1)
+        self.btn = QPushButton()
+        self.btn.setFixedWidth(104)
+        self.btn.clicked.connect(self.clicked)
+        h.addWidget(self.btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        self.busy = False
+        self.update_button()
+
+    def update_button(self):
+        if self.busy:
+            self.btn.setText("Working…")
+            self.btn.setEnabled(False)
+            self.btn.setObjectName("busy")
+        elif self.app["installed"]:
+            self.btn.setText("Remove")
+            self.btn.setEnabled(True)
+            self.btn.setObjectName("remove")
+        else:
+            self.btn.setText("Install")
+            self.btn.setEnabled(True)
+            self.btn.setObjectName("install")
+        self.btn.style().unpolish(self.btn)
+        self.btn.style().polish(self.btn)
+
+    def clicked(self):
+        self.action.emit(self.app, "remove" if self.app["installed"] else "install")
+
+    def contextMenuEvent(self, _e):
+        if self.app["installed"]:
+            self.action.emit(self.app, "open")
+
+
+class StoreWindow(QWidget):
+    def __init__(self, store=None, query="", page=0):
+        super().__init__()
+        self.store = store or Store()
+        mode, pal, font = S.look()
+        light = mode == "light"
+        bg = "#f5f5f8" if light else pal.get("bg", "#0b0b10")
+        card = "#ffffff" if light else pal.get("bg2", "#15151e")
+        fg = "#1d1d26" if light else pal.get("fg", "#e8e8f0")
+        muted = "#6b6b7b" if light else pal.get("muted", "#8b8ba0")
+        line = "#e3e3ea" if light else pal.get("inactive", "#2a2a38")
+        acc = pal.get("accent", "#a78bfa")
+        self.setWindowTitle("Auxo App Store")
+        self.setWindowIcon(QIcon.fromTheme("system-software-install"))
+        self.resize(1080, 720)
+        self.setStyleSheet(f"""
+            QWidget {{ background: {bg}; color: {fg}; font-family: "{font}"; font-size: 13px; }}
+            QFrame#side {{ background: {card}; border-right: 1px solid {line}; }}
+            QFrame#side QLabel {{ background: transparent; }}
+            QLabel#h1 {{ font-size: 20px; font-weight: 800; }}
+            QLabel#h2 {{ font-size: 18px; font-weight: 800; padding-top: 6px; background: transparent; }}
+            QLabel#muted {{ color: {muted}; background: transparent; }}
+            QFrame#appcard {{ background: {card}; border: 1px solid {line}; border-radius: 14px; }}
+            QFrame#appcard:hover {{ border-color: {rgba(acc, 0.6)}; }}
+            QFrame#appcard QLabel {{ background: transparent; }}
+            QLabel#appname {{ font-weight: 700; font-size: 14px; }}
+            QLabel#summary {{ color: {muted}; font-size: 12px; }}
+            QLabel#chip_void, QLabel#chip_flathub, QLabel#chip_auxo {{ border-radius: 8px; padding: 1px 7px; font-size: 10px;
+                                                                    font-weight: 600; }}
+            QLabel#chip_void {{ background: {rgba('#478061', 0.2)}; color: {'#2f6b4c' if light else '#7fd1a3'}; }}
+            QLabel#chip_flathub {{ background: {rgba('#4a86cf', 0.2)}; color: {'#2b5f9e' if light else '#8fbaf0'}; }}
+            QLabel#chip_auxo {{ background: {rgba(acc, 0.2)}; color: {acc}; }}
+            QPushButton {{ background: {card}; border: 1px solid {line}; border-radius: 9px; padding: 7px 14px; }}
+            QPushButton:hover {{ border-color: {acc}; }}
+            QPushButton#install {{ background: {acc}; color: {'#ffffff' if light else '#0b0b10'}; border: none;
+                                   font-weight: 700; }}
+            QPushButton#remove {{ color: #ef4444; }}
+            QPushButton#busy {{ color: {muted}; }}
+            QPushButton#nav {{ background: transparent; border: none; border-radius: 10px; padding: 10px 14px;
+                               text-align: left; font-size: 14px; }}
+            QPushButton#nav:hover {{ background: {line}; }}
+            QPushButton#nav:checked {{ background: {rgba(acc, 0.14)}; color: {acc}; font-weight: 700; }}
+            QLineEdit {{ background: {card}; border: 1px solid {line}; border-radius: 12px; padding: 10px 14px;
+                         font-size: 14px; }}
+            QLineEdit:focus {{ border-color: {acc}; }}
+            QPlainTextEdit {{ background: {card}; border: 1px solid {line}; border-radius: 10px; color: {muted};
+                              font-family: monospace; font-size: 11px; }}
+            QScrollArea {{ border: none; }}
+            QScrollBar:vertical {{ background: transparent; width: 10px; }}
+            QScrollBar::handle:vertical {{ background: {line}; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        """)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        side = QFrame()
+        side.setObjectName("side")
+        side.setFixedWidth(210)
+        sl = QVBoxLayout(side)
+        sl.setContentsMargins(14, 22, 14, 18)
+        t = QLabel("App Store")
+        t.setObjectName("h1")
+        sl.addWidget(t)
+        sl.addSpacing(14)
+        self.nav = QButtonGroup(self)
+        for i, name in enumerate(("Discover", "Search", "Installed", "Updates")):
+            b = QPushButton(name)
+            b.setObjectName("nav")
+            b.setCheckable(True)
+            b.clicked.connect(lambda _c, i=i: self.show_page(i))
+            self.nav.addButton(b, i)
+            sl.addWidget(b)
+        sl.addStretch(1)
+        self.flathub_note = QLabel("")
+        self.flathub_note.setObjectName("muted")
+        self.flathub_note.setWordWrap(True)
+        sl.addWidget(self.flathub_note)
+        self.flathub_btn = QPushButton("Add Flathub")
+        self.flathub_btn.clicked.connect(self.add_flathub)
+        sl.addWidget(self.flathub_btn)
+        root.addWidget(side)
+
+        main = QVBoxLayout()
+        main.setContentsMargins(24, 20, 24, 14)
+        main.setSpacing(12)
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search apps from Void and Flathub")
+        self.search.returnPressed.connect(self.do_search)
+        self.search_timer = QTimer(self)
+        self.search_timer.setSingleShot(True)
+        self.search_timer.timeout.connect(self.do_search)
+        self.search.textEdited.connect(lambda _t: self.search_timer.start(450))
+        main.addWidget(self.search)
+        self.stack = QStackedWidget()
+        self.pages = [self._scroll() for _ in range(4)]
+        for scroll, _lay in self.pages:
+            self.stack.addWidget(scroll)
+        main.addWidget(self.stack, 1)
+        self.status = QLabel("")
+        self.status.setObjectName("muted")
+        main.addWidget(self.status)
+        self.log = QPlainTextEdit()
+        self.log.setReadOnly(True)
+        self.log.setMaximumHeight(110)
+        self.log.hide()
+        main.addWidget(self.log)
+        root.addLayout(main, 1)
+
+        self.cards = []
+        self.proc = None
+        self.queue = []
+        self.workers = []
+        self.check_flathub()
+        self.fill_discover()
+        if query:
+            self.search.setText(query)
+            self.do_search()
+        else:
+            self.show_page(page)
+
+    def _scroll(self):
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        body = QWidget()
+        lay = QVBoxLayout(body)
+        lay.setContentsMargins(0, 0, 8, 0)
+        lay.setSpacing(10)
+        scroll.setWidget(body)
+        return scroll, lay
+
+    def _clear(self, lay):
+        while lay.count():
+            item = lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                self._clear(item.layout())
+        self.cards = [c for c in self.cards if c.parent() is not None and not c.isHidden()]
+
+    def _grid(self, lay, apps):
+        g = QGridLayout()
+        g.setSpacing(12)
+        for i, app in enumerate(apps):
+            card = AppCard(app)
+            card.action.connect(self.act)
+            self.cards.append(card)
+            g.addWidget(card, i // 2, i % 2)
+        g.setColumnStretch(0, 1)
+        g.setColumnStretch(1, 1)
+        lay.addLayout(g)
+
+    def _heading(self, lay, text, sub=None):
+        h = QLabel(text)
+        h.setObjectName("h2")
+        lay.addWidget(h)
+        if sub:
+            s = QLabel(sub)
+            s.setObjectName("muted")
+            s.setWordWrap(True)
+            lay.addWidget(s)
+
+    # ── pages ──
+    def show_page(self, i):
+        self.nav.button(i).setChecked(True)
+        self.stack.setCurrentIndex(i)
+        if i == 2:
+            self.fill_installed()
+        elif i == 3:
+            self.fill_updates()
+
+    def fill_discover(self):
+        _s, lay = self.pages[0]
+        self._clear(lay)
+        for cat, apps in self.store.catalog():
+            self._heading(lay, cat)
+            self._grid(lay, apps)
+        lay.addStretch(1)
+
+    def do_search(self):
+        text = self.search.text().strip()
+        if not text:
+            return
+        self.show_page(1)
+        _s, lay = self.pages[1]
+        self._clear(lay)
+        self._heading(lay, f"Searching for “{text}”…")
+        lay.addStretch(1)
+        self.background(lambda: self.store.search(text), lambda res: self.show_results(text, res))
+
+    def show_results(self, text, res):
+        if text != self.search.text().strip():
+            return                          # a newer search is on its way
+        _s, lay = self.pages[1]
+        self._clear(lay)
+        if isinstance(res, Exception):
+            self._heading(lay, "Search failed", str(res))
+        elif not res:
+            self._heading(lay, f"Nothing found for “{text}”",
+                          None if self.store.flathub_ready() else "Add Flathub (bottom left) to search its apps too.")
+        else:
+            self._heading(lay, f"{len(res)} results for “{text}”")
+            self._grid(lay, res)
+        lay.addStretch(1)
+
+    def fill_installed(self):
+        _s, lay = self.pages[2]
+        self._clear(lay)
+        apps = self.store.installed()
+        self._heading(lay, "Your apps", "Flathub apps, and Void apps from the Discover page. Everything else: search "
+                                        "for it, or use the terminal (xbps-query -l).")
+        if apps:
+            self._grid(lay, apps)
+        lay.addStretch(1)
+
+    def fill_updates(self):
+        _s, lay = self.pages[3]
+        self._clear(lay)
+        self._heading(lay, "Updates", "Updates everything at once: Void packages, Flathub apps and firmware, the same "
+                                      "as auxo-update.")
+        b = QPushButton("Update everything")
+        b.setObjectName("install")
+        b.setFixedWidth(200)
+        b.clicked.connect(lambda: self.run(self.store.update_command(PKEXEC), "Updating everything"))
+        lay.addWidget(b)
+        lay.addStretch(1)
+
+    # ── Flathub ──
+    def check_flathub(self):
+        ok = self.store.flathub_ready()
+        self.flathub_btn.setVisible(not ok)
+        self.flathub_note.setText("" if ok else "Flathub isn't set up yet: Discord, Spotify, Prism Launcher and "
+                                                "thousands more come from there.")
+
+    def add_flathub(self):
+        self.run([PKEXEC, TWEAK, "flatpak", "on"], "Adding Flathub", after=self.check_flathub)
+
+    # ── installing ──
+    def act(self, app, action):
+        if action == "open":
+            argv = self.store.launch_command(app)
+            if argv:
+                S.spawn(argv)
+            return
+        if action == "remove" and QMessageBox.question(self, "Remove", f"Remove {app['name']}?") != \
+                QMessageBox.StandardButton.Yes:
+            return
+        if app["source"] == "flathub" and not self.store.flathub_ready():
+            QMessageBox.information(self, "Flathub", f"{app['name']} comes from Flathub. Add Flathub first "
+                                                     "(bottom left), then install it.")
+            return
+        for c in self.cards_for(app):
+            c.busy = True
+            c.update_button()
+        verb = "Installing" if action == "install" else "Removing"
+        self.run(self.store.command(app, action, pkexec=PKEXEC, tweak=TWEAK), f"{verb} {app['name']}",
+                 after=lambda ok, app=app, action=action: self.finished_app(app, action, ok))
+
+    def cards_for(self, app):
+        out = []
+        for c in self.cards:
+            try:
+                if c.app["id"] == app["id"] and c.app["source"] == app["source"]:
+                    out.append(c)
+            except RuntimeError:            # a card from a page that was rebuilt
+                pass
+        return out
+
+    def finished_app(self, app, action, ok):
+        self.store.refresh()
+        app["installed"] = self.store.is_installed(app)
+        for c in self.cards_for(app):
+            c.busy = False
+            c.app["installed"] = app["installed"]
+            c.update_button()
+        if ok:
+            self.status.setText(f"✓ {app['name']} {'installed' if action == 'install' else 'removed'}"
+                                + (" — find it in your app menu" if action == "install" else ""))
+
+    def run(self, argv, label, after=None):
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            self.queue.append((argv, label, after))
+            self.status.setText(f"Waiting: {label} (after the current one)")
+            return
+        self.status.setText(f"⏳ {label}…")
+        self.log.show()
+        self.log.appendPlainText("$ " + " ".join(shlex.quote(a) for a in argv))
+        self.proc = QProcess(self)
+        self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
+        self.proc.readyReadStandardOutput.connect(self.read_output)
+        self.proc.finished.connect(lambda code, _s: self.done(code, label, after))
+        self.proc.errorOccurred.connect(lambda _e: self.proc.state() == QProcess.ProcessState.NotRunning
+                                        and self.done(127, label, after))
+        self.proc.start(argv[0], argv[1:])
+
+    def read_output(self):
+        text = bytes(self.proc.readAllStandardOutput()).decode(errors="replace")
+        self.log.insertPlainText(text)
+        self.log.ensureCursorVisible()
+
+    def done(self, code, label, after):
+        if getattr(self.proc, "_auxo_done", False):
+            return
+        self.proc._auxo_done = True
+        ok = code == 0
+        self.status.setText(f"✓ {label}: done" if ok else
+                            (f"✗ {label}: cancelled" if code in (126, 127) else f"✗ {label} failed (see the log)"))
+        if after:
+            try:
+                after(ok)
+            except TypeError:
+                after()
+        if self.queue:
+            argv, label, after = self.queue.pop(0)
+            self.run(argv, label, after)
+
+    def background(self, fn, then):
+        w = Worker(fn)
+        w.done.connect(then)
+        w.finished.connect(lambda: self.workers.remove(w) if w in self.workers else None)
+        self.workers.append(w)
+        w.start()
+
+    def closeEvent(self, e):
+        if self.proc and self.proc.state() != QProcess.ProcessState.NotRunning:
+            QMessageBox.warning(self, "App Store", "Something is still installing. Wait for it to finish.")
+            e.ignore()
+            return
+        super().closeEvent(e)
+
+
+def main():
+    args = sys.argv[1:]
+    if "-h" in args or "--help" in args:
+        print(__doc__.strip())
+        return 0
+    app = QApplication(sys.argv[:1])
+    app.setApplicationName("Auxo App Store")
+    app.setDesktopFileName("auxo-store")
+    query = " ".join(a for a in args if not a.startswith("--"))
+    w = StoreWindow(query=query, page=2 if "--installed" in args else 0)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
