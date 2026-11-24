@@ -406,6 +406,14 @@ if command -v sway >/dev/null 2>&1; then
 fi
 # run(..., user=X) must not wrap in runuser unless we're root: runuser refuses, so applying
 # monitors/looks from Auxo Settings (which runs as you) silently did nothing (a real bug in 4.0)
+check "session D-Bus found from the compositor's environment" "python3 -c \"
+import os, sys, tempfile; sys.path.insert(0, '$PKG/lib'); import auxo_theme as t
+d = tempfile.mkdtemp(); os.makedirs(d + '/4242')
+open(d + '/4242/comm', 'w').write('Hyprland\\n')
+open(d + '/4242/environ', 'wb').write(b'HOME=/h\\0DBUS_SESSION_BUS_ADDRESS=unix:path=/tmp/dbus-XYZ\\0HYPRLAND_INSTANCE_SIGNATURE=abc\\0')
+e = t._session_proc_env(os.getuid(), {'Hyprland'}, proc=d)
+sys.exit(not (e.get('DBUS_SESSION_BUS_ADDRESS') == 'unix:path=/tmp/dbus-XYZ' and e.get('HYPRLAND_INSTANCE_SIGNATURE') == 'abc' and 'HOME' not in e))\""
+check "switching style refreshes the running desktop" "grep -q 'def refresh_session' $T && grep -q 'pkill\", \"-x\", \"waybar' $T"
 check "commands run as you aren't wrapped in runuser" "python3 -c \"
 import os, sys, subprocess; sys.path.insert(0, '$PKG/lib'); os.environ.pop('AUXO_DRY_RUN', None)
 import auxo_core as c, pwd

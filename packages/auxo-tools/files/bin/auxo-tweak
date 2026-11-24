@@ -296,7 +296,29 @@ def apply_rice(name, user):
     auxo_theme.apply_user(user, auxo_theme.current())
     chown(f"{home}/.config", user, recursive=True)
     write_conf({f"RICE_{name.split('-')[0].upper()}": name})
-    log(f"{user}: Auxo {name} rice applied (old files kept as *.auxo-bak)")
+    if refresh_session(name, user):
+        log(f"{user}: Auxo {name} rice applied — your desktop was refreshed (old files kept as *.auxo-bak)")
+    else:
+        log(f"{user}: Auxo {name} rice applied (old files kept as *.auxo-bak)")
+
+
+def refresh_session(name, user):
+    """Show a new Hyprland/Sway rice right away: reload the compositor and restart the bar
+    (Waybar doesn't notice a new config by itself, so a style switch looked like it did nothing)."""
+    if DRY:
+        return False
+    env = auxo_theme.session_env(user) if os.geteuid() == 0 else _my_session_env(user)
+    if not env:
+        return False
+    if name.startswith("hyprland") and env.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        run(["hyprctl", "reload"], check=False, user=user, env=env)
+    elif name == "sway" and env.get("SWAYSOCK"):
+        run(["swaymsg", "reload"], check=False, user=user, env=env)
+    else:
+        return False
+    run(["pkill", "-x", "waybar"], check=False, user=user, env=env)
+    run(["sh", "-c", "sleep 0.3; setsid waybar >/dev/null 2>&1 &"], check=False, user=user, env=env)
+    return True
 
 
 DISPLAY_MANAGERS = ("sddm", "gdm", "lightdm", "greetd", "lxdm")

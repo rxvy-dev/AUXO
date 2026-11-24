@@ -336,7 +336,38 @@ def session_env(user):
     sw = sorted(glob.glob(f"{rt}/sway-ipc.*.sock"), key=os.path.getmtime)
     if sw:
         env["SWAYSOCK"] = sw[-1]
+    # the session's own environment is the truth: on Void desktops start under dbus-run-session,
+    # so the session bus has a random address that /run/user/<uid>/bus doesn't point to
+    env.update(_session_proc_env(pw.pw_uid, {p for p, d in SESSION_PROCS if d == desk}))
     return env
+
+
+SESSION_KEYS = ("DBUS_SESSION_BUS_ADDRESS", "WAYLAND_DISPLAY", "DISPLAY", "XAUTHORITY", "HYPRLAND_INSTANCE_SIGNATURE",
+                "SWAYSOCK", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE")
+
+
+def _session_proc_env(uid, names, proc="/proc"):
+    """SESSION_KEYS from the environment of the user's running compositor/shell (readable by
+    root and by the user themselves)."""
+    for pid in sorted((d for d in os.listdir(proc) if d.isdigit()), key=int, reverse=True):
+        try:
+            if os.stat(f"{proc}/{pid}").st_uid != uid:
+                continue
+            with open(f"{proc}/{pid}/comm") as f:
+                if f.read().strip() not in names:
+                    continue
+            with open(f"{proc}/{pid}/environ", "rb") as f:
+                raw = f.read().split(b"\0")
+        except OSError:
+            continue
+        found = {}
+        for item in raw:
+            k, _, v = item.decode(errors="replace").partition("=")
+            if k in SESSION_KEYS and v:
+                found[k] = v
+        if found:
+            return found
+    return {}
 
 
 def _spawn(cmd):
