@@ -1,0 +1,25 @@
+/* Auxo Hyprland · Windows style taskbar */
+@import url("../auxo/colors.css");
+@import url("../auxo/look.css");   /* fonts from Auxo Settings */
+
+* { min-height: 0; border: none; }
+
+window#waybar.taskbar {
+  background: alpha(@bg, 0.82);
+  border-top: 1px solid alpha(@fg, 0.08);
+  border-radius: 0;
+  color: @fg;
+}
+/* every button on the taskbar: a soft square that lights up on hover */
+#custom-start, #custom-search, #image, #taskbar button, #clock, #network, #pulseaudio, #battery,
+#custom-update { margin: 4px 2px; padding: 0 10px; border-radius: 6px; }
+#custom-start:hover, #custom-search:hover, #image:hover, #taskbar button:hover, #clock:hover,
+#network:hover, #pulseaudio:hover, #battery:hover { background: alpha(@fg, 0.08); }
+#custom-start { color: @accent; font-size: 20px; padding: 0 12px; }
+#custom-search { background: alpha(@fg, 0.06); border: 1px solid alpha(@fg, 0.08); border-radius: 18px;
+                 margin: 7px 8px; padding: 0 64px 0 14px; color: @muted; }
+#taskbar button { border-bottom: 3px solid transparent; }
+#taskbar button.active { background: alpha(@fg, 0.08); border-bottom: 3px solid @accent; }
+#network, #pulseaudio, #battery { padding: 0 6px; }
+#clock { font-size: 11px; padding: 0 12px; }
+#custom-update { color: @accent; }

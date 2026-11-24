@@ -22,7 +22,7 @@
     "custom/update"
   ],
   "custom/auxo": {
-    "format": "▲",
+    "format": "\u25b2",
     "tooltip": false,
     "on-click": "kitty -e auxo-tweak"
   },
@@ -40,43 +40,43 @@
   },
   "pulseaudio": {
     "format": "{icon} {volume}%",
-    "format-muted": " muted",
+    "format-muted": "\uf6a9 muted",
     "format-icons": {
       "default": [
-        "",
-        "",
-        ""
+        "\uf026",
+        "\uf027",
+        "\uf028"
       ]
     },
     "on-click": "pavucontrol"
   },
   "network": {
-    "format-wifi": "  {essid}",
-    "format-ethernet": " wired",
-    "format-disconnected": " offline",
+    "format-wifi": "\uf1eb  {essid}",
+    "format-ethernet": "\uf6ff wired",
+    "format-disconnected": "\uf071 offline",
     "on-click": "kitty -e nmtui"
   },
   "bluetooth": {
-    "format": "",
-    "format-connected": " {num_connections}",
+    "format": "\uf293",
+    "format-connected": "\uf293 {num_connections}",
     "on-click": "blueman-manager"
   },
   "cpu": {
-    "format": " {usage}%",
+    "format": "\uf2db {usage}%",
     "interval": 3
   },
   "memory": {
-    "format": " {percentage}%",
+    "format": "\uf538 {percentage}%",
     "interval": 5
   },
   "battery": {
     "format": "{icon} {capacity}%",
     "format-icons": [
-      "",
-      "",
-      "",
-      "",
-      ""
+      "\uf244",
+      "\uf243",
+      "\uf242",
+      "\uf241",
+      "\uf240"
     ],
     "states": {
       "warning": 25,
@@ -86,7 +86,7 @@
   "custom/update": {
     "exec": "xbps-install -Mun 2>/dev/null | wc -l",
     "interval": 1800,
-    "format": " {}",
+    "format": "\uf021 {}",
     "on-click": "kitty -e auxo-update"
   },
   "tray": {

@@ -407,8 +407,26 @@ import json, re, sys
 json.loads(re.sub(r"^\s*//.*$", "", open(sys.argv[1]).read(), flags=re.M))
 PY
 check "Mac waybar config is valid JSON"       "[ $ok = 1 ]"
+check "Mac style: light mode + Lagoon wallpaper" "grep -q 'mode=\"light\"' $A/.config/auxo/look.conf && readlink $A/.config/auxo/wallpaper.png | grep -q auxo-lagoon"
+check "Liquid Glass: vibrant blur + glass panels" "grep -q 'vibrancy' $A/.config/hypr/style.conf && grep -q 'auxo-launchpad' $A/.config/hypr/style.conf && grep -q 'auxo-launcher --style mac' $A/.config/waybar/config.jsonc"
+
+echo "▲ Windows-style Hyprland rice"
+"$T" rice hyprland-win --user alex >/dev/null 2>&1
+check "taskbar at the bottom with Start"      "grep -q '\"custom/start\"' $A/.config/waybar/config.jsonc && grep -q '\"position\": \"bottom\"' $A/.config/waybar/config.jsonc"
+check "Super opens Start, Alt+F4 closes"      "grep -q 'bindr = SUPER, SUPER_L, exec' $A/.config/hypr/style.conf && grep -q 'ALT, F4, killactive' $A/.config/hypr/style.conf"
+check "Windows preset + Bloom wallpaper"      "grep -q 'rounding=\"8\"' $A/.config/auxo/look.conf && readlink $A/.config/auxo/wallpaper.png | grep -q auxo-bloom"
+check "style remembered (win)"                "grep -q 'RICE_HYPRLAND=\"hyprland-win\"' $ROOT/etc/auxo/auxo.conf"
+python3 - "$A/.config/waybar/config.jsonc" <<'PY' && ok=1 || ok=0
+import json, re, sys
+json.loads(re.sub(r"^\s*//.*$", "", open(sys.argv[1]).read(), flags=re.M))
+PY
+check "Windows waybar config is valid JSON"   "[ $ok = 1 ]"
+check "bar icons are real glyphs (not blank)" "python3 -c \"import glob,json,re,sys; sys.exit(not all(any(0xF000 <= ord(c) <= 0xF8FF for c in json.dumps(json.loads(re.sub(r'^\\\\s*//.*\$','',open(p).read(),flags=re.M)),ensure_ascii=False)) for p in glob.glob('$PKG/share/auxo/rices/*/waybar/config.jsonc')))\""
+out=$(QT_QPA_PLATFORM=offscreen AUXO_HOME="$A" python3 "$HERE/tests/test-shell.py" 2>&1); rc=$?
+echo "$out" | sed 's/^/    /' | tail -3
+check "launcher + control center (offscreen)" "[ $rc = 0 ]"
 "$T" rice hyprland --user alex >/dev/null 2>&1
-check "back to the Auxo style"                "! grep -q 'Mac style' $A/.config/hypr/style.conf && ! grep -q '\"name\": \"dock\"' $A/.config/waybar/config.jsonc && grep -q 'RICE_HYPRLAND=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
+check "back to the Auxo style"               "! grep -q 'Mac style' $A/.config/hypr/style.conf && ! grep -q '\"name\": \"dock\"' $A/.config/waybar/config.jsonc && grep -q 'RICE_HYPRLAND=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
 check "Hyprland waybar scrolls workspaces (0.49 syntax)" "! grep -rq 'hl.dsp' $PKG/share/auxo/rices && grep -q 'hyprctl dispatch workspace e+1' $PKG/share/auxo/rices/hyprland/waybar/config.jsonc"
 
 echo "▲ keyboard shortcuts (auxo-keys)"

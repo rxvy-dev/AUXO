@@ -1,0 +1,463 @@
+#!/usr/bin/env python3
+"""auxo-control — Control Center (Mac style) / Quick settings (Windows style) for the Auxo rices.
+
+  auxo-control --style mac        top-right Control Center: Wi-Fi, Bluetooth, Focus, now playing,
+                                  Display and Sound sliders, shortcuts
+  auxo-control --style windows    bottom-right Quick settings tiles, sliders, battery and settings
+Every switch uses the normal tool for the job (nmcli, bluetoothctl, makoctl, playerctl,
+brightnessctl, wpctl, auxo-tweak), so nothing here is special to Auxo.
+"""
+import glob
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+try:
+    from PyQt6.QtCore import Qt, QTimer
+    from PyQt6.QtGui import QColor, QPixmap
+    from PyQt6.QtWidgets import (QApplication, QGridLayout, QHBoxLayout, QLabel, QSlider, QToolButton,
+                                 QVBoxLayout, QWidget)
+except ImportError:
+    print("auxo-control needs PyQt6: sudo xbps-install python3-pyqt6-widgets", file=sys.stderr)
+    sys.exit(1)
+
+import auxo_shell as S  # noqa: E402
+from auxo_glass import GlassPanel, glass_css, place  # noqa: E402
+
+FA = "Font Awesome 6 Free"
+BOLT, BATT = "\uf0e7", "\uf240"
+BRANDS = {"\uf293"}           # glyphs from the Font Awesome Brands font (Bluetooth)
+
+
+class Backend:
+    """Reads and changes system state through the usual command-line tools."""
+
+    def out(self, *argv):
+        if not shutil.which(argv[0]):
+            return None
+        try:
+            p = subprocess.run(argv, capture_output=True, text=True, timeout=3)
+            return p.stdout if p.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+
+    def do(self, *argv):
+        if shutil.which(argv[0]):
+            S.spawn(list(argv))
+
+    # Wi-Fi
+    def wifi(self):
+        st = self.out("nmcli", "radio", "wifi")
+        if st is None:
+            return None, ""
+        ssid = ""
+        for line in (self.out("nmcli", "-t", "-f", "active,ssid", "dev", "wifi") or "").splitlines():
+            if line.startswith("yes:"):
+                ssid = line[4:]
+        return st.strip() == "enabled", ssid
+
+    def set_wifi(self, on):
+        self.do("nmcli", "radio", "wifi", "on" if on else "off")
+
+    # Bluetooth
+    def bluetooth(self):
+        st = self.out("bluetoothctl", "show")
+        if st is None:
+            return None
+        return "Powered: yes" in st
+
+    def set_bluetooth(self, on):
+        self.do("bluetoothctl", "power", "on" if on else "off")
+
+    # Airplane mode: every radio off
+    def airplane(self):
+        st = self.out("nmcli", "radio", "all")
+        if st is None:
+            return None
+        return "enabled" not in st.splitlines()[-1] if st.strip() else False
+
+    def set_airplane(self, on):
+        self.do("nmcli", "radio", "all", "off" if on else "on")
+        if on:
+            self.do("bluetoothctl", "power", "off")
+
+    # Focus: mako's do-not-disturb mode
+    def focus(self):
+        st = self.out("makoctl", "mode")
+        if st is None:
+            return None
+        return "do-not-disturb" in st.split()
+
+    def set_focus(self, on):
+        self.do("makoctl", "mode", "-a" if on else "-r", "do-not-disturb")
+
+    # light / dark
+    def dark(self):
+        return S.look()[0] == "dark"
+
+    def set_dark(self, on):
+        self.do("auxo-tweak", "mode", "dark" if on else "light")
+
+    # brightness (laptops)
+    def brightness(self):
+        st = self.out("brightnessctl", "-m")
+        m = re.search(r",(\d+)%,", st or "")
+        return int(m.group(1)) if m and glob.glob("/sys/class/backlight/*") else None
+
+    def set_brightness(self, pct):
+        self.do("brightnessctl", "-q", "s", f"{max(1, pct)}%")
+
+    # volume
+    def volume(self):
+        st = self.out("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+        m = re.search(r"Volume:\s*([\d.]+)", st or "")
+        return (round(float(m.group(1)) * 100), "MUTED" in st) if m else (None, False)
+
+    def set_volume(self, pct):
+        self.do("wpctl", "set-volume", "-l", "1", "@DEFAULT_AUDIO_SINK@", f"{pct / 100:.2f}")
+
+    def toggle_mute(self):
+        self.do("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle")
+
+    # media
+    def playing(self):
+        st = self.out("playerctl", "metadata", "--format", "{{status}}\t{{title}}\t{{artist}}\t{{mpris:artUrl}}")
+        if not st or "\t" not in st:
+            return None
+        status, title, artist, art = (st.rstrip("\n").split("\t") + ["", "", "", ""])[:4]
+        return {"status": status, "title": title, "artist": artist, "art": art[7:] if art.startswith("file://") else ""}
+
+    def media(self, what):
+        self.do("playerctl", what)
+
+    # battery
+    def battery(self):
+        for b in sorted(glob.glob("/sys/class/power_supply/BAT*")):
+            try:
+                cap = int(open(f"{b}/capacity").read().strip())
+                charging = open(f"{b}/status").read().strip() == "Charging"
+                return cap, charging
+            except (OSError, ValueError):
+                continue
+        return None
+
+
+def rgba(hex_color, a):
+    c = QColor(hex_color)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{a})"
+
+
+class Control(GlassPanel):
+    def __init__(self, style, be=None):
+        self.style_name = style
+        self.be = be or Backend()
+        mode, pal, font = S.look()
+        light = mode == "light"
+        self.pal, self.light = pal, light
+        win = style == "windows"
+        super().__init__("auxo-quick" if win else "auxo-control", 10 if win else 34, style, light)
+        fg, mut = ("#1d1d24", "#55555f") if light else ("#f2f2f7", "#a8a8b8")
+        tile = ("#fbfbfb" if light else "#2d2d2d") if win else "transparent"
+        on = pal["accent"]
+        self.setStyleSheet(f"""
+            * {{ font-family: "{font}"; color: {fg}; font-size: 13px; }}
+            QLabel#muted {{ color: {mut}; font-size: 11px; }}
+            QLabel#head {{ font-weight: 600; }}
+            QLabel#glyph, QToolButton#glyph {{ font-family: "{FA}"; font-weight: 900; }}
+            QToolButton#round {{ background: {tile}; border: none; border-radius: {26 if not win else 6}px;
+                                font-family: "{FA}"; font-weight: 900; font-size: 18px; }}
+            QToolButton#round:checked {{ background: {on}; color: white; }}
+            QToolButton#roundb {{ background: {tile}; border: none; border-radius: {26 if not win else 6}px;
+                                 font-family: "Font Awesome 6 Brands"; font-size: 18px; }}
+            QToolButton#roundb:checked {{ background: {on}; color: white; }}
+            QToolButton#roundb:disabled {{ color: {rgba(fg, 0.3)}; }}
+            QToolButton#round:disabled {{ color: {rgba(fg, 0.3)}; }}
+            QWidget#tile {{ background: {tile}; border-radius: 6px; }}
+            {glass_css(light, 26, "QWidget#tile") if not win else ""}
+            {glass_css(light, 26, "QToolButton#round") if not win else ""}
+            {glass_css(light, 26, "QToolButton#roundb") if not win else ""}
+            QToolButton#round:checked, QToolButton#roundb:checked {{ background: {on}; color: white;
+                                                                    border: 1px solid rgba(255,255,255,0.5); }}
+            QToolButton#media {{ background: transparent; border: none; font-family: "{FA}"; font-weight: 900;
+                                font-size: 16px; padding: 4px; }}
+            QSlider::groove:horizontal {{ height: {8 if not win else 4}px; background: {rgba(fg, 0.15)};
+                                         border-radius: {4 if not win else 2}px; }}
+            QSlider::sub-page:horizontal {{ background: {'#ffffff' if not win and not light else on};
+                                           border-radius: {4 if not win else 2}px; }}
+            QSlider::handle:horizontal {{ background: {'#ffffff' if not win else on}; width: {16 if not win else 18}px;
+                                         margin: {-4 if not win else -7}px 0; border-radius: {8 if not win else 9}px;
+                                         border: 1px solid {rgba('#000000', 0.15)}; }}
+            QToolButton#flat {{ background: transparent; border: none; border-radius: 4px; padding: 6px;
+                               font-family: "{FA}"; font-weight: 900; }}
+            QToolButton#flat:hover {{ background: {rgba(fg, 0.08)}; }}
+        """)
+        self.toggles = {}
+        (self._build_windows if win else self._build_mac)()
+        self.refresh()
+        self.timer = QTimer(self, interval=2500)
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start()
+
+    # ── pieces ──
+    def round_button(self, key, glyph, tip, fn, size=52, checkable=True):
+        b = QToolButton()
+        b.setObjectName("roundb" if glyph in BRANDS else "round")
+        b.setText(glyph)
+        b.setToolTip(tip)
+        b.setCheckable(checkable)
+        b.setFixedSize(size, size)
+        if size and self.style_name == "mac":
+            b.setStyleSheet(f"border-radius: {size // 2}px;")
+        b.clicked.connect(fn)
+        if key:
+            self.toggles[key] = b
+        return b
+
+    def tile(self):
+        w = QWidget()
+        w.setObjectName("tile")
+        w.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        return w
+
+    def slider(self, title, glyph, fn, mute=None):
+        box = self.tile()
+        v = QVBoxLayout(box)
+        v.setContentsMargins(16, 12, 16, 14)
+        if title:
+            t = QLabel(title)
+            t.setObjectName("head")
+            v.addWidget(t)
+        row = QHBoxLayout()
+        g = QToolButton() if mute else QLabel()
+        g.setObjectName("glyph" if not mute else "flat")
+        g.setText(glyph)
+        if mute:
+            g.clicked.connect(mute)
+        row.addWidget(g)
+        s = QSlider(Qt.Orientation.Horizontal)
+        s.setRange(0, 100)
+        s.sliderReleased.connect(lambda: fn(s.value()))
+        s.valueChanged.connect(lambda val: fn(val) if not s.isSliderDown() else None)  # wheel/keys/click
+        row.addWidget(s, 1)
+        v.addLayout(row)
+        return box, s
+
+    def _toggle(self, key, getter, setter):
+        def fn():
+            setter(self.toggles[key].isChecked())
+            QTimer.singleShot(700, self.refresh)
+        return fn
+
+    # ── Mac: Control Center ──
+    def _build_mac(self):
+        self.setFixedSize(332, 474)
+        g = QGridLayout(self)
+        g.setContentsMargins(16, 16, 16, 16)
+        g.setSpacing(12)
+        # Wi-Fi pill
+        self.wifi_tile = self.tile()
+        wl = QHBoxLayout(self.wifi_tile)
+        wl.setContentsMargins(8, 8, 12, 8)
+        wl.addWidget(self.round_button("wifi", "\uf1eb", "Wi-Fi", self._toggle("wifi", self.be.wifi, self.be.set_wifi), 40))
+        col = QVBoxLayout()
+        col.setSpacing(0)
+        t = QLabel("Wi-Fi")
+        t.setObjectName("head")
+        self.ssid = QLabel("")
+        self.ssid.setObjectName("muted")
+        col.addWidget(t)
+        col.addWidget(self.ssid)
+        wl.addLayout(col, 1)
+        g.addWidget(self.wifi_tile, 0, 0, 1, 2)
+        # Bluetooth + Airplane circles
+        g.addWidget(self.round_button("bt", "\uf293", "Bluetooth", self._toggle("bt", self.be.bluetooth,
+                                                                            self.be.set_bluetooth)), 1, 0,
+                    Qt.AlignmentFlag.AlignCenter)
+        g.addWidget(self.round_button("air", "\uf072", "Airplane mode", self._toggle("air", self.be.airplane,
+                                                                               self.be.set_airplane)), 1, 1,
+                    Qt.AlignmentFlag.AlignCenter)
+        # Now playing (2×2)
+        self.media_tile = self.tile()
+        ml = QVBoxLayout(self.media_tile)
+        ml.setContentsMargins(14, 12, 14, 10)
+        self.art = QLabel()
+        self.art.setFixedSize(44, 44)
+        ml.addWidget(self.art)
+        self.song = QLabel("Not playing")
+        self.song.setObjectName("head")
+        self.artist = QLabel("")
+        self.artist.setObjectName("muted")
+        ml.addWidget(self.song)
+        ml.addWidget(self.artist)
+        mr = QHBoxLayout()
+        for glyph, what in (("\uf04a", "previous"), ("\uf04b", "play-pause"), ("\uf04e", "next")):
+            b = QToolButton()
+            b.setObjectName("media")
+            b.setText(glyph)
+            b.clicked.connect(lambda _=False, w=what: (self.be.media(w), QTimer.singleShot(400, self.refresh)))
+            if what == "play-pause":
+                self.play_btn = b
+            mr.addWidget(b)
+        ml.addLayout(mr)
+        g.addWidget(self.media_tile, 0, 2, 2, 2)
+        # Focus pill + two squares
+        self.focus_tile = self.tile()
+        fl = QHBoxLayout(self.focus_tile)
+        fl.setContentsMargins(8, 8, 12, 8)
+        fl.addWidget(self.round_button("focus", "\uf186", "Focus (do not disturb)",
+                                       self._toggle("focus", self.be.focus, self.be.set_focus), 40))
+        ft = QLabel("Focus")
+        ft.setObjectName("head")
+        fl.addWidget(ft, 1)
+        g.addWidget(self.focus_tile, 2, 0, 1, 2)
+        g.addWidget(self.round_button("dark", "\uf042", "Dark mode", self._toggle("dark", self.be.dark, self.be.set_dark)),
+                    2, 2, Qt.AlignmentFlag.AlignCenter)
+        g.addWidget(self.round_button(None, "\uf030", "Screenshot of an area", self.screenshot, checkable=False),
+                    2, 3, Qt.AlignmentFlag.AlignCenter)
+        # sliders
+        self.bright_box, self.bright = self.slider("Display", "\uf185", self.be.set_brightness)
+        g.addWidget(self.bright_box, 3, 0, 1, 4)
+        self.vol_box, self.vol = self.slider("Sound", "\uf028", self.be.set_volume, mute=self.be.toggle_mute)
+        g.addWidget(self.vol_box, 4, 0, 1, 4)
+        # shortcuts
+        for i, (glyph, tip, fn) in enumerate((("\uf023", "Lock", lambda: (S.power("lock"), self.close())),
+                                             ("\uf013", "Auxo Settings", lambda: (S.spawn(["auxo-settings"]), self.close())),
+                                             ("\uf390", "Displays", lambda: (S.spawn(["auxo-settings", "displays"]),
+                                                                       self.close())),
+                                             ("\uf011", "Power off", lambda: (S.power("shutdown"), self.close())))):
+            g.addWidget(self.round_button(None, glyph, tip, fn, checkable=False), 5, i, Qt.AlignmentFlag.AlignCenter)
+        for c in range(4):
+            g.setColumnMinimumWidth(c, 64)
+
+    # ── Windows: Quick settings ──
+    def _build_windows(self):
+        self.setFixedWidth(380)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(22, 22, 22, 12)
+        v.setSpacing(14)
+        g = QGridLayout()
+        g.setSpacing(10)
+        tiles = (("wifi", "\uf1eb", "Wi-Fi", self.be.wifi, self.be.set_wifi),
+                 ("bt", "\uf293", "Bluetooth", self.be.bluetooth, self.be.set_bluetooth),
+                 ("air", "\uf072", "Airplane mode", self.be.airplane, self.be.set_airplane),
+                 ("focus", "\uf186", "Focus", self.be.focus, self.be.set_focus),
+                 ("dark", "\uf042", "Dark mode", self.be.dark, self.be.set_dark),
+                 (None, "\uf030", "Screenshot", None, None))
+        for i, (key, glyph, label, getter, setter) in enumerate(tiles):
+            cell = QVBoxLayout()
+            cell.setSpacing(6)
+            b = self.round_button(key, glyph, label, self._toggle(key, getter, setter) if key else self.screenshot,
+                                  size=0, checkable=bool(key))
+            b.setFixedSize(102, 46)
+            cell.addWidget(b)
+            lab = QLabel(label)
+            lab.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            lab.setObjectName("muted")
+            cell.addWidget(lab)
+            if key == "wifi":
+                self.ssid = lab
+            g.addLayout(cell, i // 3, i % 3)
+        v.addLayout(g)
+        self.bright_box, self.bright = self.slider("", "\uf185", self.be.set_brightness)
+        self.vol_box, self.vol = self.slider("", "\uf028", self.be.set_volume, mute=self.be.toggle_mute)
+        for box in (self.bright_box, self.vol_box):
+            box.setObjectName("")
+            box.setStyleSheet("background: transparent;")
+            v.addWidget(box)
+        foot = QHBoxLayout()
+        self.batt = QLabel("")
+        self.batt.setObjectName("muted")
+        foot.addWidget(self.batt)
+        foot.addStretch(1)
+        for glyph, tip, fn in (("\uf013", "Auxo Settings", lambda: (S.spawn(["auxo-settings"]), self.close())),
+                               ("\uf011", "Power", lambda: (S.spawn(["auxo-launcher", "--style", "windows"]),
+                                                      self.close()))):
+            b = QToolButton()
+            b.setObjectName("flat")
+            b.setText(glyph)
+            b.setToolTip(tip)
+            b.clicked.connect(fn)
+            foot.addWidget(b)
+        v.addLayout(foot)
+        self.media_tile = None
+
+    # ── state ──
+    def refresh(self):
+        wifi, ssid = self.be.wifi()
+        states = {"wifi": wifi, "bt": self.be.bluetooth(), "air": self.be.airplane(), "focus": self.be.focus(),
+                  "dark": self.be.dark()}
+        for key, st in states.items():
+            b = self.toggles.get(key)
+            if not b:
+                continue
+            b.setEnabled(st is not None)
+            b.blockSignals(True)
+            b.setChecked(bool(st))
+            b.blockSignals(False)
+        if self.style_name == "mac":
+            self.ssid.setText(ssid if wifi and ssid else ("On" if wifi else "Off") if wifi is not None else "Not available")
+        elif wifi and ssid:
+            self.ssid.setText(ssid[:14])
+        br = self.be.brightness()
+        self.bright_box.setVisible(br is not None)
+        if br is not None and not self.bright.isSliderDown():
+            self.bright.blockSignals(True)
+            self.bright.setValue(br)
+            self.bright.blockSignals(False)
+        vol, muted = self.be.volume()
+        self.vol_box.setEnabled(vol is not None)
+        if vol is not None and not self.vol.isSliderDown():
+            self.vol.blockSignals(True)
+            self.vol.setValue(min(100, vol))
+            self.vol.blockSignals(False)
+        if self.media_tile is not None:
+            m = self.be.playing()
+            self.song.setText((m["title"] or "Unknown")[:22] if m else "Not playing")
+            self.artist.setText((m["artist"] or "")[:26] if m else "")
+            self.play_btn.setText("\uf04c" if m and m["status"] == "Playing" else "\uf04b")
+            pm = QPixmap(m["art"]) if m and m["art"] else QPixmap()
+            if not pm.isNull():
+                self.art.setPixmap(pm.scaled(44, 44, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                             Qt.TransformationMode.SmoothTransformation))
+            else:
+                self.art.setText("\uf001")
+                self.art.setObjectName("glyph")
+                self.art.setStyleSheet(f"font-family: '{FA}'; font-weight: 900; font-size: 26px; "
+                                       f"color: {self.pal['accent']}; background: transparent;")
+        if self.style_name == "windows":
+            b = self.be.battery()
+            self.batt.setText(f"{BOLT if b[1] else BATT}  {b[0]}%{' · charging' if b[1] else ''}" if b else "")
+            self.setFixedHeight(self.layout().sizeHint().height())     # fit: no empty space when there's no backlight
+
+    def screenshot(self):
+        self.close()
+        if shutil.which("grim") and shutil.which("slurp"):
+            S.spawn(["sh", "-c", 'sleep 0.3; grim -g "$(slurp)" - | swappy -f - || grim -g "$(slurp)"'])
+        elif shutil.which("maim"):
+            S.spawn(["sh", "-c", "sleep 0.3; maim -s | xclip -selection clipboard -t image/png"])
+
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    args = sys.argv[1:]
+    style = args[args.index("--style") + 1] if "--style" in args and args.index("--style") + 1 < len(args) else "mac"
+    style = "windows" if style == "windows" else "mac"
+    app = QApplication(sys.argv[:1])
+    app.setDesktopFileName("auxo-quick" if style == "windows" else "auxo-control")
+    w = Control(style)
+    w.show()
+    if style == "windows":
+        QTimer.singleShot(80, lambda: place(w, "auxo-quick", "bottom-right", bar=52))
+    else:
+        QTimer.singleShot(80, lambda: place(w, "auxo-control", "top-right", bar=32))
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,144 @@
+// Auxo Hyprland · Windows style: one taskbar along the bottom, Start in the middle.
+// auxo: bars stay where they are (Auxo Settings' bar position doesn't move the taskbar)
+{
+  "name": "taskbar",
+  "layer": "top",
+  "position": "bottom",
+  "height": 48,
+  "exclusive": true,
+  "modules-left": [],
+  "modules-center": [
+    "custom/start",
+    "custom/search",
+    "image#files",
+    "image#firefox",
+    "image#terminal",
+    "image#steam",
+    "image#discord",
+    "image#settings",
+    "wlr/taskbar"
+  ],
+  "modules-right": [
+    "tray",
+    "custom/update",
+    "network",
+    "pulseaudio",
+    "battery",
+    "clock"
+  ],
+  "custom/start": {
+    "format": "\u25b2",
+    "tooltip": false,
+    "on-click": "pkill -f auxo-launcher || auxo-launcher --style windows"
+  },
+  "custom/search": {
+    "format": "\uf002  Search",
+    "tooltip": false,
+    "on-click": "pkill -f auxo-launcher || auxo-launcher --style windows"
+  },
+  "image#files": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/system-file-manager.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "thunar"
+  },
+  "image#firefox": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/firefox.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "firefox"
+  },
+  "image#terminal": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/utilities-terminal.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "kitty"
+  },
+  "image#steam": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/steam.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "steam || notify-send 'Steam isn\u2019t installed' 'sudo auxo-tweak gaming on'"
+  },
+  "image#discord": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/discord.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "flatpak run com.discordapp.Discord || notify-send 'Discord isn\u2019t installed' 'sudo auxo-tweak apps discord'"
+  },
+  "image#settings": {
+    "path": "/usr/share/icons/Papirus/64x64/apps/preferences-system.svg",
+    "size": 30,
+    "tooltip": false,
+    "on-click": "auxo-settings"
+  },
+  "wlr/taskbar": {
+    "format": "{icon}",
+    "icon-size": 30,
+    "icon-theme": "Papirus-Dark",
+    "tooltip-format": "{title}",
+    "on-click": "activate",
+    "on-click-middle": "close",
+    "ignore-list": [
+      "firefox",
+      "kitty",
+      "thunar",
+      "Thunar",
+      "steam",
+      "com.discordapp.Discord",
+      "auxo-settings",
+      "auxo-start",
+      "auxo-quick"
+    ]
+  },
+  "network": {
+    "format-wifi": "\uf1eb",
+    "format-ethernet": "\uf6ff",
+    "format-disconnected": "\uf071",
+    "tooltip-format": "{essid} {ipaddr}",
+    "on-click": "pkill -f auxo-control || auxo-control --style windows"
+  },
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "\uf6a9",
+    "format-icons": {
+      "default": [
+        "\uf026",
+        "\uf027",
+        "\uf028"
+      ]
+    },
+    "tooltip-format": "{volume}%",
+    "on-click": "pkill -f auxo-control || auxo-control --style windows",
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+  },
+  "battery": {
+    "format": "{icon}",
+    "format-icons": [
+      "\uf244",
+      "\uf243",
+      "\uf242",
+      "\uf241",
+      "\uf240"
+    ],
+    "tooltip-format": "{capacity}%",
+    "on-click": "pkill -f auxo-control || auxo-control --style windows"
+  },
+  "custom/update": {
+    "exec": "n=$(xbps-install -Mun 2>/dev/null | wc -l); [ \"$n\" -gt 0 ] && echo \"$n\" || echo ''",
+    "interval": 1800,
+    "format": "\uf021 {}",
+    "tooltip": false,
+    "on-click": "kitty -e auxo-update"
+  },
+  "clock": {
+    "format": "{:%H:%M\n%d/%m/%Y}",
+    "tooltip-format": "<tt>{calendar}</tt>",
+    "justify": "right"
+  },
+  "tray": {
+    "spacing": 10,
+    "icon-size": 16
+  }
+}

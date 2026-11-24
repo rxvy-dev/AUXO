@@ -332,6 +332,14 @@ def paint_desktop(key, w=220, h=124):
         p.setBrush(acc)
         p.drawRoundedRect(QRectF(4, y + 3, 22, 10), 3, 3)
         window(QRectF(36, 26 if key == "xfce" else 12, 140, 78), radius=4)
+    elif key == "hyprland" and conf().get("RICE_HYPRLAND") == "hyprland-win":
+        window(QRectF(18, 12, w * 0.55 - 18, h - 42), True, 5)
+        window(QRectF(w * 0.55 + 6, 12, w * 0.45 - 24, h - 42), False, 5)
+        p.setBrush(QColor(21, 21, 30, 230))
+        p.drawRect(QRectF(0, h - 20, w, 20))                             # taskbar
+        for i, col in enumerate((acc, QColor("#e8e8f0"), QColor("#fbbf24"), acc2, QColor("#e8e8f0"))):
+            p.setBrush(col)
+            p.drawRoundedRect(QRectF(w / 2 - 46 + i * 19, h - 15, 11, 11), 2, 2)
     elif key == "hyprland" and conf().get("RICE_HYPRLAND") == "hyprland-mac":
         p.setBrush(QColor(21, 21, 30, 200))
         p.drawRect(QRectF(0, 0, w, 9))                                   # menu bar
@@ -927,12 +935,14 @@ class Settings(QMainWindow):
                 styles.addWidget(QLabel("Style:"))
                 cur_style = conf().get("RICE_HYPRLAND", "hyprland")
                 grp = QButtonGroup(c)
-                for rice_name, text in (("hyprland", "Auxo"), ("hyprland-mac", "Mac-style")):
+                tips = {"hyprland": "Floating bar, the classic Auxo look",
+                        "hyprland-mac": "Liquid Glass: menu bar, dock, Launchpad, Control Center, Spotlight search",
+                        "hyprland-win": "Taskbar with Start in the middle, Quick settings, Windows keys"}
+                for rice_name, text in (("hyprland", "Auxo"), ("hyprland-mac", "Mac"), ("hyprland-win", "Windows")):
                     sb = QPushButton(text)
                     sb.setCheckable(True)
                     sb.setChecked(rice_name == cur_style)
-                    sb.setToolTip("Menu bar on top, a dock, Spotlight-style search (Super+Space)"
-                                  if rice_name == "hyprland-mac" else "Floating bar, the classic Auxo look")
+                    sb.setToolTip(tips[rice_name])
                     sb.clicked.connect(lambda _=False, r=rice_name, t=text: self.run(
                         ["rice", r], root=True, label=f"Hyprland style → {t}",
                         done=lambda code: (self.reload_look(), self.refresh_desktops())))

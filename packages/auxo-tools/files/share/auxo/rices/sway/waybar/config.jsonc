@@ -3,19 +3,91 @@
   "position": "top",
   "height": 34,
   "margin": "8 14 0 14",
-  "modules-left": ["custom/auxo", "sway/workspaces", "sway/window"],
-  "modules-center": ["clock"],
-  "modules-right": ["tray", "pulseaudio", "network", "bluetooth", "cpu", "memory", "battery", "custom/update"],
-  "custom/auxo": { "format": "▲", "tooltip": false, "on-click": "foot auxo-tweak" },
-  "sway/workspaces": { "format": "{id}"},
-  "sway/window": { "max-length": 50 },
-  "clock": { "format": "{:%a %d %b  %H:%M}", "tooltip-format": "<tt>{calendar}</tt>" },
-  "pulseaudio": { "format": "{icon} {volume}%", "format-muted": " muted", "format-icons": { "default": ["", "", ""] }, "on-click": "pavucontrol" },
-  "network": { "format-wifi": "  {essid}", "format-ethernet": " wired", "format-disconnected": " offline", "on-click": "foot nmtui" },
-  "bluetooth": { "format": "", "format-connected": " {num_connections}", "on-click": "blueman-manager" },
-  "cpu": { "format": " {usage}%", "interval": 3 },
-  "memory": { "format": " {percentage}%", "interval": 5 },
-  "battery": { "format": "{icon} {capacity}%", "format-icons": ["", "", "", "", ""], "states": { "warning": 25, "critical": 12 } },
-  "custom/update": { "exec": "xbps-install -Mun 2>/dev/null | wc -l", "interval": 1800, "format": " {}", "on-click": "foot auxo-update" },
-  "tray": { "spacing": 8 }
+  "modules-left": [
+    "custom/auxo",
+    "sway/workspaces",
+    "sway/window"
+  ],
+  "modules-center": [
+    "clock"
+  ],
+  "modules-right": [
+    "tray",
+    "pulseaudio",
+    "network",
+    "bluetooth",
+    "cpu",
+    "memory",
+    "battery",
+    "custom/update"
+  ],
+  "custom/auxo": {
+    "format": "\u25b2",
+    "tooltip": false,
+    "on-click": "foot auxo-tweak"
+  },
+  "sway/workspaces": {
+    "format": "{id}"
+  },
+  "sway/window": {
+    "max-length": 50
+  },
+  "clock": {
+    "format": "{:%a %d %b  %H:%M}",
+    "tooltip-format": "<tt>{calendar}</tt>"
+  },
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-muted": "\uf6a9 muted",
+    "format-icons": {
+      "default": [
+        "\uf026",
+        "\uf027",
+        "\uf028"
+      ]
+    },
+    "on-click": "pavucontrol"
+  },
+  "network": {
+    "format-wifi": "\uf1eb  {essid}",
+    "format-ethernet": "\uf6ff wired",
+    "format-disconnected": "\uf071 offline",
+    "on-click": "foot nmtui"
+  },
+  "bluetooth": {
+    "format": "\uf293",
+    "format-connected": "\uf293 {num_connections}",
+    "on-click": "blueman-manager"
+  },
+  "cpu": {
+    "format": "\uf2db {usage}%",
+    "interval": 3
+  },
+  "memory": {
+    "format": "\uf538 {percentage}%",
+    "interval": 5
+  },
+  "battery": {
+    "format": "{icon} {capacity}%",
+    "format-icons": [
+      "\uf244",
+      "\uf243",
+      "\uf242",
+      "\uf241",
+      "\uf240"
+    ],
+    "states": {
+      "warning": 25,
+      "critical": 12
+    }
+  },
+  "custom/update": {
+    "exec": "xbps-install -Mun 2>/dev/null | wc -l",
+    "interval": 1800,
+    "format": "\uf021 {}",
+    "on-click": "foot auxo-update"
+  },
+  "tray": {
+    "spacing": 8
+  }
 }

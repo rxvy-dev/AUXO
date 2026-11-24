@@ -17,9 +17,19 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
-- **Mac-style Hyprland**: a menu bar on top (▲ menu, app name, status icons), a frosted dock
-  with your apps, Spotlight-style search on Super+Space, Mac-like window animations and lock
-  screen. Pick it in Auxo Settings → Desktop → Style, or `sudo auxo-tweak rice hyprland-mac`.
+- **Mac-style Hyprland, in Liquid Glass**: a glass menu bar on top (▲ menu, app name, status
+  icons), a glass dock, Spotlight-style search on Super+Space, an Applications panel with search
+  and categories (Super+A or the dock's grid icon) and a Control Center (Wi-Fi, Bluetooth, Focus,
+  dark mode, brightness, volume, now playing) behind the menu bar's toggle icon. Panels are
+  frosted, see-through glass with a bright rim over Hyprland's vibrant blur. Light mode and a new
+  Lagoon wallpaper. Pick it in Auxo Settings → Desktop → Style, or `sudo auxo-tweak rice hyprland-mac`.
+- **Windows-style Hyprland**: a centred taskbar with Start, search, pinned and open apps, tray and
+  a two-line clock; a Start menu (Pinned — right-click to pin/unpin —, All apps, Recommended recent
+  files, your name and power); Quick settings from the taskbar's status icons; the Super key opens
+  Start, Alt+F4, Alt+Tab, Super+Shift+S screenshots. New Bloom wallpaper.
+  `sudo auxo-tweak rice hyprland-win`.
+- Fixed: Waybar and polybar icons were blank on every rice (the icon characters had been lost
+  from the config files). They're written as escapes now, and a test checks it.
 - **Displays**: a new Auxo Settings page and `auxo-tweak monitors` for resolution, refresh rate,
   scale, rotation, VRR, layout (drag the screens) and which workspaces open on each screen,
   written into the Hyprland, Sway and i3 rices. Hyprland now uses each monitor's highest
@@ -31,7 +41,7 @@
   broken characters; they're Font Awesome icons now.
 - Fixed: Hyprland's idle screen-off and workspace scrolling used a newer Hyprland syntax than the
   0.49 that Void users get, so they did nothing.
- Void ships PipeWire switched off, and Auxo never turned it on. Every
+- Fixed: no sound. Void ships PipeWire switched off, and Auxo never turned it on. Every
   desktop (and the live ISO) now starts PipeWire at login with WirePlumber, the PulseAudio layer
   and ALSA routed through it (alsa-pipewire), as Void's handbook describes. i3 and Cinnamon now
   start with a D-Bus session, which PipeWire needs. `sudo auxo-tweak doctor --fix` repairs

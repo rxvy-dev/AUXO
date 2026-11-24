@@ -244,8 +244,11 @@ SESSION_RICES = {"gnome", "xfce", "cinnamon", "chrono"}
 
 
 # Rice styles layered on a base rice: the base is applied first, then the style's files on top
-RICE_LAYERS = {"hyprland-mac": "hyprland"}
-RICE_PRESET = {"hyprland-mac": "mac"}       # the look preset that goes with a style
+RICE_LAYERS = {"hyprland-mac": "hyprland", "hyprland-win": "hyprland"}
+RICE_PRESET = {"hyprland-mac": "mac", "hyprland-win": "win"}       # the look preset that goes with a style
+# each style starts light, on its own wallpaper (change both freely afterwards)
+RICE_LOOK = {"hyprland-mac": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-lagoon.jpg"},
+             "hyprland-win": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-bloom.jpg"}}
 
 
 def apply_rice(name, user):
@@ -285,6 +288,9 @@ def apply_rice(name, user):
                 os.chmod(os.path.join(base, f), 0o755)
     if name in RICE_PRESET:
         look = auxo_look.preset(auxo_look.load(home), RICE_PRESET[name])
+        for k, v in RICE_LOOK.get(name, {}).items():
+            if k != "wallpaper" or os.path.exists(R(v)):
+                look[k] = v
         auxo_look.save(home, look)
     auxo_theme.apply_user(user, auxo_theme.current())
     chown(f"{home}/.config", user, recursive=True)
@@ -1402,7 +1408,7 @@ def main():
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
     s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop")
     s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
-    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac", "sway", "i3",
+    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac", "hyprland-win", "sway", "i3",
                                                                       "chrono"])
     s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
     s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset", "presets", "preset",

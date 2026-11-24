@@ -1,0 +1,434 @@
+#!/usr/bin/env python3
+"""auxo-launcher — the app launcher of the Mac-style and Windows-style Auxo rices.
+
+  auxo-launcher --style mac        Applications panel: search, categories, a big icon grid
+  auxo-launcher --style windows    Start menu: search, Pinned, All apps, Recommended files, power
+Type to search, Enter opens the first match, Esc or clicking elsewhere closes it.
+Right-click an app in the Start menu to pin or unpin it (saved in ~/.config/auxo/pinned).
+"""
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+try:
+    from PyQt6.QtCore import QSize, Qt, QTimer
+    from PyQt6.QtGui import QColor, QFont, QIcon
+    from PyQt6.QtWidgets import (QApplication, QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+                                 QListView, QListWidget, QListWidgetItem, QMenu, QPushButton, QSizePolicy, QStackedWidget,
+                                 QToolButton, QVBoxLayout, QWidget)
+except ImportError:
+    print("auxo-launcher needs PyQt6: sudo xbps-install python3-pyqt6-widgets", file=sys.stderr)
+    sys.exit(1)
+
+import auxo_shell as S  # noqa: E402
+from auxo_glass import GlassPanel, glass_css, place  # noqa: E402
+
+PINNED_FILE = os.path.join(S.HOME, ".config/auxo/pinned")
+DEFAULT_PINNED = ["firefox.desktop", "org.xfce.thunar.desktop", "thunar.desktop", "kitty.desktop", "foot.desktop",
+                  "steam.desktop", "com.discordapp.Discord.desktop", "auxo-settings.desktop", "auxo-welcome.desktop",
+                  "org.gnome.Calculator.desktop", "mpv.desktop", "libreoffice-writer.desktop", "gimp.desktop",
+                  "org.kde.krita.desktop", "obs.desktop", "code-oss.desktop", "vscode.desktop", "btop.desktop"]
+
+
+def rgba(hex_color, a):
+    c = QColor(hex_color)
+    return f"rgba({c.red()},{c.green()},{c.blue()},{a})"
+
+
+def icon_for(name):
+    if name and os.path.isabs(name) and os.path.exists(name):
+        return QIcon(name)
+    ic = QIcon.fromTheme(name or "")
+    return ic if not ic.isNull() else QIcon.fromTheme("application-x-executable")
+
+
+def set_icon_theme(mode):
+    for theme in (("Papirus-Light", "Papirus") if mode == "light" else ("Papirus-Dark", "Papirus")):
+        if any(os.path.isdir(os.path.join(d, "icons", theme)) for d in S.data_dirs()):
+            QIcon.setThemeName(theme)
+            return
+
+
+def load_pinned(apps):
+    by_id = {a["id"]: a for a in apps}
+    try:
+        ids = [l.strip() for l in open(PINNED_FILE) if l.strip() and not l.startswith("#")]
+    except OSError:
+        ids = DEFAULT_PINNED
+    out = [by_id[i] for i in ids if i in by_id]
+    # files and terminal: whichever of the alternatives is installed, once
+    seen, uniq = set(), []
+    for a in out:
+        key = {"thunar.desktop": "files", "org.xfce.thunar.desktop": "files", "foot.desktop": "term",
+               "kitty.desktop": "term"}.get(a["id"], a["id"])
+        if key not in seen:
+            seen.add(key)
+            uniq.append(a)
+    return uniq
+
+
+def save_pinned(ids):
+    os.makedirs(os.path.dirname(PINNED_FILE), exist_ok=True)
+    with open(PINNED_FILE, "w") as f:
+        f.write("# Start menu pins (auxo-launcher) — right-click an app to change them\n" + "\n".join(ids) + "\n")
+
+
+def open_app(app, win):
+    if S.spawn(S.command(app)):
+        win.close()
+
+
+# ── Mac style: the Applications panel ─────────────────────────────────
+class MacLauncher(GlassPanel):
+    def __init__(self, apps, mode, pal, font):
+        light = mode == "light"
+        super().__init__("auxo-launchpad", 32, "mac", light)
+        self.apps = apps
+        fg, mut = ("#1d1d24", "#5b5b68") if light else ("#f2f2f7", "#a0a0b0")
+        self.setFixedSize(780, 600)
+        self.setStyleSheet(f"""
+            * {{ font-family: "{font}"; color: {fg}; }}
+            {glass_css(light, 18, "QLineEdit")}
+            QLineEdit {{ padding: 10px 14px 10px 40px; font-size: 17px; }}
+            QLabel#lens {{ font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 15px; color: {mut};
+                          background: transparent; }}
+            {glass_css(light, 13, "QPushButton#chip")}
+            QPushButton#chip {{ padding: 5px 13px; font-size: 12px; color: {mut}; }}
+            QPushButton#chip:checked {{ background: {pal['accent']}; color: white; }}
+            QListWidget {{ background: transparent; border: none; outline: none; font-size: 12px; }}
+            QListWidget::item {{ border-radius: 14px; padding: 6px; color: {fg}; }}
+            QListWidget::item:hover {{ background: {rgba('#ffffff', 0.45) if light else rgba('#ffffff', 0.08)}; }}
+            QListWidget::item:selected {{ background: {rgba(pal['accent'], 0.28)}; color: {fg}; }}
+            QScrollBar:vertical {{ width: 6px; background: transparent; }}
+            QScrollBar::handle:vertical {{ background: {rgba(fg, 0.25)}; border-radius: 3px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        """)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(22, 20, 22, 16)
+        lay.setSpacing(12)
+        self.search = QLineEdit(placeholderText="Applications")
+        lens = QLabel("\uf002", self.search)    # the magnifying glass (Font Awesome)
+        lens.setObjectName("lens")
+        lens.move(15, 13)
+        lay.addWidget(self.search)
+        chips = QHBoxLayout()
+        chips.setSpacing(6)
+        self.group = QButtonGroup(self)
+        groups = ["All"] + [g for g, _ in S.CATEGORIES if any(a["group"] == g for a in apps)]
+        if any(a["group"] == "Other" for a in apps):
+            groups.append("Other")
+        for g in groups:
+            b = QPushButton(g)
+            b.setObjectName("chip")
+            b.setCheckable(True)
+            b.setChecked(g == "All")
+            b.clicked.connect(self.refill)
+            self.group.addButton(b)
+            chips.addWidget(b)
+        chips.addStretch(1)
+        lay.addLayout(chips)
+        self.grid = QListWidget()
+        self.grid.setViewMode(QListView.ViewMode.IconMode)
+        self.grid.setIconSize(QSize(60, 60))
+        self.grid.setGridSize(QSize(120, 120))
+        self.grid.setTextElideMode(Qt.TextElideMode.ElideNone)
+        self.grid.setMovement(QListView.Movement.Static)
+        self.grid.setResizeMode(QListView.ResizeMode.Adjust)
+        self.grid.setWordWrap(True)
+        self.grid.itemClicked.connect(lambda it: open_app(it.data(Qt.ItemDataRole.UserRole), self))
+        self.grid.itemActivated.connect(lambda it: open_app(it.data(Qt.ItemDataRole.UserRole), self))
+        lay.addWidget(self.grid, 1)
+        self.search.textChanged.connect(self.refill)
+        self.search.returnPressed.connect(self.first)
+        self.refill()
+        self.search.setFocus()
+
+    def refill(self):
+        g = self.group.checkedButton().text() if self.group.checkedButton() else "All"
+        q = self.search.text()
+        self.grid.clear()
+        for a in self.apps:
+            if (g == "All" or a["group"] == g) and S.matches(a, q):
+                it = QListWidgetItem(icon_for(a["icon"]), a["name"])
+                it.setData(Qt.ItemDataRole.UserRole, a)
+                it.setToolTip(a["comment"])
+                it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+                self.grid.addItem(it)
+        if self.grid.count():
+            self.grid.setCurrentRow(0)
+
+    def first(self):
+        if self.grid.count():
+            open_app(self.grid.item(0).data(Qt.ItemDataRole.UserRole), self)
+
+
+# ── Windows style: the Start menu ─────────────────────────────────────
+class StartMenu(GlassPanel):
+    def __init__(self, apps, mode, pal, font):
+        light = mode == "light"
+        super().__init__("auxo-start", 10, "windows", light)
+        self.apps, self.pal = apps, pal
+        fg, mut = ("#1a1a1a", "#5f5f5f") if light else ("#ffffff", "#c5c5c5")
+        field = "#ffffff" if light else "#1b1b1b"
+        hover = rgba("#000000", 0.05) if light else rgba("#ffffff", 0.07)
+        self.setFixedSize(640, 700)
+        self.setStyleSheet(f"""
+            * {{ font-family: "{font}"; color: {fg}; font-size: 12px; }}
+            QLineEdit {{ background: {field}; border: 1px solid {rgba('#000000' if light else '#ffffff', 0.08)};
+                        border-bottom: 2px solid {pal['accent']}; border-radius: 18px; padding: 8px 14px 8px 38px;
+                        font-size: 13px; }}
+            QLabel#title {{ font-weight: 600; font-size: 13px; }}
+            QLabel#lens {{ font-family: "Font Awesome 6 Free"; font-weight: 900; color: {mut}; background: transparent; }}
+            QToolButton#glyph {{ font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 14px;
+                                background: transparent; border: none; border-radius: 4px; padding: 8px 10px; }}
+            QToolButton#glyph:hover {{ background: {hover}; }}
+            QToolButton#glyph::menu-indicator {{ image: none; }}
+            QPushButton#pill {{ background: {hover}; border: none; border-radius: 4px; padding: 4px 10px;
+                               font-size: 11px; }}
+            QPushButton#pill:hover {{ background: {rgba('#808080', 0.25)}; }}
+            QListWidget {{ background: transparent; border: none; outline: none; }}
+            QListWidget::item {{ border-radius: 4px; padding: 4px; color: {fg}; }}
+            QListWidget::item:hover {{ background: {hover}; }}
+            QListWidget::item:selected {{ background: {rgba(pal['accent'], 0.22)}; color: {fg}; }}
+            QToolButton#recent {{ background: transparent; border: none; border-radius: 4px; padding: 6px;
+                                 text-align: left; }}
+            QToolButton#recent:hover, QToolButton#foot:hover {{ background: {hover}; }}
+            QToolButton#foot {{ background: transparent; border: none; border-radius: 4px; padding: 6px 10px; }}
+            QFrame#footer {{ background: {rgba('#000000' if light else '#000000', 0.04 if light else 0.18)};
+                            border-top: 1px solid {rgba('#000000' if light else '#ffffff', 0.06)};
+                            border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }}
+            QLabel#muted {{ color: {mut}; font-size: 11px; }}
+            QScrollBar:vertical {{ width: 6px; background: transparent; }}
+            QScrollBar::handle:vertical {{ background: {rgba(fg, 0.25)}; border-radius: 3px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        """)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        body = QVBoxLayout()
+        body.setContentsMargins(32, 28, 32, 12)
+        body.setSpacing(10)
+        self.search = QLineEdit(placeholderText="Type here to search")
+        lens = QLabel("\uf002", self.search)
+        lens.setObjectName("lens")
+        lens.move(15, 11)
+        body.addWidget(self.search)
+        self.stack = QStackedWidget()
+        body.addWidget(self.stack, 1)
+        outer.addLayout(body, 1)
+
+        # page 0: Pinned + Recommended
+        home = QWidget()
+        hl = QVBoxLayout(home)
+        hl.setContentsMargins(0, 14, 0, 0)
+        hl.setSpacing(8)
+        hl.addLayout(self._title_row("Pinned", "All apps  ›", lambda: self.stack.setCurrentIndex(1)))
+        self.pinned = self._grid(rows=3)
+        hl.addWidget(self.pinned)
+        hl.addLayout(self._title_row("Recommended", "More  ›", lambda: S.spawn(["xdg-open", os.path.join(S.HOME)])))
+        rec = QGridLayout()
+        rec.setHorizontalSpacing(12)
+        rec.setVerticalSpacing(2)
+        files = S.recent_files(6)
+        for i, f in enumerate(files):
+            b = QToolButton()
+            b.setObjectName("recent")
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+            b.setIcon(self._file_icon(f["path"]))
+            b.setIconSize(QSize(28, 28))
+            b.setText(f"{f['name'][:30]}\n{f['when']}")
+            b.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            b.clicked.connect(lambda _=False, p=f["path"]: (S.spawn(["xdg-open", p]), self.close()))
+            rec.addWidget(b, i // 2, i % 2)
+        if not files:
+            empty = QLabel("Files you open will show up here.")
+            empty.setObjectName("muted")
+            rec.addWidget(empty, 0, 0)
+        hl.addLayout(rec)
+        hl.addStretch(1)
+        self.stack.addWidget(home)
+
+        # page 1: All apps (A–Z)
+        allp = QWidget()
+        al = QVBoxLayout(allp)
+        al.setContentsMargins(0, 14, 0, 0)
+        al.addLayout(self._title_row("All apps", "‹  Back", lambda: self.stack.setCurrentIndex(0)))
+        self.all = QListWidget()
+        self.all.setIconSize(QSize(26, 26))
+        self.all.setSpacing(1)
+        self.all.itemClicked.connect(self._activate)
+        self.all.itemActivated.connect(self._activate)
+        self.all.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.all.customContextMenuRequested.connect(lambda pos: self._menu(self.all, pos))
+        al.addWidget(self.all)
+        self.stack.addWidget(allp)
+
+        # page 2: search results
+        self.results = QListWidget()
+        self.results.setIconSize(QSize(26, 26))
+        self.results.itemClicked.connect(self._activate)
+        self.results.itemActivated.connect(self._activate)
+        self.stack.addWidget(self.results)
+
+        # footer: you + power
+        foot = QFrame()
+        foot.setObjectName("footer")
+        foot.setFixedHeight(64)
+        fl = QHBoxLayout(foot)
+        fl.setContentsMargins(40, 0, 40, 0)
+        me = QToolButton()
+        me.setObjectName("foot")
+        me.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        face = os.path.join(S.HOME, ".face")
+        me.setIcon(QIcon(face) if os.path.exists(face) else QIcon.fromTheme("user-avatar-symbolic",
+                                                                             QIcon.fromTheme("avatar-default")))
+        me.setIconSize(QSize(30, 30))
+        me.setText("  " + S.user_name())
+        me.clicked.connect(lambda: (S.spawn(["auxo-settings"]), self.close()))
+        fl.addWidget(me)
+        fl.addStretch(1)
+        for glyph, tip, cmd in (("\uf07b", "Files", ["xdg-open", S.HOME]), ("\uf013", "Auxo Settings", ["auxo-settings"])):
+            b = QToolButton()
+            b.setObjectName("glyph")
+            b.setText(glyph)
+            b.setToolTip(tip)
+            b.clicked.connect(lambda _=False, c=cmd: (S.spawn(c), self.close()))
+            fl.addWidget(b)
+        pw = QToolButton()
+        pw.setObjectName("glyph")
+        pw.setText("\uf011")
+        pw.setToolTip("Power")
+        pw.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        m = QMenu(pw)
+        for text, act in (("Lock", "lock"), ("Sign out", "logout"), ("Restart", "restart"), ("Shut down", "shutdown")):
+            m.addAction(text, lambda a=act: (S.power(a), self.close()))
+        pw.setMenu(m)
+        fl.addWidget(pw)
+        outer.addWidget(foot)
+
+        self.search.textChanged.connect(self.on_search)
+        self.search.returnPressed.connect(self.first)
+        self.refill()
+        self.search.setFocus()
+
+    def _title_row(self, title, button, fn):
+        row = QHBoxLayout()
+        t = QLabel(title)
+        t.setObjectName("title")
+        row.addWidget(t)
+        row.addStretch(1)
+        b = QPushButton(button)
+        b.setObjectName("pill")
+        b.clicked.connect(fn)
+        row.addWidget(b)
+        return row
+
+    def _grid(self, rows):
+        g = QListWidget()
+        g.setViewMode(QListView.ViewMode.IconMode)
+        g.setIconSize(QSize(34, 34))
+        g.setGridSize(QSize(96, 82))
+        g.setTextElideMode(Qt.TextElideMode.ElideNone)
+        g.setMovement(QListView.Movement.Static)
+        g.setResizeMode(QListView.ResizeMode.Adjust)
+        g.setWordWrap(True)
+        g.setFixedHeight(82 * rows + 8)
+        g.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        g.itemClicked.connect(self._activate)
+        g.itemActivated.connect(self._activate)
+        g.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        g.customContextMenuRequested.connect(lambda pos: self._menu(g, pos))
+        return g
+
+    def _item(self, a, grid=True):
+        it = QListWidgetItem(icon_for(a["icon"]), a["name"])
+        it.setData(Qt.ItemDataRole.UserRole, a)
+        it.setToolTip(a["comment"])
+        if grid:
+            it.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
+        return it
+
+    @staticmethod
+    def _file_icon(path):
+        from PyQt6.QtCore import QMimeDatabase
+        mt = QMimeDatabase().mimeTypeForFile(path)
+        return QIcon.fromTheme(mt.iconName(), QIcon.fromTheme(mt.genericIconName(), QIcon.fromTheme("text-x-generic")))
+
+    def refill(self):
+        self.pinned.clear()
+        pins = load_pinned(self.apps)
+        for a in pins[:18]:
+            self.pinned.addItem(self._item(a))
+        self.all.clear()
+        letter = None
+        for a in self.apps:
+            first = a["name"][:1].upper()
+            if first != letter:
+                letter = first
+                h = QListWidgetItem(letter if letter.isalpha() else "#")
+                h.setFlags(Qt.ItemFlag.NoItemFlags)
+                f = QFont()
+                f.setBold(True)
+                h.setFont(f)
+                self.all.addItem(h)
+            self.all.addItem(self._item(a, grid=False))
+
+    def on_search(self, text):
+        if not text.strip():
+            self.stack.setCurrentIndex(0)
+            return
+        self.results.clear()
+        for a in self.apps:
+            if S.matches(a, text):
+                self.results.addItem(self._item(a, grid=False))
+        if self.results.count():
+            self.results.setCurrentRow(0)
+        self.stack.setCurrentIndex(2)
+
+    def first(self):
+        if self.stack.currentIndex() == 2 and self.results.count():
+            self._activate(self.results.item(0))
+
+    def _activate(self, it):
+        a = it.data(Qt.ItemDataRole.UserRole) if it else None
+        if a:
+            open_app(a, self)
+
+    def _menu(self, widget, pos):
+        it = widget.itemAt(pos)
+        a = it.data(Qt.ItemDataRole.UserRole) if it else None
+        if not a:
+            return
+        pins = [p["id"] for p in load_pinned(self.apps)]
+        m = QMenu(self)
+        if a["id"] in pins:
+            m.addAction("Unpin from Start", lambda: (save_pinned([p for p in pins if p != a["id"]]), self.refill()))
+        else:
+            m.addAction("Pin to Start", lambda: (save_pinned(pins + [a["id"]]), self.refill()))
+        m.exec(widget.mapToGlobal(pos))
+
+
+def main():
+    args = sys.argv[1:]
+    style = args[args.index("--style") + 1] if "--style" in args and args.index("--style") + 1 < len(args) else "mac"
+    style = "windows" if style == "windows" else "mac"
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    app = QApplication(sys.argv[:1])          # --style is ours, not Qt's widget style
+    app.setDesktopFileName("auxo-start" if style == "windows" else "auxo-launchpad")   # Wayland app id
+    mode, pal, font = S.look()
+    set_icon_theme(mode)
+    apps = S.load_apps()
+    win = (StartMenu if style == "windows" else MacLauncher)(apps, mode, pal, font)
+    win.show()
+    if style == "windows":                       # just above the taskbar, in the middle
+        QTimer.singleShot(80, lambda: place(win, "auxo-start", "bottom-center", bar=52))
+    else:
+        QTimer.singleShot(80, lambda: place(win, "auxo-launchpad", "center"))
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
