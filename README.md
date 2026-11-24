@@ -46,6 +46,7 @@ auxo-tweak apps creative dev          # popular app bundles in one go
 auxo-tweak look preset lite           # Auxo, glass, minimal, cozy, retro, mac or lite
 auxo-tweak rice hyprland-mac          # Hyprland, Mac style in Liquid Glass: menu bar, dock, Control Center
 auxo-tweak rice hyprland-win          # Hyprland, Windows style: taskbar, Start menu, Quick settings
+auxo-clipboard                        # clipboard history (Super+Shift+V on Hyprland/Sway)
 auxo-tweak monitors set DP-1 mode=2560x1440@144 scale=1.25 workspaces=1-5
 auxo-tweak doctor --fix               # find and repair common problems
 auxo-tweak ai on && auxo-ai           # Auxo AI: a free assistant that runs on your PC

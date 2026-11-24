@@ -122,6 +122,8 @@ class FakeBackend:
     def focus(self): return None                      # mako not running: tile greyed out
     def set_focus(self, on): calls.append(("focus", on))
     def dark(self): return False
+    def night(self): return False
+    def set_night(self, on): calls.append(("night", on))
     def set_dark(self, on): calls.append(("dark", on))
     def brightness(self): return None                 # desktop: no backlight
     def set_brightness(self, pct): calls.append(("bright", pct))
@@ -144,6 +146,8 @@ for style in ("mac", "windows"):
     check(f"{style}: volume shown", w.vol.value() == 40)
     w.toggles["bt"].click()
     check(f"{style}: bluetooth toggle calls the backend", ("bt", True) in calls)
+    w.toggles["night"].click()
+    check(f"{style}: night light toggle", ("night", True) in calls)
     w.vol.setValue(70)
     check(f"{style}: volume slider", ("vol", 70) in calls)
     if style == "mac":

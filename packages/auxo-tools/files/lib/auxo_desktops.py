@@ -24,7 +24,8 @@ COMMON_WM = [
     "blueman", "brightnessctl", "playerctl", "font-awesome6", "papirus-icon-theme",
     "breeze-gtk", "breeze-icons", "greetd", "tuigreet", "polkit-gnome",
 ]
-WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy",
+WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy", "cliphist", "rofimoji",
+              "gammastep",
               "qt6-wayland", "qt5-wayland", "xdg-desktop-portal-gtk"]
 X11 = ["xorg-minimal", "xinit", "xorg-fonts", "xrandr", "xsetroot"]
 

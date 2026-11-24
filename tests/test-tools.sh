@@ -422,6 +422,13 @@ json.loads(re.sub(r"^\s*//.*$", "", open(sys.argv[1]).read(), flags=re.M))
 PY
 check "Windows waybar config is valid JSON"   "[ $ok = 1 ]"
 check "bar icons are real glyphs (not blank)" "python3 -c \"import glob,json,re,sys; sys.exit(not all(any(0xF000 <= ord(c) <= 0xF8FF for c in json.dumps(json.loads(re.sub(r'^\\\\s*//.*\$','',open(p).read(),flags=re.M)),ensure_ascii=False)) for p in glob.glob('$PKG/share/auxo/rices/*/waybar/config.jsonc')))\""
+check "Windows: Super+V is clipboard history"  "grep -q 'unbind = \$mod, V' $A/.config/hypr/style.conf && grep -q 'bind = \$mod, V, exec, auxo-clipboard' $A/.config/hypr/style.conf"
+check "clipboard history kept on every Wayland rice" "grep -q 'wl-paste --watch cliphist store' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'wl-paste --watch cliphist store' $PKG/share/auxo/rices/sway/sway/config"
+check "Super+Shift+V / Super+. on Hyprland and Sway" "grep -q 'SHIFT, V, exec, auxo-clipboard' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'mod+period exec rofimoji' $PKG/share/auxo/rices/sway/sway/config"
+check "cliphist, rofimoji, gammastep installed with the WMs" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import WAYLAND_WM as W; sys.exit(not {'cliphist','rofimoji','gammastep'} <= set(W))\""
+check "auxo-clipboard parses"                  "sh -n $PKG/bin/auxo-clipboard"
+out=$(env -u WAYLAND_DISPLAY -u DISPLAY AUXO_HOME="$A" "$PKG/bin/auxo-keys" --wm hyprland --print 2>&1)
+check "auxo-keys names them"                   "echo \"\$out\" | grep -q 'Clipboard history' && echo \"\$out\" | grep -q 'Emoji picker' && echo \"\$out\" | grep -q 'Start menu'"
 out=$(QT_QPA_PLATFORM=offscreen AUXO_HOME="$A" python3 "$HERE/tests/test-shell.py" 2>&1); rc=$?
 echo "$out" | sed 's/^/    /' | tail -3
 check "launcher + control center (offscreen)" "[ $rc = 0 ]"

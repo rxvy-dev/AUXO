@@ -30,6 +30,10 @@
   dark mode, brightness, volume, now playing) behind the menu bar's toggle icon. Panels are
   frosted, see-through glass with a bright rim over Hyprland's vibrant blur. Light mode and a new
   Lagoon wallpaper. Pick it in Auxo Settings → Desktop → Style, or `sudo auxo-tweak rice hyprland-mac`.
+- **Clipboard history, emoji picker, night light** on Hyprland and Sway: Super+Shift+V shows what
+  you copied earlier (Super+V on the Windows style, like Windows), Super+. picks an emoji, and the
+  Control Center / Quick settings have a Night light toggle (warmer colours), plus Clipboard and
+  Emoji buttons. `auxo-clipboard clear` forgets the history.
 - **Windows-style Hyprland**: a centred taskbar with Start, search, pinned and open apps, tray and
   a two-line clock; a Start menu (Pinned — right-click to pin/unpin —, All apps, Recommended recent
   files, your name and power); Quick settings from the taskbar's status icons; the Super key opens

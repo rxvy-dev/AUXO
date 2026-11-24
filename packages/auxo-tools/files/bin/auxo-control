@@ -95,6 +95,18 @@ class Backend:
     def set_focus(self, on):
         self.do("makoctl", "mode", "-a" if on else "-r", "do-not-disturb")
 
+    # Night light: warmer colours (gammastep keeps the screen warm while it runs)
+    def night(self):
+        if not shutil.which("gammastep"):
+            return None
+        return self.out("pgrep", "-x", "gammastep") is not None
+
+    def set_night(self, on):
+        if on:
+            self.do("gammastep", "-O", "4000")
+        else:
+            self.do("pkill", "-x", "gammastep")
+
     # light / dark
     def dark(self):
         return S.look()[0] == "dark"
@@ -323,13 +335,17 @@ class Control(GlassPanel):
         g.addWidget(self.bright_box, 3, 0, 1, 4)
         self.vol_box, self.vol = self.slider("Sound", "\uf028", self.be.set_volume, mute=self.be.toggle_mute)
         g.addWidget(self.vol_box, 4, 0, 1, 4)
-        # shortcuts
-        for i, (glyph, tip, fn) in enumerate((("\uf023", "Lock", lambda: (S.power("lock"), self.close())),
-                                             ("\uf013", "Auxo Settings", lambda: (S.spawn(["auxo-settings"]), self.close())),
-                                             ("\uf390", "Displays", lambda: (S.spawn(["auxo-settings", "displays"]),
-                                                                       self.close())),
-                                             ("\uf011", "Power off", lambda: (S.power("shutdown"), self.close())))):
-            g.addWidget(self.round_button(None, glyph, tip, fn, checkable=False), 5, i, Qt.AlignmentFlag.AlignCenter)
+        # shortcuts: Night Shift, clipboard history, lock, settings, power
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        row.addWidget(self.round_button("night", "\uf0eb", "Night Shift (warmer colours)",
+                                        self._toggle("night", self.be.night, self.be.set_night), 46))
+        for glyph, tip, fn in (("\uf328", "Clipboard history", lambda: (self.close(), S.spawn(["auxo-clipboard"]))),
+                               ("\uf023", "Lock", lambda: (S.power("lock"), self.close())),
+                               ("\uf013", "Auxo Settings", lambda: (S.spawn(["auxo-settings"]), self.close())),
+                               ("\uf011", "Power off", lambda: (S.power("shutdown"), self.close()))):
+            row.addWidget(self.round_button(None, glyph, tip, fn, 46, checkable=False))
+        g.addLayout(row, 5, 0, 1, 4)
         for c in range(4):
             g.setColumnMinimumWidth(c, 64)
 
@@ -345,12 +361,19 @@ class Control(GlassPanel):
                  ("bt", "\uf293", "Bluetooth", self.be.bluetooth, self.be.set_bluetooth),
                  ("air", "\uf072", "Airplane mode", self.be.airplane, self.be.set_airplane),
                  ("focus", "\uf186", "Focus", self.be.focus, self.be.set_focus),
+                 ("night", "\uf0eb", "Night light", self.be.night, self.be.set_night),
                  ("dark", "\uf042", "Dark mode", self.be.dark, self.be.set_dark),
-                 (None, "\uf030", "Screenshot", None, None))
+                 (None, "\uf030", "Screenshot", None, None),
+                 (None, "\uf328", "Clipboard", None, None),
+                 (None, "\uf118", "Emoji", None, None))
         for i, (key, glyph, label, getter, setter) in enumerate(tiles):
             cell = QVBoxLayout()
             cell.setSpacing(6)
-            b = self.round_button(key, glyph, label, self._toggle(key, getter, setter) if key else self.screenshot,
+            action = {"Screenshot": self.screenshot,
+                      "Clipboard": lambda: (self.close(), S.spawn(["auxo-clipboard"])),
+                      "Emoji": lambda: (self.close(), S.spawn(["rofimoji", "--selector", "wofi", "--action", "copy",
+                                                               "--skin-tone", "neutral"]))}.get(label)
+            b = self.round_button(key, glyph, label, self._toggle(key, getter, setter) if key else action,
                                   size=0, checkable=bool(key))
             b.setFixedSize(102, 46)
             cell.addWidget(b)
@@ -389,7 +412,7 @@ class Control(GlassPanel):
     def refresh(self):
         wifi, ssid = self.be.wifi()
         states = {"wifi": wifi, "bt": self.be.bluetooth(), "air": self.be.airplane(), "focus": self.be.focus(),
-                  "dark": self.be.dark()}
+                  "dark": self.be.dark(), "night": self.be.night()}
         for key, st in states.items():
             b = self.toggles.get(key)
             if not b:

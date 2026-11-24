@@ -22,6 +22,7 @@ input type:touchpad { tap enabled; natural_scroll enabled }
 exec pipewire                       # sound (sway doesn't run XDG autostart)
 exec waybar
 exec mako
+exec wl-paste --watch cliphist store   # clipboard history (Super+Shift+V)
 exec nm-applet --indicator
 exec blueman-applet
 exec auxo-polkit-agent
@@ -38,6 +39,8 @@ bindsym $mod+f fullscreen
 bindsym $mod+v floating toggle
 bindsym $mod+l exec swaylock -f -c 0b0b10
 bindsym $mod+t exec $term -e auxo-tweak
+bindsym $mod+Shift+v exec auxo-clipboard
+bindsym $mod+period exec rofimoji --selector wofi --action copy --skin-tone neutral
 bindsym $mod+Shift+c reload
 bindsym $mod+Shift+e exec swaynag -t warning -m 'Leave Sway?' -B 'Yes' 'swaymsg exit'
 bindsym Print exec grim -g "$(slurp)" - | swappy -f -
