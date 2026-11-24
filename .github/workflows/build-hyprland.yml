@@ -1,0 +1,61 @@
+name: Build Hyprland packages
+
+# Void doesn't package Hyprland, so Auxo builds it (packages/hyprland). The packages are
+# published as one archive on the "hyprland-packages" release; the ISO build puts them on
+# the ISO, and auxo-tweak downloads them on systems installed from older ISOs.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["packages/hyprland/**", ".github/workflows/build-hyprland.yml"]
+  schedule:
+    - cron: "41 3 1 * *"   # monthly: rebuild against whatever Void has moved to
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+      options: --platform linux/amd64 --privileged
+    steps:
+      - name: Prepare the container
+        run: |
+          mkdir -p /etc/xbps.d && cp /usr/share/xbps.d/*-repository-*.conf /etc/xbps.d/
+          sed -i 's|repo-default|repo-ci|g' /etc/xbps.d/*-repository-*.conf
+          xbps-install -Syu xbps && xbps-install -yu && xbps-install -y sudo bash grep curl git github-cli
+
+      - name: Get the source
+        run: |
+          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" /src
+          git -C /src fetch --depth 1 origin "$GITHUB_SHA" && git -C /src checkout -q "$GITHUB_SHA"
+
+      - name: Build Hyprland and its libraries
+        run: OUT=/out sh /src/packages/hyprland/build.sh
+
+      - name: Check that it installs on current Void
+        run: |
+          xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current -n \
+            hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland | tail -25
+
+      - name: Publish (release "hyprland-packages")
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /src
+          git config --global --add safe.directory /src
+          gh release view hyprland-packages >/dev/null 2>&1 || \
+            gh release create hyprland-packages --title "Hyprland packages for Auxo" --prerelease \
+              --notes "Hyprland 0.49 and its libraries, built against current Void Linux by .github/workflows/build-hyprland.yml. Used by the ISO and by auxo-tweak; not a download for people."
+          gh release upload hyprland-packages /out/hyprland-x86_64.tar --clobber
+
+      - name: Keep the build log of a failed package
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyprland-build-logs
+          path: /work/void-packages/masterdir*/builddir/**/*.log
+          if-no-files-found: ignore

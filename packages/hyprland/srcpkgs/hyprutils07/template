@@ -1,0 +1,27 @@
+# Template file for 'hyprutils07'
+pkgname=hyprutils07
+version=0.7.1
+revision=50
+build_style=cmake
+configure_args+=" --no-warn-unused-cli"
+configure_args+=" -DCMAKE_BUILD_TYPE:STRING=Release"
+configure_args+=" -DCMAKE_INSTALL_PREFIX:PATH=/usr"
+hostmakedepends="
+  pkgconf
+"
+makedepends="
+  pixman-devel
+"
+short_desc="Hyprutils 0.7 (libhyprutils.so.6) for Hyprland 0.49"
+conflicts="hyprutils-devel>=0"
+maintainer="Auxo Linux <rxvy-dev@users.noreply.github.com>"
+license="BSD-3-Clause"
+homepage="https://github.com/hyprwm/hyprutils"
+distfiles="https://github.com/hyprwm/hyprutils/archive/refs/tags/v${version}.tar.gz"
+wrksrc="hyprutils-${version}"
+checksum=bcbf05252b392b8837eec9ba9855ff6ddab571f9795917c7139215ae4b2cf1bc
+
+post_install() {
+  vlicense LICENSE
+}
+
