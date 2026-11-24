@@ -58,6 +58,7 @@ bindsym $mod+a exec auxo-launcher --style mac
 bindsym $mod+c exec auxo-control --style mac
 bindsym $mod+comma exec auxo-settings
 bindsym $mod+g exec auxo-gamemode
+bindsym Ctrl+Shift+Escape exec auxo-monitor
 bindsym Mod1+F4 kill
 bindsym $mod+j layout toggle split
 bindsym $mod+Tab focus next

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=System Monitor
+GenericName=Task Manager
+Comment=CPU, GPU, memory, disks, network, temperatures, and end apps that hang
+Exec=auxo-monitor
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=task manager;processes;cpu;gpu;ram;memory;temperature;kill;end task;

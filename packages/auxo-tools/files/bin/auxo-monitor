@@ -1,0 +1,473 @@
+#!/usr/bin/env python3
+"""auxo-monitor — Auxo's system monitor: CPU, GPU, memory, disks, network and temperatures at a
+glance, and every running app with End task. Ctrl+Shift+Esc on every Auxo rice.
+
+  auxo-monitor               open it
+  auxo-monitor --processes   open on the process list
+"""
+import os
+import signal
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+import auxo_shell as S  # noqa: E402
+from auxo_sysstats import Stats, human  # noqa: E402
+
+from PyQt6.QtCore import QPointF, QRectF, Qt, QTimer  # noqa: E402
+from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen  # noqa: E402
+from PyQt6.QtWidgets import (QAbstractItemView, QApplication, QButtonGroup, QFrame, QGridLayout,  # noqa: E402
+                             QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton,
+                             QStackedWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+
+HISTORY = 60          # points per graph (one a second → the last minute)
+
+
+class Graph(QWidget):
+    """A smooth line graph with a soft fill, newest value on the right."""
+
+    def __init__(self, colour, maximum=100.0, height=70, second=None):
+        super().__init__()
+        self.colour, self.second, self.maximum = QColor(colour), QColor(second) if second else None, maximum
+        self.values, self.values2 = [0.0] * HISTORY, [0.0] * HISTORY
+        self.setMinimumHeight(height)
+
+    def push(self, v, v2=None):
+        self.values = self.values[1:] + [v]
+        if v2 is not None:
+            self.values2 = self.values2[1:] + [v2]
+        self.update()
+
+    def _path(self, values, w, h, top):
+        p = QPainterPath()
+        step = w / (len(values) - 1)
+        pts = [QPointF(i * step, h - h * min(1.0, v / top)) for i, v in enumerate(values)]
+        p.moveTo(pts[0])
+        for a, b in zip(pts, pts[1:]):
+            mid = (a.x() + b.x()) / 2
+            p.cubicTo(QPointF(mid, a.y()), QPointF(mid, b.y()), b)
+        return p
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height() - 2
+        top = self.maximum or max(1.0, max(self.values + self.values2) * 1.15)
+        grid = QColor(self.colour)
+        grid.setAlpha(28)
+        p.setPen(QPen(grid, 1, Qt.PenStyle.DashLine))
+        for frac in (0.25, 0.5, 0.75):
+            p.drawLine(QPointF(0, h * frac), QPointF(w, h * frac))
+        for values, colour in ((self.values2, self.second), (self.values, self.colour)):
+            if colour is None:
+                continue
+            line = self._path(values, w, h, top)
+            fill = QPainterPath(line)
+            fill.lineTo(w, h)
+            fill.lineTo(0, h)
+            fill.closeSubpath()
+            g = QLinearGradient(0, 0, 0, h)
+            c1, c2 = QColor(colour), QColor(colour)
+            c1.setAlpha(90)
+            c2.setAlpha(0)
+            g.setColorAt(0, c1)
+            g.setColorAt(1, c2)
+            p.fillPath(fill, g)
+            p.setPen(QPen(colour, 2))
+            p.drawPath(line)
+        p.end()
+
+
+class Bar(QWidget):
+    def __init__(self, colour, track):
+        super().__init__()
+        self.colour, self.track, self.frac = QColor(colour), QColor(track), 0.0
+        self.setFixedHeight(8)
+
+    def set(self, frac):
+        self.frac = max(0.0, min(1.0, frac))
+        self.update()
+
+    def paintEvent(self, _e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        r = QRectF(0, 0, self.width(), self.height())
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(self.track)
+        p.drawRoundedRect(r, 4, 4)
+        if self.frac > 0:
+            c = self.colour if self.frac < 0.9 else QColor("#f87171")
+            p.setBrush(c)
+            p.drawRoundedRect(QRectF(0, 0, max(8.0, r.width() * self.frac), r.height()), 4, 4)
+        p.end()
+
+
+class Card(QFrame):
+    def __init__(self, title):
+        super().__init__()
+        self.setObjectName("card")
+        self.lay = QVBoxLayout(self)
+        self.lay.setContentsMargins(18, 14, 18, 16)
+        self.lay.setSpacing(6)
+        head = QHBoxLayout()
+        t = QLabel(title)
+        t.setObjectName("cardtitle")
+        head.addWidget(t)
+        head.addStretch(1)
+        self.big = QLabel("—")
+        self.big.setObjectName("big")
+        head.addWidget(self.big)
+        self.lay.addLayout(head)
+        self.sub = QLabel("")
+        self.sub.setObjectName("muted")
+        self.lay.addWidget(self.sub)
+
+
+class Monitor(QWidget):
+    def __init__(self, stats=None, page=0):
+        super().__init__()
+        self.stats = stats or Stats()
+        mode, pal, font = S.look()
+        self.light = mode == "light"
+        self.pal = pal
+        bg = "#f5f5f8" if self.light else pal.get("bg", "#0b0b10")
+        card = "#ffffff" if self.light else pal.get("bg2", "#15151e")
+        fg = "#1d1d26" if self.light else pal.get("fg", "#e8e8f0")
+        muted = "#6b6b7b" if self.light else pal.get("muted", "#8b8ba0")
+        line = "#e3e3ea" if self.light else pal.get("inactive", "#2a2a38")
+        acc, acc2 = pal.get("accent", "#a78bfa"), pal.get("accent2", "#22d3ee")
+
+        def rgba(hex_colour, a):          # Qt reads #RRGGBBAA as #AARRGGBB: say it explicitly
+            c = QColor(hex_colour)
+            return f"rgba({c.red()},{c.green()},{c.blue()},{a})"
+        self.colours = {"acc": acc, "acc2": acc2, "track": line, "green": "#34d399", "amber": "#fbbf24"}
+        self.setWindowTitle("System Monitor")
+        self.resize(1020, 680)
+        self.setStyleSheet(f"""
+            QWidget {{ background: {bg}; color: {fg}; font-family: "{font}"; font-size: 13px; }}
+            QFrame#side {{ background: {card}; border-right: 1px solid {line}; }}
+            QFrame#card {{ background: {card}; border: 1px solid {line}; border-radius: 14px; }}
+            QFrame#card QLabel, QFrame#card QWidget, QFrame#side QLabel {{ background: transparent; }}
+            QLabel#cardtitle {{ font-weight: 700; font-size: 14px; }}
+            QLabel#big {{ font-size: 22px; font-weight: 800; color: {acc}; }}
+            QLabel#muted {{ color: {muted}; font-size: 12px; }}
+            QLabel#h1 {{ font-size: 20px; font-weight: 800; background: transparent; }}
+            QPushButton#nav {{ background: transparent; border: none; border-radius: 10px; padding: 10px 14px;
+                               text-align: left; font-size: 14px; }}
+            QPushButton#nav:hover {{ background: {line}; }}
+            QPushButton#nav:checked {{ background: {rgba(acc, 0.14)}; color: {acc}; font-weight: 700; }}
+            QPushButton {{ background: {card}; border: 1px solid {line}; border-radius: 9px; padding: 8px 16px; }}
+            QPushButton:hover {{ border-color: {acc}; }}
+            QPushButton#danger {{ background: #ef4444; color: white; border: none; font-weight: 700; }}
+            QPushButton:disabled {{ color: {muted}; background: {card}; }}
+            QLineEdit {{ background: {card}; border: 1px solid {line}; border-radius: 9px; padding: 8px 12px; }}
+            QLineEdit:focus {{ border-color: {acc}; }}
+            QTableWidget {{ background: {card}; border: 1px solid {line}; border-radius: 12px; gridline-color: transparent;
+                            selection-background-color: {rgba(acc, 0.22)}; selection-color: {fg}; }}
+            QTableWidget::item {{ padding: 4px 8px; border: none; }}
+            QHeaderView::section {{ background: {card}; color: {muted}; border: none; border-bottom: 1px solid {line};
+                                    padding: 8px; font-weight: 600; }}
+            QScrollBar:vertical {{ background: transparent; width: 10px; }}
+            QScrollBar::handle:vertical {{ background: {line}; border-radius: 4px; min-height: 30px; }}
+            QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; }}
+        """)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        side = QFrame()
+        side.setObjectName("side")
+        side.setFixedWidth(200)
+        sl = QVBoxLayout(side)
+        sl.setContentsMargins(14, 22, 14, 18)
+        title = QLabel("System Monitor")
+        title.setObjectName("h1")
+        sl.addWidget(title)
+        sl.addSpacing(14)
+        self.nav = QButtonGroup(self)
+        self.stack = QStackedWidget()
+        for i, name in enumerate(("Overview", "Processes")):
+            b = QPushButton(name)
+            b.setObjectName("nav")
+            b.setCheckable(True)
+            b.clicked.connect(lambda _c, i=i: self.stack.setCurrentIndex(i))
+            self.nav.addButton(b, i)
+            sl.addWidget(b)
+        sl.addStretch(1)
+        self.uptime = QLabel("")
+        self.uptime.setObjectName("muted")
+        self.uptime.setWordWrap(True)
+        sl.addWidget(self.uptime)
+        root.addWidget(side)
+        root.addWidget(self.stack, 1)
+        self.stack.addWidget(self._overview())
+        self.stack.addWidget(self._processes())
+        self.nav.button(page).setChecked(True)
+        self.stack.setCurrentIndex(page)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.tick)
+        self.timer.start(1000)
+        self.ticks = 0
+        self.stats.cpu()
+        self.stats.network()
+        self.tick()
+
+    # ── overview ──
+    def _overview(self):
+        w = QWidget()
+        g = QGridLayout(w)
+        g.setContentsMargins(22, 22, 22, 22)
+        g.setSpacing(14)
+        c = self.colours
+        self.cpu_card = Card("CPU")
+        self.cpu_card.sub.setText(self.stats.cpu_name())
+        self.cpu_graph = Graph(c["acc"])
+        self.cpu_card.lay.addWidget(self.cpu_graph, 1)
+        self.cores = QHBoxLayout()
+        self.cores.setSpacing(3)
+        self.core_bars = []
+        self.cpu_card.lay.addLayout(self.cores)
+        g.addWidget(self.cpu_card, 0, 0, 1, 2)
+
+        self.mem_card = Card("Memory")
+        self.mem_graph = Graph(c["acc2"])
+        self.mem_bar = Bar(c["acc2"], c["track"])
+        self.mem_card.lay.addWidget(self.mem_graph, 1)
+        self.mem_card.lay.addWidget(self.mem_bar)
+        self.swap_label = QLabel("")
+        self.swap_label.setObjectName("muted")
+        self.mem_card.lay.addWidget(self.swap_label)
+        g.addWidget(self.mem_card, 0, 2)
+
+        self.gpu_card = Card("GPU")
+        self.gpu_graph = Graph(c["green"])
+        self.gpu_card.lay.addWidget(self.gpu_graph, 1)
+        self.gpu_none = QLabel("Auxo reads usage from NVIDIA (nvidia-smi) and AMD GPUs. Temperatures are on the right.")
+        self.gpu_none.setObjectName("muted")
+        self.gpu_none.setWordWrap(True)
+        self.gpu_card.lay.addWidget(self.gpu_none, 1, Qt.AlignmentFlag.AlignTop)
+        g.addWidget(self.gpu_card, 1, 0)
+
+        self.net_card = Card("Network")
+        self.net_graph = Graph(c["acc"], maximum=0, second=c["acc2"])
+        self.net_card.lay.addWidget(self.net_graph, 1)
+        g.addWidget(self.net_card, 1, 1)
+
+        self.temp_card = Card("Temperatures")
+        self.temp_box = QVBoxLayout()
+        self.temp_card.lay.addLayout(self.temp_box)
+        self.temp_card.lay.addStretch(1)
+        self.temp_labels = {}
+        g.addWidget(self.temp_card, 1, 2)
+
+        self.disk_card = Card("Disks")
+        self.disk_card.big.hide()
+        self.disk_box = QGridLayout()
+        self.disk_box.setHorizontalSpacing(14)
+        self.disk_card.lay.addLayout(self.disk_box)
+        self.disk_rows = {}
+        g.addWidget(self.disk_card, 2, 0, 1, 3)
+        for col in range(3):
+            g.setColumnStretch(col, 1)
+        return w
+
+    # ── processes ──
+    def _processes(self):
+        w = QWidget()
+        v = QVBoxLayout(w)
+        v.setContentsMargins(22, 22, 22, 22)
+        v.setSpacing(12)
+        top = QHBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search apps and processes")
+        self.search.textChanged.connect(lambda _t: self.fill_processes(self.last_procs))
+        top.addWidget(self.search, 1)
+        self.end_btn = QPushButton("End task")
+        self.end_btn.setObjectName("danger")
+        self.end_btn.clicked.connect(lambda: self.end_task(signal.SIGTERM))
+        self.kill_btn = QPushButton("Force quit")
+        self.kill_btn.clicked.connect(lambda: self.end_task(signal.SIGKILL))
+        top.addWidget(self.end_btn)
+        top.addWidget(self.kill_btn)
+        v.addLayout(top)
+        self.table = QTableWidget(0, 5)
+        self.table.setHorizontalHeaderLabels(["Name", "CPU", "Memory", "User", "PID"])
+        self.table.verticalHeader().hide()
+        self.table.setShowGrid(False)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        hh = self.table.horizontalHeader()
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        for i in range(1, 5):
+            hh.setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.setSortingEnabled(True)
+        self.table.sortByColumn(1, Qt.SortOrder.DescendingOrder)
+        self.table.itemSelectionChanged.connect(self.selection_changed)
+        v.addWidget(self.table, 1)
+        self.proc_note = QLabel("")
+        self.proc_note.setObjectName("muted")
+        v.addWidget(self.proc_note)
+        self.last_procs = []
+        self.selected_pid = None
+        return w
+
+    # ── updates ──
+    def tick(self):
+        st = self.stats
+        total, cores = st.cpu()
+        self.cpu_card.big.setText(f"{total:.0f}%")
+        self.cpu_graph.push(total)
+        while len(self.core_bars) < len(cores):
+            b = Bar(self.colours["acc"], self.colours["track"])
+            b.setFixedHeight(26)
+            self.core_bars.append(b)
+            self.cores.addWidget(b)
+        for b, v in zip(self.core_bars, cores):
+            b.set(v / 100)
+        used, tot, su, stot = st.memory()
+        self.mem_card.big.setText(f"{100 * used / tot:.0f}%" if tot else "—")
+        self.mem_card.sub.setText(f"{human(used)} of {human(tot)} in use")
+        self.mem_graph.push(100 * used / tot if tot else 0)
+        self.mem_bar.set(used / tot if tot else 0)
+        self.swap_label.setText(f"Swap {human(su)} of {human(stot)}" if stot else "No swap")
+        gpu = st.gpu() if self.ticks % 2 == 0 else getattr(self, "_gpu", None)
+        self._gpu = gpu
+        if gpu:
+            name, busy, temp = gpu
+            self.gpu_card.big.setText(f"{busy:.0f}%")
+            self.gpu_card.sub.setText(name + (f" · {temp:.0f} °C" if temp else ""))
+            self.gpu_graph.push(busy)
+            self.gpu_graph.show()
+            self.gpu_none.hide()
+        else:
+            self.gpu_card.sub.setText("No usage readings for this GPU")
+            self.gpu_graph.hide()
+            self.gpu_none.show()
+        down, up = st.network()
+        self.net_card.big.setText(human(down, rate=True))
+        self.net_card.sub.setText(f"↓ {human(down, rate=True)}   ↑ {human(up, rate=True)}")
+        self.net_graph.push(down, up)
+        temps = st.temps()
+        for k, v in temps.items():
+            if k not in self.temp_labels:
+                row = QHBoxLayout()
+                name = QLabel(k)
+                val = QLabel("")
+                val.setAlignment(Qt.AlignmentFlag.AlignRight)
+                row.addWidget(name)
+                row.addWidget(val, 1)
+                self.temp_box.addLayout(row)
+                self.temp_labels[k] = val
+            colour = "#f87171" if v >= 85 else ("#fbbf24" if v >= 70 else self.colours["green"])
+            self.temp_labels[k].setText(f"<b style='color:{colour}'>{v:.0f} °C</b>")
+        hottest = max(temps.values()) if temps else None
+        self.temp_card.big.setText(f"{hottest:.0f}°" if hottest else "—")
+        if not temps:
+            self.temp_card.sub.setText("No sensors found")
+        if self.ticks % 5 == 0:
+            for i, (mnt, u, t) in enumerate(st.disks()):
+                if mnt not in self.disk_rows:
+                    name, bar, info = QLabel(mnt), Bar(self.colours["acc"], self.colours["track"]), QLabel("")
+                    info.setObjectName("muted")
+                    r = len(self.disk_rows)
+                    self.disk_box.addWidget(name, r, 0)
+                    self.disk_box.addWidget(bar, r, 1)
+                    self.disk_box.addWidget(info, r, 2)
+                    self.disk_box.setColumnStretch(1, 1)
+                    self.disk_rows[mnt] = (bar, info)
+                bar, info = self.disk_rows[mnt]
+                bar.set(u / t if t else 0)
+                info.setText(f"{human(u)} of {human(t)}  ·  {human(t - u)} free")
+        if self.ticks % 2 == 0:
+            self.last_procs = st.processes()
+            if self.stack.currentIndex() == 1:
+                self.fill_processes(self.last_procs)
+        try:
+            up_s = float(open(f"{st.proc}/uptime").read().split()[0])
+            self.uptime.setText(f"Up {int(up_s // 3600)} h {int(up_s % 3600 // 60)} min")
+        except (OSError, ValueError, IndexError):
+            pass
+        self.ticks += 1
+
+    def fill_processes(self, procs):
+        q = self.search.text().lower().strip()
+        # kernel threads (no command line, no memory) can't be ended: only shown when searched for
+        rows = [p for p in procs if (q and (q in p["name"].lower() or q in p["cmd"].lower()))
+                or (not q and not p["cmd"].startswith("["))]
+        self.table.setSortingEnabled(False)
+        self.table.setRowCount(len(rows))
+        reselect = None
+        for r, p in enumerate(rows):
+            items = [QTableWidgetItem(p["name"]), Num(f"{p['cpu']:.1f}%", p["cpu"]), Num(human(p["mem"]), p["mem"]),
+                     QTableWidgetItem(p["user"]), Num(str(p["pid"]), p["pid"])]
+            items[0].setToolTip(p["cmd"])
+            items[0].setData(Qt.ItemDataRole.UserRole, p["pid"])
+            items[0].setData(Qt.ItemDataRole.UserRole + 1, p["uid"])
+            for c, it in enumerate(items):
+                self.table.setItem(r, c, it)
+            if p["pid"] == self.selected_pid:
+                reselect = r
+        self.table.setSortingEnabled(True)
+        if reselect is not None:
+            for r in range(self.table.rowCount()):
+                if self.table.item(r, 0).data(Qt.ItemDataRole.UserRole) == self.selected_pid:
+                    self.table.selectRow(r)
+        mine = sum(1 for p in procs if p["uid"] == os.getuid())
+        self.proc_note.setText(f"{len(procs)} processes · {mine} yours. You can end your own apps; "
+                               "system processes need an admin.")
+        self.selection_changed()
+
+    def selected(self):
+        rows = self.table.selectionModel().selectedRows() if self.table.selectionModel() else []
+        if not rows:
+            return None
+        it = self.table.item(rows[0].row(), 0)
+        return it.data(Qt.ItemDataRole.UserRole), it.data(Qt.ItemDataRole.UserRole + 1), it.text()
+
+    def selection_changed(self):
+        sel = self.selected()
+        if sel:
+            self.selected_pid = sel[0]
+        ok = bool(sel) and (sel[1] == os.getuid() or os.geteuid() == 0)
+        self.end_btn.setEnabled(ok)
+        self.kill_btn.setEnabled(ok)
+
+    def end_task(self, sig):
+        sel = self.selected()
+        if not sel:
+            return
+        pid, _uid, name = sel
+        try:
+            os.kill(pid, sig)
+            self.proc_note.setText(f"{'Ended' if sig == signal.SIGTERM else 'Force quit'} {name} ({pid})")
+        except ProcessLookupError:
+            self.proc_note.setText(f"{name} had already closed")
+        except PermissionError:
+            QMessageBox.warning(self, "System Monitor", f"{name} belongs to another user or the system.")
+
+
+class Num(QTableWidgetItem):
+    """A table cell that sorts by number, not text."""
+
+    def __init__(self, text, value):
+        super().__init__(text)
+        self.value = value
+        self.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+
+    def __lt__(self, other):
+        return self.value < getattr(other, "value", 0)
+
+
+def main():
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print(__doc__.strip())
+        return 0
+    app = QApplication(sys.argv[:1])
+    app.setApplicationName("System Monitor")
+    app.setDesktopFileName("auxo-monitor")
+    w = Monitor(page=1 if "--processes" in sys.argv else 0)
+    w.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
