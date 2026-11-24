@@ -48,7 +48,9 @@ jobs:
       - name: Check Auxo's three Hyprland styles with Hyprland itself
         run: |
           xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current hyprland python3 >/dev/null
-          Hyprland --version | head -1
+          id hyprcheck >/dev/null 2>&1 || useradd -m hyprcheck   # Hyprland won't run as root
+          export XDG_RUNTIME_DIR=$(mktemp -d); chown hyprcheck "$XDG_RUNTIME_DIR"
+          sudo -u hyprcheck env XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR Hyprland --version | head -1
           fail=0
           for style in hyprland hyprland-mac hyprland-win; do
             FR=$(mktemp -d); mkdir -p "$FR/etc/auxo" "$FR/home/t" "$FR/usr/share/auxo"
@@ -56,7 +58,8 @@ jobs:
             ln -s /src/packages/auxo-tools/files/share/auxo/rices "$FR/usr/share/auxo/rices"
             AUXO_ROOT=$FR AUXO_DRY_RUN=1 AUXO_LIB=/src/packages/auxo-tools/files/lib \
               python3 /src/packages/auxo-tools/files/bin/auxo-tweak rice "$style" --user t >/dev/null
-            out=$(HOME=$FR/home/t XDG_RUNTIME_DIR=$(mktemp -d) Hyprland --verify-config -c "$FR/home/t/.config/hypr/hyprland.conf" 2>&1)
+            chmod -R a+rX "$FR"
+            out=$(sudo -u hyprcheck env HOME=$FR/home/t XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR Hyprland --verify-config -c "$FR/home/t/.config/hypr/hyprland.conf" 2>&1 || true)
             echo "── $style"; echo "$out" | tail -15
             echo "$out" | grep -qi "config ok" || { echo "::error::Hyprland rejects the $style config"; fail=1; }
           done
