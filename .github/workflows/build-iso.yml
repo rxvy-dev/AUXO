@@ -68,10 +68,11 @@ jobs:
           fi
 
       - name: Enable KVM for the VM test
+        timeout-minutes: 8      # apt on the runner once hung for 20+ minutes here
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
-          sudo apt-get update -q && sudo apt-get install -yq qemu-system-x86 xorriso socat imagemagick
+          for try in 1 2 3; do timeout 150 sudo apt-get update -q && timeout 240 sudo apt-get install -yq qemu-system-x86 xorriso socat imagemagick && break; echo "apt attempt $try failed, retrying"; sleep 5; done
 
       - name: Boot the ISO in QEMU (smoke test)
         run: ./scripts/smoke-test.sh out/auxo-linux-*.iso 600
