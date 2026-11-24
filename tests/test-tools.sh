@@ -464,6 +464,13 @@ check "auxo-clipboard parses"                  "sh -n $PKG/bin/auxo-clipboard"
 out=$(env -u WAYLAND_DISPLAY -u DISPLAY AUXO_HOME="$A" "$PKG/bin/auxo-keys" --wm hyprland --print 2>&1)
 check "auxo-keys names them"                   "echo \"\$out\" | grep -q 'Clipboard history' && echo \"\$out\" | grep -q 'Emoji picker' && echo \"\$out\" | grep -q 'Start menu'"
 # `pkill -f X || X` kills the shell running it (its command line contains X): the menu never opened
+GM=$(mktemp -d); mkdir -p "$GM/bin"
+for c in hyprctl makoctl powerprofilesctl notify-send; do printf '#!/bin/sh\necho "%s $*" >> %s/calls\n[ "%s $1" = "powerprofilesctl get" ] && echo balanced\nexit 0\n' "$c" "$GM" "$c" > "$GM/bin/$c"; chmod +x "$GM/bin/$c"; done
+gm() { env PATH="$GM/bin:$PATH" XDG_RUNTIME_DIR="$GM" HYPRLAND_INSTANCE_SIGNATURE=x sh $PKG/bin/auxo-gamemode "$@"; }
+gm on; check "Gaming mode on: effects off, DND, performance" "[ \"\$(gm status)\" = on ] && grep -q 'animations:enabled 0' $GM/calls && grep -q 'makoctl mode -a do-not-disturb' $GM/calls && grep -q 'powerprofilesctl set performance' $GM/calls"
+: > "$GM/calls"; gm
+check "Gaming mode toggles off and restores"   "[ \"\$(gm status)\" = off ] && grep -q 'hyprctl reload' $GM/calls && grep -q 'makoctl mode -r do-not-disturb' $GM/calls && grep -q 'powerprofilesctl set balanced' $GM/calls"
+rm -rf "$GM"
 check "same keys on every rice (3 Hyprland styles, Sway, i3)" "python3 $HERE/tests/keymap-parity.py >/dev/null"
 check "no self-killing 'pkill -f X || X' launchers"  "! grep -rnE 'pkill -f [^|]*\\|\\|' $PKG/share/auxo/rices $PKG/bin"
 check "press-again closes only the app, not its shell" "python3 -c \"

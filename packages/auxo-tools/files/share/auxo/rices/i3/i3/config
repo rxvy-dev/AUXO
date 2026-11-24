@@ -47,6 +47,7 @@ bindsym $mod+space exec --no-startup-id rofi -show drun
 bindsym $mod+a exec --no-startup-id auxo-launcher --style mac
 bindsym $mod+c exec --no-startup-id auxo-control --style mac
 bindsym $mod+comma exec --no-startup-id auxo-settings
+bindsym $mod+g exec --no-startup-id auxo-gamemode
 bindsym $mod+Shift+v exec --no-startup-id clipmenu
 bindsym Mod1+F4 kill
 bindsym $mod+j layout toggle split

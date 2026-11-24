@@ -95,6 +95,14 @@ class Backend:
     def set_focus(self, on):
         self.do("makoctl", "mode", "-a" if on else "-r", "do-not-disturb")
 
+    # Gaming mode (auxo-gamemode): effects + notifications off, performance profile
+    def gaming(self):
+        st = self.out("auxo-gamemode", "status")
+        return None if st is None else st.strip() == "on"
+
+    def set_gaming(self, on):
+        self.do("auxo-gamemode", "on" if on else "off")
+
     # Night light: warmer colours (gammastep keeps the screen warm while it runs)
     def night(self):
         if not shutil.which("gammastep"):
@@ -340,8 +348,9 @@ class Control(GlassPanel):
         row.setSpacing(6)
         row.addWidget(self.round_button("night", "\uf0eb", "Night Shift (warmer colours)",
                                         self._toggle("night", self.be.night, self.be.set_night), 46))
-        for glyph, tip, fn in (("\uf328", "Clipboard history", lambda: (self.close(), S.spawn(["auxo-clipboard"]))),
-                               ("\uf023", "Lock", lambda: (S.power("lock"), self.close())),
+        row.addWidget(self.round_button("gaming", "\uf11b", "Gaming mode (Super+G)",
+                                        self._toggle("gaming", self.be.gaming, self.be.set_gaming), 46))
+        for glyph, tip, fn in (("\uf023", "Lock", lambda: (S.power("lock"), self.close())),
                                ("\uf013", "Auxo Settings", lambda: (S.spawn(["auxo-settings"]), self.close())),
                                ("\uf011", "Power off", lambda: (S.power("shutdown"), self.close()))):
             row.addWidget(self.round_button(None, glyph, tip, fn, 46, checkable=False))
@@ -365,7 +374,7 @@ class Control(GlassPanel):
                  ("dark", "\uf042", "Dark mode", self.be.dark, self.be.set_dark),
                  (None, "\uf030", "Screenshot", None, None),
                  (None, "\uf328", "Clipboard", None, None),
-                 (None, "\uf118", "Emoji", None, None))
+                 ("gaming", "\uf11b", "Game mode", self.be.gaming, self.be.set_gaming))
         for i, (key, glyph, label, getter, setter) in enumerate(tiles):
             cell = QVBoxLayout()
             cell.setSpacing(6)
@@ -412,7 +421,8 @@ class Control(GlassPanel):
     def refresh(self):
         wifi, ssid = self.be.wifi()
         states = {"wifi": wifi, "bt": self.be.bluetooth(), "air": self.be.airplane(), "focus": self.be.focus(),
-                  "dark": self.be.dark(), "night": self.be.night()}
+                  "dark": self.be.dark(), "night": self.be.night(),
+                  "gaming": self.be.gaming()}
         for key, st in states.items():
             b = self.toggles.get(key)
             if not b:

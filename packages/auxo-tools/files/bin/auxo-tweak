@@ -378,6 +378,8 @@ def cmd_desktop(args):
             auxo_chrono.build(getattr(args, "chrono_ref", None) or auxo_chrono.REF)
         for sv in GUI_SERVICES:
             sv_enable(sv)
+        if installed("power-profiles-daemon"):   # power profiles (Gaming mode, auxo-tweak power)
+            sv_enable("power-profiles-daemon")
         audio_setup()                            # PipeWire starts at login, with WirePlumber + Pulse + ALSA
         for sv in ("dhcpcd", "wpa_supplicant"):  # NetworkManager manages the network now
             if sv_enabled(sv):

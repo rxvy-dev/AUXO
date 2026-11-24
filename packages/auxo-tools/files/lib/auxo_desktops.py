@@ -21,7 +21,7 @@ PLASMA_CORE = ["plasma-desktop", "plasma-workspace-x11", "plasma-nm", "plasma-pa
 
 COMMON_WM = [
     "Thunar", "thunar-archive-plugin", "gvfs", "pavucontrol", "network-manager-applet",
-    "blueman", "brightnessctl", "playerctl", "font-awesome6", "papirus-icon-theme",
+    "blueman", "brightnessctl", "playerctl", "power-profiles-daemon", "font-awesome6", "papirus-icon-theme",
     "breeze-gtk", "breeze-icons", "greetd", "tuigreet", "polkit-gnome",
 ]
 WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy", "cliphist", "rofimoji",

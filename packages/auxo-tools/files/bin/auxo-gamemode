@@ -1,0 +1,62 @@
+#!/bin/sh
+# auxo-gamemode — Gaming mode: everything that gets in the way of a game, off in one go.
+#   auxo-gamemode            toggle (Super+G, or the Game mode button in the Control Center)
+#   auxo-gamemode on|off     switch it
+#   auxo-gamemode status     prints on or off
+# On: no blur, shadows, animations, gaps or rounding (Hyprland; Sway: no gaps), notifications
+# held back (mako / dunst), the performance power profile. Off puts everything back.
+# Runs as you; no password. Games themselves can still use `gamemoderun %command%` in Steam.
+STATE="${XDG_RUNTIME_DIR:-/tmp}/auxo-gamemode"
+PREV="$STATE.power"
+
+is_on() { [ -f "$STATE" ]; }
+have() { command -v "$1" >/dev/null 2>&1; }
+note() { have notify-send && notify-send -a "Auxo" -i input-gaming "Gaming mode" "$1" 2>/dev/null; }
+
+on() {
+  if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && have hyprctl; then
+    hyprctl --batch "keyword animations:enabled 0; keyword decoration:blur:enabled 0; \
+keyword decoration:shadow:enabled 0; keyword general:gaps_in 0; keyword general:gaps_out 0; \
+keyword decoration:rounding 0; keyword misc:vfr 1" >/dev/null
+  elif [ -n "$SWAYSOCK" ] && have swaymsg; then
+    swaymsg "gaps inner all set 0; gaps outer all set 0" >/dev/null
+  fi
+  have makoctl && makoctl mode -a do-not-disturb >/dev/null 2>&1
+  have dunstctl && dunstctl set-paused true >/dev/null 2>&1
+  if have powerprofilesctl; then
+    powerprofilesctl get > "$PREV" 2>/dev/null
+    powerprofilesctl set performance 2>/dev/null
+  fi
+  : > "$STATE"
+  note "On: effects and notifications off, performance power profile"
+}
+
+off() {
+  rm -f "$STATE"
+  if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ] && have hyprctl; then
+    hyprctl reload >/dev/null                     # back to your config, as it was
+  elif [ -n "$SWAYSOCK" ] && have swaymsg; then
+    # a reload keeps per-workspace gap overrides: put your configured gaps back explicitly
+    swaymsg reload >/dev/null
+    cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+    gi=$(cat "$cfg/sway/config" "$cfg"/auxo/*sway* 2>/dev/null | sed -n 's/^gaps inner \([0-9]*\).*/\1/p' | tail -1)
+    go=$(cat "$cfg/sway/config" "$cfg"/auxo/*sway* 2>/dev/null | sed -n 's/^gaps outer \([0-9]*\).*/\1/p' | tail -1)
+    swaymsg "gaps inner all set ${gi:-0}; gaps outer all set ${go:-0}" >/dev/null
+  fi
+  have makoctl && makoctl mode -r do-not-disturb >/dev/null 2>&1
+  have dunstctl && dunstctl set-paused false >/dev/null 2>&1
+  if have powerprofilesctl; then
+    powerprofilesctl set "$(cat "$PREV" 2>/dev/null || echo balanced)" 2>/dev/null
+    rm -f "$PREV"
+  fi
+  note "Off: everything is back"
+}
+
+case "${1:-toggle}" in
+  on) on ;;
+  off) off ;;
+  toggle) if is_on; then off; else on; fi ;;
+  status) if is_on; then echo on; else echo off; fi ;;
+  -h|--help) sed -n '2,8s/^# \{0,1\}//p' "$0" ;;
+  *) echo "usage: auxo-gamemode [on|off|toggle|status]" >&2; exit 2 ;;
+esac
