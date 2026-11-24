@@ -45,7 +45,7 @@ DESKTOP_INFO = {
     "gnome": "Clean and simple, with its own login screen. Auxo rice: Papirus icons, Inter, dark mode.",
     "xfce": "Light and traditional. Great on older PCs. Riced by Auxo.",
     "cinnamon": "Familiar layout, like Windows. Riced by Auxo.",
-    "hyprland": "Animated tiling, fully riced by Auxo (from the hyprland-void repo).",
+    "hyprland": "Animated tiling with gaps and a floating bar, fully riced by Auxo.",
     "sway": "Tiling Wayland, riced by Auxo. Keyboard-driven.",
     "i3": "The classic tiling window manager (X11), riced by Auxo.",
     "chrono": "rxvy's own Wayland desktop: 40+ retro and modern themes. Built from source (a few minutes).",
@@ -490,23 +490,24 @@ class TUI:
                 "Format the EFI partition?", [f"{self.cfg.efi_part} isn't FAT32 yet. Format it as FAT32?"])
 
     def page_desktop(self):
-        items = []
+        # the Hyprland styles are desktops of their own in the list: easy to find
+        items, info = [], dict(DESKTOP_INFO)
         for k, d in DESKTOPS.items():
             tag = "needs internet" if k in ONLINE_DESKTOPS else "installs offline"
-            items.append((k, d["name"], tag, True))
+            if k == "hyprland":
+                for style, (sname, sdesc, _rice) in STYLES.items():
+                    key = f"hyprland:{style}"
+                    items.append((key, "Hyprland" if style == "auxo" else f"Hyprland — {sname} style", tag, True))
+                    info[key] = DESKTOP_INFO.get(k, "") if style == "auxo" else sdesc + "."
+            else:
+                items.append((k, d["name"], tag, True))
         intro = None if self.env.online else ["You're offline: desktops that need internet are swapped for Plasma."]
-        while True:
-            self.cfg.desktop = self.menu("Desktop", items, self.cfg.desktop, intro=intro,
-                                         describe=lambda k: DESKTOP_INFO.get(k, ""))
-            if self.cfg.desktop != "hyprland":
-                return
-            try:
-                self.cfg.style = self.menu("Hyprland style", [(k, v[0], v[1], True) for k, v in STYLES.items()],
-                                           self.cfg.style, intro=["How Hyprland looks. Change it any time in "
-                                                                  "Auxo Settings → Desktop → Style."])
-                return
-            except Back:
-                continue
+        current = f"hyprland:{self.cfg.style}" if self.cfg.desktop == "hyprland" else self.cfg.desktop
+        choice = self.menu("Desktop", items, current, intro=intro, describe=lambda k: info.get(k, ""))
+        desk, _, style = choice.partition(":")
+        self.cfg.desktop = desk
+        if style:
+            self.cfg.style = style
 
     def page_look(self):
         items = [(k, k, v[0], True) for k, v in ACCENTS.items()]

@@ -690,64 +690,57 @@ class DesktopPage(Page):
     intro = "All of them come riced by Auxo. You can install another one later in Auxo Settings."
 
     def build(self):
+        # the Hyprland styles are desktops of their own here: easy to find, one click
+        entries = []
+        for k, d in DESKTOPS.items():
+            if k == "hyprland":
+                for style, (sname, sdesc, _rice) in STYLES.items():
+                    name = "Hyprland" if style == "auxo" else f"Hyprland — {sname} style"
+                    info = DESKTOP_INFO.get(k, "") if style == "auxo" else sdesc + "."
+                    entries.append((f"hyprland:{style}", name, info, k, style))
+            else:
+                entries.append((k, d["name"], DESKTOP_INFO.get(k, ""), k, None))
         grid = QGridLayout()
         grid.setSpacing(12)
-        self.cards = {}
-        for i, (k, d) in enumerate(DESKTOPS.items()):
-            card = Card(lambda k=k: self.choose(k))
+        self.cards, self.previews = {}, []
+        for i, (key, name, info, desk, style) in enumerate(entries):
+            card = Card(lambda key=key: self.choose_key(key))
             v = QVBoxLayout(card)
             v.setContentsMargins(16, 14, 16, 14)
             v.setSpacing(6)
             row = QHBoxLayout()
-            row.addWidget(label(f"<b>{d['name']}</b>"))
+            row.addWidget(label(f"<b>{name}</b>"))
             row.addStretch(1)
-            if k in ONLINE_DESKTOPS:
+            if desk in ONLINE_DESKTOPS:
                 row.addWidget(label("needs internet" if self.env.online else "offline: Plasma instead", "chip"))
             else:
                 row.addWidget(label("installs offline", "chipon"))
             v.addLayout(row)
-            v.addWidget(label(DESKTOP_INFO.get(k, ""), "muted", wrap=True))
+            if style:
+                prev = StylePreview(style)
+                self.previews.append(prev)
+                v.addWidget(prev)
+            v.addWidget(label(info, "muted", wrap=True))
             v.addStretch(1)
-            self.cards[k] = card
+            self.cards[key] = card
             grid.addWidget(card, i // 2, i % 2)
         self.lay.addLayout(grid)
-        self.style_box = QWidget()
-        sl = QVBoxLayout(self.style_box)
-        sl.setContentsMargins(0, 10, 0, 0)
-        sl.addWidget(label("Hyprland style", "h3"))
-        row = QHBoxLayout()
-        row.setSpacing(12)
-        self.style_cards, self.previews = {}, []
-        for k, (name, desc, _rice) in STYLES.items():
-            card = Card(lambda k=k: self.choose_style(k))
-            v = QVBoxLayout(card)
-            v.setContentsMargins(12, 12, 12, 12)
-            prev = StylePreview(k)
-            self.previews.append(prev)
-            v.addWidget(prev, 0, Qt.AlignmentFlag.AlignHCenter)
-            v.addWidget(label(f"<b>{name}</b>"))
-            v.addWidget(label(desc, "hint", wrap=True))
-            self.style_cards[k] = card
-            row.addWidget(card)
-        row.addStretch(1)
-        sl.addLayout(row)
-        self.lay.addWidget(self.style_box)
-        self.choose(self.cfg.desktop)
-        self.choose_style(self.cfg.style)
+        self.choose(self.cfg.desktop, self.cfg.style)
 
-    def choose(self, k):
-        self.cfg.desktop = k
-        for key, c in self.cards.items():
-            c.set_checked(key == k)
-        self.style_box.setVisible(k == "hyprland")
-        if k == "hyprland":
-            QTimer.singleShot(0, lambda: self.parentWidget() and self.style_box.parentWidget() and
-                              self.findChild(QScrollArea).ensureWidgetVisible(self.style_box))
+    def choose_key(self, key):
+        desk, _, style = key.partition(":")
+        self.choose(desk, style or None)
 
-    def choose_style(self, k):
-        self.cfg.style = k
-        for key, c in self.style_cards.items():
-            c.set_checked(key == k)
+    def choose(self, desk, style=None):
+        self.cfg.desktop = desk
+        if desk == "hyprland":
+            self.cfg.style = style or self.cfg.style or "auxo"
+        key = f"hyprland:{self.cfg.style}" if desk == "hyprland" else desk
+        for k, c in self.cards.items():
+            c.set_checked(k == key)
+
+    def choose_style(self, style):
+        self.choose("hyprland", style)
 
     def set_accent(self, accent):
         for p in self.previews:

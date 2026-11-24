@@ -17,6 +17,22 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Fixed: Hyprland didn't install.** Void doesn't package Hyprland, and the community repo Auxo
+  used (hyprland-void) stopped being rebuilt in May 2025; Void has since moved on (libjxl 0.12,
+  libdisplay-info 0.3 and its own newer hyprutils), so those packages no longer installed. Auxo now
+  builds Hyprland 0.49 itself against current Void (`packages/hyprland`, rebuilt monthly by CI),
+  ships it on the ISO, and `auxo-tweak` / `auxo-update` download it on older installs.
+- **Fixed: Sway ignored your monitor settings.** A comment at the end of the `include` line (Sway and
+  i3 only allow comments on their own line) made Sway skip the monitors file and show a config
+  error at every login; Sway's touchpad block was rejected the same way. Updating repairs existing
+  configs.
+- **Fixed: changes from Auxo Settings didn't apply live** (monitors, Hyprland reloads, looks): the
+  reload ran through `runuser`, which only works as root, so it silently did nothing when Settings
+  ran it as you.
+- **Mac and Windows styles in the installer's desktop list**, as their own choices, with previews.
+  `auxo-tweak style mac|windows|auxo`, and `auxo-tweak rice mac` / `rice hyprland -mac` work too.
+- **auxo-update updates Auxo's own tools**: every build now publishes them, so installed systems
+  get fixes like these without reinstalling.
 - **Graphical installer**: Install Auxo Linux in the live session now opens a graphical installer:
   your disks drawn as bars (what's on them now, and what Auxo will make of them), dual boot with
   existing partitions, desktop cards with Hyprland style previews (Auxo, Mac, Windows), accent

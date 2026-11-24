@@ -40,6 +40,25 @@ $SUDO xbps-install -Su "${yes[@]}" xbps || { note "updating xbps failed (offline
 step "Packages"
 $SUDO xbps-install -Su "${yes[@]}" || { note "xbps-install failed"; exit 1; }
 
+# Auxo's own tools aren't in Void's repos: each Auxo build publishes them on GitHub
+FETCH=/usr/libexec/auxo/auxo-fetch-repo
+if [[ -x $FETCH ]]; then
+  step "Auxo tools"
+  if $SUDO "$FETCH" https://github.com/rxvy-dev/AUXO/releases/latest/download/auxo-packages-x86_64.tar /var/lib/auxo/auxo-repo; then
+    $SUDO xbps-install -u "${yes[@]}" -R /var/lib/auxo/auxo-repo $(xbps-query auxo-installer >/dev/null 2>&1 && echo auxo-installer) \
+      $(xbps-query cybervis >/dev/null 2>&1 && echo cybervis) auxo-tools || note "couldn't update Auxo's tools"
+  else
+    note "couldn't download Auxo's tools (offline?)"
+  fi
+  # Hyprland is built by Auxo too: refresh the local copy when Hyprland is installed
+  if xbps-query hyprland >/dev/null 2>&1 || [[ -f /etc/xbps.d/20-hyprland.conf ]]; then
+    if $SUDO "$FETCH" https://github.com/rxvy-dev/AUXO/releases/latest/download/hyprland-x86_64.tar /var/lib/auxo/hyprland-repo; then
+      printf '# added by auxo-update: Auxo'"'"'s own hyprland packages\nrepository=/var/lib/auxo/hyprland-repo\n' | $SUDO tee /etc/xbps.d/20-hyprland.conf >/dev/null
+      $SUDO xbps-install -Su "${yes[@]}" || note "updating Hyprland failed"
+    fi
+  fi
+fi
+
 # keep Auxo's name in os-release if base-files was updated
 command -v auxo-branding >/dev/null && $SUDO auxo-branding >/dev/null 2>&1
 

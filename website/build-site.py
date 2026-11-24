@@ -1328,7 +1328,7 @@ docs = head("Auxo Linux documentation",
 <p>Auxo installs the desktop, applies its setup, points the login screen at the new desktop and keeps your previous config files as <code>*.auxo-bak</code>. Log out to start using it.</p>
 <ul class="dl">
 <li><b>KDE Plasma 6</b>: the default desktop and the live session, with the Auxo global theme. It installs even without internet.</li>
-<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty. Void doesn't package Hyprland, so it comes from the <a class="inl" href="https://github.com/Makrennel/hyprland-void">hyprland-void</a> community repository, which Auxo adds for you.</li>
+<li><b>Hyprland</b> (Auxo rice): waybar, wofi, mako, hyprlock and kitty. Void doesn't package Hyprland, so Auxo builds it against current Void (from <a class="inl" href="https://github.com/Makrennel/hyprland-void">hyprland-void</a>'s recipes) and ships it on the ISO. Pick the Auxo, Mac or Windows style.</li>
 <li><b>Sway</b> (Auxo rice): waybar, foot and mako.</li>
 <li><b>i3</b> (Auxo rice): polybar, rofi and picom.</li>
 <li><b>GNOME</b> (Auxo rice): Papirus icons, Inter, the dark style, your accent and Super+Enter for a terminal. No extensions, so GNOME updates can't break it.</li>
@@ -1494,7 +1494,7 @@ KEYS_I3 = [("Super+Enter", "Terminal (alacritty)"), ("Super+D", "App launcher (r
 DPAGE = [
  ("plasma", "KDE Plasma 6", "Default · Wayland", "The default desktop and the live session. A full, familiar desktop with the Auxo global theme, and the only one that installs without internet.",
   ["kde-plasma", "konsole", "dolphin", "kate", "ark", "spectacle", "kde-gtk-config"], None),
- ("hyprland", "Hyprland", "Auxo rice · Wayland", "Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent. Comes from the hyprland-void community repository.",
+ ("hyprland", "Hyprland", "Auxo rice · Wayland", "Animated tiling with gaps and rounded corners. The bar, launcher, notifications, lock screen, idle and screenshots are all set up and themed in your accent. Built by Auxo for current Void; comes in Auxo, Mac and Windows styles.",
   ["hyprland", "hyprpaper", "hypridle", "hyprlock", "Waybar", "wofi", "mako", "kitty", "grim + slurp + swappy"], KEYS_HYPR),
  ("sway", "Sway", "Auxo rice · Wayland", "i3-style tiling on Wayland. Lightweight and predictable, with waybar and your accent on the focused window.",
   ["sway", "swaybg", "swayidle", "swaylock", "Waybar", "wofi", "mako", "foot"], KEYS_SWAY),

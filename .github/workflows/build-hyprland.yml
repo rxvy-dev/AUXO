@@ -1,8 +1,8 @@
 name: Build Hyprland packages
 
-# Void doesn't package Hyprland, so Auxo builds it (packages/hyprland). The packages are
-# published as one archive on the "hyprland-packages" release; the ISO build puts them on
-# the ISO, and auxo-tweak downloads them on systems installed from older ISOs.
+# Void doesn't package Hyprland, so Auxo builds it (packages/hyprland). Each build is published
+# as a "hyprland-*" pre-release; the ISO build puts the newest on the ISO and attaches it to the
+# ISO's release as hyprland-x86_64.tar, where auxo-tweak and auxo-update download it from.
 on:
   workflow_dispatch:
   push:
@@ -21,8 +21,12 @@ jobs:
     container:
       image: ghcr.io/void-linux/void-glibc-full:latest
       options: --platform linux/amd64 --privileged
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Prepare the container
+        shell: sh       # Void's image has no bash until this installs it
         run: |
           mkdir -p /etc/xbps.d && cp /usr/share/xbps.d/*-repository-*.conf /etc/xbps.d/
           sed -i 's|repo-default|repo-ci|g' /etc/xbps.d/*-repository-*.conf
@@ -41,16 +45,19 @@ jobs:
           xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current -n \
             hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland | tail -25
 
-      - name: Publish (release "hyprland-packages")
+      - name: Publish (a "hyprland-DATE-SHA" pre-release; the ISO build picks the newest)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd /src
           git config --global --add safe.directory /src
-          gh release view hyprland-packages >/dev/null 2>&1 || \
-            gh release create hyprland-packages --title "Hyprland packages for Auxo" --prerelease \
-              --notes "Hyprland 0.49 and its libraries, built against current Void Linux by .github/workflows/build-hyprland.yml. Used by the ISO and by auxo-tweak; not a download for people."
-          gh release upload hyprland-packages /out/hyprland-x86_64.tar --clobber
+          tag="hyprland-$(date -u +%Y.%m.%d-%H%M)-${GITHUB_SHA::7}"
+          gh release create "$tag" /out/hyprland-x86_64.tar --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "Hyprland packages ($tag)" \
+            --notes "Hyprland 0.49 and its libraries, built against current Void Linux by .github/workflows/build-hyprland.yml. The next ISO build puts these on the ISO and in its release (hyprland-x86_64.tar). Not a download for people."
+          # keep the newest two
+          gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("hyprland-"))] | sort_by(.createdAt) | reverse | .[2:] | .[].tagName' \
+            | while read -r old; do gh release delete "$old" --yes --cleanup-tag || true; done
 
       - name: Keep the build log of a failed package
         if: failure()

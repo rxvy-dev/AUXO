@@ -16,6 +16,7 @@ os.environ["AUXO_TEST_DISKS"] = os.path.join(HERE, "tests/fixtures/lsblk.json")
 os.environ.setdefault("AUXO_LIB", os.path.join(HERE, "packages/auxo-tools/files/lib"))
 sys.path.insert(0, os.path.join(HERE, "installer"))
 
+from PyQt6.QtCore import Qt  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
 from auxo_install import disks as disklib  # noqa: E402
@@ -95,11 +96,15 @@ shot(w, "03-disk")
 w.next.click()
 
 desk = w.pages[3]
-check("Desktop page", w.index == 3 and not desk.style_box.isVisibleTo(w))
-desk.choose("hyprland")
-check("Hyprland shows the styles", desk.style_box.isVisibleTo(w))
-desk.choose_style("mac")
-check("Mac style picked", w.cfg.desktop == "hyprland" and w.cfg.style == "mac")
+check("Desktop page", w.index == 3)
+check("Mac and Windows styles are their own cards", "hyprland:mac" in desk.cards and "hyprland:windows" in desk.cards
+      and "hyprland:auxo" in desk.cards)
+desk.cards["hyprland:windows"].mousePressEvent(type("E", (), {"button": lambda self: Qt.MouseButton.LeftButton})())
+check("click Windows style", w.cfg.desktop == "hyprland" and w.cfg.style == "windows"
+      and desk.cards["hyprland:windows"].property("checked"))
+desk.choose_key("hyprland:mac")
+check("Mac style picked", w.cfg.desktop == "hyprland" and w.cfg.style == "mac"
+      and not desk.cards["hyprland:windows"].property("checked"))
 shot(w, "04-desktop")
 w.next.click()
 

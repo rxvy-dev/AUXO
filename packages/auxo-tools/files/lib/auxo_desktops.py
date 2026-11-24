@@ -1,8 +1,8 @@
 """Desktop / window-manager catalogue used by the installer and auxo-tweak (Void Linux).
 
 Every package name here exists in Void's repos (checked against void-packages),
-except the Hyprland packages, which come from the hyprland-void community repo
-(Void doesn't package Hyprland). See HYPRLAND_REPO.
+except the Hyprland packages, which Auxo builds itself
+See HYPRLAND_REPO.
 """
 
 # A graphical session on Void needs D-Bus + elogind (seat/session management) and polkit.
@@ -44,7 +44,15 @@ CHRONO_RUNTIME = ["grim", "slurp", "wl-clipboard", "hwids", "foot", "xdg-desktop
                   "xdg-desktop-portal-gtk", "brightnessctl", "playerctl", "qt6-wayland", "greetd", "tuigreet"]
 
 # Hyprland is not in Void's official repos; this community repo builds it for Void.
-HYPRLAND_REPO = "https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc"
+# Hyprland is built by Auxo (packages/hyprland, .github/workflows/build-hyprland.yml) because the
+# community repo it used to come from stopped being rebuilt and no longer installs on current Void.
+# The ISO carries the packages as a local repository; systems without it download the archive.
+HYPRLAND_REPO = "/var/lib/auxo/hyprland-repo"
+HYPRLAND_PACKAGES_URL = "https://github.com/rxvy-dev/AUXO/releases/latest/download/hyprland-x86_64.tar"
+OLD_HYPRLAND_REPO = "https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc"
+# Auxo's own tools, published with every ISO build (auxo-update installs newer ones)
+AUXO_PACKAGES_URL = "https://github.com/rxvy-dev/AUXO/releases/latest/download/auxo-packages-x86_64.tar"
+AUXO_REPO = "/var/lib/auxo/auxo-repo"
 
 DESKTOPS = {
     "plasma": {

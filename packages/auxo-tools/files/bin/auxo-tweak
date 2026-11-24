@@ -48,6 +48,7 @@ from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, 
                        invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
                        sv_enable, sv_disable, sv_enabled, audio_setup, audio_missing, SHARE, RESET, BOLD, DIM)
 from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
+import auxo_desktops  # noqa: E402
 import auxo_theme  # noqa: E402
 import auxo_gnome  # noqa: E402
 import auxo_look  # noqa: E402
@@ -321,15 +322,22 @@ def set_default_session(user, session, dm="greetd"):
     run(["chown", "-R", "_greeter:_greeter", "/var/cache/tuigreet"], check=False)
 
 
-def add_repo(name, url):
-    """Add a third-party xbps repository. Its signing key is accepted on the first sync:
-    xbps asks on stdin (-y doesn't answer that question), so the answer is sent along.
-    Only called for a desktop the user picked that needs the repo (Hyprland)."""
-    path = f"/etc/xbps.d/20-{name}.conf"
-    if not os.path.exists(R(path)):
-        write_file(path, f"# added by auxo-tweak\nrepository={url}\n")
-        log(f"accepting the signing key of {url}")
-        run(["xbps-install", "-S"], check=False, input="y\n" * 4)
+FETCH_REPO = "/usr/libexec/auxo/auxo-fetch-repo"
+
+
+def local_repo(name, path, url, refresh=False):
+    """Use a package archive Auxo publishes as a local repository (no signing key needed).
+    The ISO ships the Hyprland one; others are downloaded. refresh: get the newest when online."""
+    have_it = os.path.exists(R(f"{path}/x86_64-repodata"))
+    if (refresh or not have_it) and online():
+        log(f"{name}: downloading Auxo's packages")
+        if DRY:
+            run([FETCH_REPO, url, path], check=False)
+        elif run([FETCH_REPO, url, path], check=False) != 0 and not have_it:
+            raise AuxoError(f"couldn't download {url} — check your connection and try again")
+    elif not have_it:
+        raise AuxoError(f"{name} needs internet the first time — connect (nmtui) and try again")
+    write_file(f"/etc/xbps.d/20-{name}.conf", f"# added by auxo-tweak: Auxo's own {name} packages\nrepository={path}\n")
 
 
 def cmd_desktop(args):
@@ -339,8 +347,8 @@ def cmd_desktop(args):
         if not online() and not all(installed(p) for p in d["packages"]):
             raise AuxoError("no internet connection — connect first (nmtui) and try again")
         if d.get("repo"):
-            log(f"{d['name']}: adding its community repository")
-            add_repo(args.name, d["repo"])
+            # Hyprland: Auxo's own build (the hyprland-void repo older Auxo used no longer installs)
+            local_repo(args.name, d["repo"], auxo_desktops.HYPRLAND_PACKAGES_URL, refresh=True)
         log(f"installing {d['name']}")
         xbps_install(*d["packages"])
         if d.get("build") == "chrono":
@@ -383,8 +391,44 @@ def cmd_desktop(args):
     log(f"desktop → {d['name']}. Reboot or log out to use it.")
 
 
+# short names people type for the Hyprland styles
+STYLE_ALIASES = {"macos": "mac", "osx": "mac", "apple": "mac", "glass": "mac", "liquid-glass": "mac",
+                 "win": "windows", "win11": "windows", "windows11": "windows", "default": "auxo", "normal": "auxo"}
+RICE_ALIASES = {"mac": "hyprland-mac", "hyprland-macos": "hyprland-mac", "hypr-mac": "hyprland-mac",
+                "windows": "hyprland-win", "hyprland-windows": "hyprland-win", "hypr-win": "hyprland-win",
+                "plasma": "kde", "kde-plasma": "kde"}
+
+
+def rice_name(value):
+    v = value.lower()
+    v = STYLE_ALIASES.get(v, v)
+    return RICE_ALIASES.get(v, v)
+
+
+def forgiving_argv(argv):
+    """`rice hyprland -mac`, `rice hyprland mac`, `desktop hyprland-mac` → what was meant."""
+    a = list(argv)
+    for i in range(len(a) - 1):
+        if a[i].lower() in ("hyprland", "hypr") and a[i + 1].lower().lstrip("-") in ("mac", "macos", "win", "windows"):
+            a[i:i + 2] = ["hyprland-" + ("mac" if a[i + 1].lower().lstrip("-").startswith("mac") else "win")]
+            break
+    if len(a) >= 2 and a[0] == "desktop" and a[1].lower() in ("hyprland-mac", "hyprland-win", "mac", "windows"):
+        log(f"Installing Hyprland; then run: sudo auxo-tweak style {'mac' if 'mac' in a[1] else 'windows'}")
+        a[1] = "hyprland"
+    return a
+
+
+def cmd_style(args):
+    """auxo-tweak style mac|windows|auxo: the Hyprland rice for that style."""
+    args.name = {"auxo": "hyprland", "mac": "hyprland-mac", "windows": "hyprland-win"}[args.name]
+    cmd_rice(args)
+
+
 def cmd_rice(args):
     require_root()
+    if args.name.startswith("hyprland") and not (have("Hyprland") or have("hyprland")):
+        log("Hyprland isn't installed yet, so this style is saved for when it is. Install it with: "
+            "sudo auxo-tweak desktop hyprland")
     if args.name == "kde":
         import auxo_kde
         accent = auxo_theme.current()
@@ -1408,9 +1452,13 @@ def main():
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
     s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop")
     s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
-    s = sub.add_parser("rice"); s.add_argument("name", choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac", "hyprland-win", "sway", "i3",
-                                                                      "chrono"])
+    s = sub.add_parser("rice"); s.add_argument("name", type=rice_name,
+                                               choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac",
+                                                        "hyprland-win", "sway", "i3", "chrono"])
     s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
+    s = sub.add_parser("style", help="Hyprland's look: auxo, mac (Liquid Glass) or windows")
+    s.add_argument("name", type=lambda v: STYLE_ALIASES.get(v.lower(), v.lower()), choices=["auxo", "mac", "windows"])
+    s.add_argument("--user"); s.set_defaults(fn=cmd_style)
     s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset", "presets", "preset",
                                                                        "export", "import"])
     s.add_argument("--name", help="export: the name shown when someone imports it")
@@ -1462,7 +1510,7 @@ def main():
     s.add_argument("--rice", action="store_true", help="also apply the GNOME/Cinnamon/Xfce rice")
     s.set_defaults(fn=cmd_session_apply)
 
-    args = p.parse_args()
+    args = p.parse_args(forgiving_argv(sys.argv[1:]))
     if not args.cmd:
         menu()
         return

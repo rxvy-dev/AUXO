@@ -272,6 +272,7 @@ def tui_walkthrough(shots_dir=None):
     res["filesystem"] = "Filesystem" in text() and "btrfs" in text()
     send(ENTER)
     res["desktop"] = "Desktop" in text() and "Hyprland" in text() and "needs internet" in text() and "Auxo global theme" in text()
+    res["styles listed"] = "Hyprland — Mac style" in text() and "Hyprland — Windows style" in text()
     snap("04-desktop")
     send(ENTER)                                # Plasma
     send(DOWN); send(ENTER)                    # accent: cyan
@@ -354,6 +355,7 @@ try:
     labels = {"welcome": "welcome screen (dry-run badge)", "give": "welcome page: Auxo supports cancer research", "keyboard": "keyboard list", "search": "type-to-search filters",
               "language": "language page", "timezone": "time zone page", "disk": "disk list, small USB marked unusable",
               "filesystem": "filesystem choice", "desktop": "desktops with 'needs internet' when offline",
+              "styles listed": "Hyprland Mac + Windows styles in the desktop list",
               "accent": "accent → kernel", "account": "account form", "mismatch": "password mismatch caught",
               "extras": "extras checklist", "review": "review shows the disk to erase", "confirm": "red confirmation dialog",
               "installed": "dry-run install reaches the finish screen", "give_done": "finish page: cancer research note"}

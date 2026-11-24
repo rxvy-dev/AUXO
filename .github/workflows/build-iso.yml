@@ -36,6 +36,18 @@ jobs:
           python3 tests/test-summit.py
           python3 tests/test-settings.py
 
+      - name: Get Auxo's Hyprland packages (newest build-hyprland release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p out
+          tag=$(gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("hyprland-"))] | sort_by(.createdAt) | reverse | .[0].tagName // empty')
+          if [[ -n $tag ]]; then
+            gh release download "$tag" -p hyprland-x86_64.tar -D out --clobber && echo "Hyprland packages: $tag" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::No Hyprland packages yet (run 'Build Hyprland packages'): Hyprland won't install from this ISO."
+          fi
+
       - name: Build the ISO in a Void container (void-mklive)
         run: |
           ./build.sh --docker
@@ -87,6 +99,11 @@ jobs:
           cd out
           iso=$(ls auxo-linux-*.iso)
           files="$iso $iso.sha256"     # under 2 GB: checked by the size step above
+          # Auxo's own packages (auxo-update installs newer ones from here) and Hyprland (built by
+          # Auxo); fixed names, so releases/latest/download/<name> always finds the newest
+          tar -cf auxo-packages-x86_64.tar -C repo .
+          files="$files auxo-packages-x86_64.tar"
+          [[ -f hyprland-x86_64.tar ]] && files="$files hyprland-x86_64.tar"
           note="Verify with: sha256sum -c $iso.sha256"
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \

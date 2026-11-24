@@ -41,6 +41,18 @@ cp -a "$SRC/mklive/include/." "$INCLUDE/"
 chown -R root:root "$INCLUDE"
 find "$INCLUDE" -type d -exec chmod 755 {} +
 find "$INCLUDE" -type f -exec chmod go-w {} +
+# Hyprland, built by Auxo (Void doesn't package it): a local repository on the live system, so
+# the installer and auxo-tweak can install it without a signing key (Void's own packages it
+# needs still come from the internet)
+if [[ -f $OUT/hyprland-x86_64.tar ]]; then
+  mkdir -p "$INCLUDE/var/lib/auxo/hyprland-repo"
+  tar -xf "$OUT/hyprland-x86_64.tar" -C "$INCLUDE/var/lib/auxo/hyprland-repo"
+  [[ -f $INCLUDE/var/lib/auxo/hyprland-repo/x86_64-repodata ]] || xbps-rindex -a "$INCLUDE"/var/lib/auxo/hyprland-repo/*.xbps
+  chown -R root:root "$INCLUDE/var/lib/auxo"
+  echo "Hyprland packages on the ISO: $(ls "$INCLUDE"/var/lib/auxo/hyprland-repo/*.xbps | wc -l)"
+else
+  echo "warning: no out/hyprland-x86_64.tar — Hyprland won't install from this ISO" >&2
+fi
 
 # leftovers of an interrupted mklive run (their mounts were already released by build.sh)
 rm -rf --one-file-system "$MK"/mklive-build.* 2>/dev/null || true

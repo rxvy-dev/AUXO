@@ -32,6 +32,14 @@ homepage="https://github.com/hyprwm/hyprland-qtutils"
 distfiles="https://github.com/hyprwm/hyprland-qtutils/archive/refs/tags/v${version}.tar.gz"
 checksum="56a83f4625feeed86bbc5d744b91d2074330c5aa41adf6e32c023f06f9fb9d34"
 
+# Qt 6.10 moved private modules into their own packages: ask for WaylandClientPrivate by name
+pre_configure() {
+  for f in CMakeLists.txt utils/*/CMakeLists.txt; do
+    grep -q 'Qt6::WaylandClientPrivate' "$f" || continue
+    vsed -i '0,/find_package(Qt6/s//find_package(Qt6 REQUIRED COMPONENTS WaylandClientPrivate)\nfind_package(Qt6/' "$f"
+  done
+}
+
 post_install() {
   vlicense LICENSE
 }

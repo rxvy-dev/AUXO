@@ -1,0 +1,24 @@
+#!/bin/sh
+# auxo-fetch-repo URL DIR — download a package archive Auxo publishes on GitHub (a .tar of .xbps
+# files) and make DIR a local xbps repository from it. Local repositories need no signing key.
+# Used for Hyprland (built by Auxo: Void doesn't package it) and for Auxo's own tools.
+# Exit status: 0 = DIR is ready (updated or already current), 1 = couldn't download.
+set -eu
+URL=$1 DIR=$2
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+if command -v curl >/dev/null 2>&1; then
+  curl -fsSL --retry 2 -o "$TMP/pkgs.tar" "$URL" || exit 1
+else
+  xbps-fetch -o "$TMP/pkgs.tar" "$URL" >/dev/null 2>&1 || exit 1
+fi
+mkdir -p "$TMP/new"
+tar -xf "$TMP/pkgs.tar" -C "$TMP/new"
+ls "$TMP"/new/*.xbps >/dev/null 2>&1 || { echo "auxo-fetch-repo: no packages in $URL" >&2; exit 1; }
+[ -f "$TMP/new/x86_64-repodata" ] || xbps-rindex -a "$TMP"/new/*.xbps >/dev/null
+mkdir -p "$(dirname "$DIR")"
+rm -rf "$DIR.old"
+[ -d "$DIR" ] && mv "$DIR" "$DIR.old"
+mv "$TMP/new" "$DIR"
+chmod 755 "$DIR"
+rm -rf "$DIR.old"

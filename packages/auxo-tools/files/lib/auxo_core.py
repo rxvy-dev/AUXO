@@ -41,8 +41,16 @@ def warn(msg):
 def run(cmd, check=True, capture=False, user=None, env=None, input=None):
     """Run a command (list). Honors dry-run. Returns stdout when capture=True.
     input: text sent to the command's stdin."""
-    if user and user != "root":
-        cmd = ["runuser", "-u", user, "--"] + cmd
+    # switch user only when we're root (runuser refuses otherwise): run as yourself, e.g. from
+    # Auxo Settings, the command already runs as the right person
+    if user and user != "root" and (os.geteuid() == 0 or DRY):
+        import pwd
+        try:
+            same = not DRY and pwd.getpwuid(os.geteuid()).pw_name == user
+        except KeyError:
+            same = False
+        if not same:
+            cmd = ["runuser", "-u", user, "--"] + cmd
     if DRY:
         print("[dry-run] " + " ".join(shlex.quote(c) for c in cmd), flush=True)
         return "" if capture else 0

@@ -78,10 +78,17 @@ out=$(PATH="$GB:$PATH" "$T" accent cyan --user alex 2>&1); rm -rf "$GB"
 check "first theme setup rebuilds grub.cfg under a lock" "echo \"\$out\" | grep -q 'flock -w 120 /run/lock/auxo-grub.lock grub-mkconfig'"
 "$T" accent emerald --user alex --no-grub >/dev/null 2>&1
 
-echo "▲ desktop hyprland --replace (community repo)"
+echo "▲ desktop hyprland --replace (Auxo's own Hyprland packages)"
+mkdir -p "$ROOT/etc/xbps.d"; echo "repository=https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc" > "$ROOT/etc/xbps.d/20-hyprland.conf"
+mkdir -p "$ROOT/var/lib/auxo/hyprland-repo"; : > "$ROOT/var/lib/auxo/hyprland-repo/x86_64-repodata"   # what the ISO ships
 out=$("$T" desktop hyprland --user alex --replace 2>&1); echo "$out" | sed 's/^/    /' | head -8
-check "adds the hyprland-void repo"          "grep -q 'repository=https://raw.githubusercontent.com/Makrennel/hyprland-void/repository-x86_64-glibc' $ROOT/etc/xbps.d/20-hyprland.conf"
-check "accepts the repo key on first sync"   "echo \"\$out\" | grep -q 'accepting the signing key' && echo \"\$out\" | grep -q 'xbps-install -S\$'"
+check "uses Auxo's local Hyprland repository"  "grep -qx 'repository=/var/lib/auxo/hyprland-repo' $ROOT/etc/xbps.d/20-hyprland.conf"
+check "the dead hyprland-void repo is replaced" "! grep -q Makrennel $ROOT/etc/xbps.d/20-hyprland.conf && ! grep -rq Makrennel $PKG/bin $PKG/lib/auxo_desktops.py --exclude=auxo_desktops.py"
+check "no signing key to accept"               "! echo \"\$out\" | grep -q 'signing key'"
+check "auxo-fetch-repo is packaged and parses" "sh -n $PKG/libexec/auxo-fetch-repo && grep -q auxo-fetch-repo $HERE/packages/build-xbps.sh"
+FR=$(mktemp -d); mkdir -p "$FR/src"; printf 'x' > "$FR/src/a-1_1.x86_64.xbps"; printf 'r' > "$FR/src/x86_64-repodata"; tar -cf "$FR/p.tar" -C "$FR/src" .
+check "auxo-fetch-repo makes a local repo from an archive" "PATH=\"$FR/bin:\$PATH\" sh $PKG/libexec/auxo-fetch-repo file://$FR/p.tar $FR/repo && [ -f $FR/repo/a-1_1.x86_64.xbps ] && [ -f $FR/repo/x86_64-repodata ]"
+rm -rf "$FR"
 check "installs hyprland + session base"     "echo \"\$out\" | grep -E 'xbps-install -y .*hyprland' | grep -q elogind"
 check "skips packages already installed"     "! echo \"\$out\" | grep -E 'xbps-install -y .* konsole( |$)' >/dev/null"
 check "enables dbus, elogind, NetworkManager" "enabled dbus && enabled elogind && enabled NetworkManager"
@@ -389,6 +396,24 @@ check "turning every screen off is refused"   "! \"$T\" monitors set DP-1 enable
 "$T" monitors reset --user alex >/dev/null 2>&1
 check "reset goes back to automatic"          "! grep -q '^monitor = DP-1' $MH && [ -f $MH ]"
 check "monitors --json is valid"              "env -u WAYLAND_DISPLAY -u DISPLAY \"$T\" monitors --json --user alex | python3 -m json.tool >/dev/null"
+# Sway and i3 allow comments only on their own line: "include x   # note" is an error and the
+# monitor file is skipped (a real bug in 4.0). Same for one-line { a; b } blocks.
+check "Sway/i3 configs: no comments after a command" "! grep -nE '^[[:space:]]*[^#[:space:]].*[[:space:]]#[[:space:]]' $PKG/share/auxo/rices/sway/sway/config $PKG/share/auxo/rices/i3/i3/config"
+check "Sway/i3 configs: no one-line { a; b } blocks" "! grep -nE '\\{[^}]*;[^}]*\\}' $PKG/share/auxo/rices/sway/sway/config $PKG/share/auxo/rices/i3/i3/config"
+check "monitor include lines are exact"       "grep -qx 'include ~/.config/auxo/monitors-sway' $PKG/share/auxo/rices/sway/sway/config && grep -qx 'include ~/.config/auxo/monitors-i3' $PKG/share/auxo/rices/i3/i3/config"
+if command -v sway >/dev/null 2>&1; then
+  check "Sway itself accepts the rice's config" "HOME=$A XDG_RUNTIME_DIR=\$(mktemp -d) WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 sway -C -c $PKG/share/auxo/rices/sway/sway/config >/dev/null 2>&1"
+fi
+# run(..., user=X) must not wrap in runuser unless we're root: runuser refuses, so applying
+# monitors/looks from Auxo Settings (which runs as you) silently did nothing (a real bug in 4.0)
+check "commands run as you aren't wrapped in runuser" "python3 -c \"
+import os, sys, subprocess; sys.path.insert(0, '$PKG/lib'); os.environ.pop('AUXO_DRY_RUN', None)
+import auxo_core as c, pwd
+c.DRY = False; me = pwd.getpwuid(os.getuid()).pw_name; seen = []
+c.subprocess.run = lambda cmd, **k: (seen.append(cmd), subprocess.CompletedProcess(cmd, 0, ''))[1]
+os.geteuid = lambda: 1000; c.run(['swaymsg', 'reload'], check=False, user='alex')
+os.geteuid = lambda: 0; c.run(['swaymsg', 'reload'], check=False, user='alex')
+sys.exit(not (seen[0] == ['swaymsg', 'reload'] and seen[1][:3] == ['runuser', '-u', 'alex']))\""
 
 echo "▲ Mac-style Hyprland rice"
 "$T" rice hyprland-mac --user alex >/dev/null 2>&1

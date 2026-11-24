@@ -32,7 +32,7 @@ install -m755 "$src/etc/kernel.d/post-install/49-auxo-default-kernel" "$d/etc/ke
 # no boot splash: keep Plymouth out of every initramfs
 install -m644 "$src/dracut/90-auxo-no-plymouth.conf" "$d/usr/lib/dracut/dracut.conf.d/"
 # D-Bus must start elogind through runit (Void's wrapper), never as a bare unsupervised copy
-install -m755 "$src/libexec/elogind-activate" "$d/usr/libexec/auxo/"
+install -m755 "$src/libexec/elogind-activate" "$src/libexec/auxo-fetch-repo" "$d/usr/libexec/auxo/"
 install -m644 "$src/share/dbus-1/system-services/org.freedesktop.login1.service" \
   "$d/usr/local/share/dbus-1/system-services/"
 find "$d/usr/share/auxo" -name '*.sh' -exec chmod 755 {} +
@@ -46,7 +46,15 @@ post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-bra
       # came out wrong. Move Auxo's login screen to tty7 (takes effect at the next boot).
       if grep -q '^# written by auxo-tweak' etc/greetd/config.toml 2>/dev/null; then
         sed -i 's/^vt = 1$/vt = 7/' etc/greetd/config.toml
-      fi ;;
+      fi
+      # 4.0 Sway/i3 configs: a comment after "include …monitors" (Sway and i3 only allow comments
+      # on their own line) made them skip your monitor settings, and Sway's one-line touchpad
+      # block was rejected. Repair the copies in home folders.
+      for f in home/*/.config/sway/config home/*/.config/i3/config etc/skel/.config/sway/config; do
+        [ -f "$f" ] || continue
+        sed -i -E 's|^(include ~/\.config/auxo/monitors-(sway\|i3))[[:space:]]+#.*$|\1|' "$f"
+        sed -i 's|^input type:touchpad { tap enabled; natural_scroll enabled }$|input type:touchpad {\n    tap enabled\n    natural_scroll enabled\n}|' "$f"
+      done ;;
 esac
 SH
 

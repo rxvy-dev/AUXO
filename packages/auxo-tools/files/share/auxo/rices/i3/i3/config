@@ -14,7 +14,8 @@ client.focused_inactive $bg     $bg     $muted  $bg       #2a2a38
 
 exec_always --no-startup-id feh --bg-fill ~/.config/auxo/wallpaper.png
 exec_always --no-startup-id ~/.config/polybar/launch.sh
-exec --no-startup-id pipewire        # sound (i3 doesn't run XDG autostart)
+# sound (i3 doesn't run XDG autostart)
+exec --no-startup-id pipewire
 exec --no-startup-id picom -b
 exec --no-startup-id dunst
 exec --no-startup-id nm-applet
@@ -80,5 +81,6 @@ bindsym XF86MonBrightnessDown exec --no-startup-id brightnessctl s 5%-
 for_window [class="Pavucontrol|Blueman-manager|auxo-welcome"] floating enable
 
 # ── your look settings (Auxo Settings / auxo-tweak look) — loaded last so they win ──
-include ~/.config/auxo/monitors-i3     # Auxo Settings → Displays
+# Auxo Settings → Displays
+include ~/.config/auxo/monitors-i3
 include ~/.config/auxo/look-i3

@@ -30,9 +30,16 @@ sudo -Eu builder common/travis/set_mirror.sh
 sudo -Eu builder common/travis/prepare.sh
 common/travis/fetch-xtools.sh
 
+# helpers Hyprland runs without (its pop-up dialogs): a failure here doesn't stop the build
+OPTIONAL=" hyprland-qt-support hyprland-qtutils "
 for p in $ORDER; do
   echo "::group::Building $p"
-  sudo -Eu builder ./xbps-src -j"$(nproc)" -s -H "$WORK/hostdir" pkg "$p"
+  if ! sudo -Eu builder ./xbps-src -j"$(nproc)" -s -H "$WORK/hostdir" pkg "$p"; then
+    case "$OPTIONAL" in
+      *" $p "*) echo "::warning::$p didn't build; Hyprland works without it" ;;
+      *) echo "::error::$p didn't build"; exit 1 ;;
+    esac
+  fi
   echo "::endgroup::"
 done
 
