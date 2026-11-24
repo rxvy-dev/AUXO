@@ -25,6 +25,8 @@ input type:touchpad {
 # sound (sway doesn't run XDG autostart)
 exec pipewire
 exec waybar
+# a clear cursor
+seat seat0 xcursor_theme Adwaita 24
 exec mako
 # live wallpaper (video / day & night) when picked in Auxo Settings → Look
 exec auxo-wallpaper

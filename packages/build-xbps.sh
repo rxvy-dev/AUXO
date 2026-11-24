@@ -50,6 +50,20 @@ post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-bra
       # 4.0 Sway/i3 configs: a comment after "include …monitors" (Sway and i3 only allow comments
       # on their own line) made them skip your monitor settings, and Sway's one-line touchpad
       # block was rejected. Repair the copies in home folders.
+      # no cursor theme was set on Hyprland/Sway/i3: a faint fallback cursor. Adwaita everywhere.
+      for f in home/*/.config/hypr/hyprland.conf; do
+        [ -f "$f" ] && ! grep -q XCURSOR_THEME "$f" && sed -i 's/^env = XCURSOR_SIZE,24$/env = XCURSOR_THEME,Adwaita\nenv = XCURSOR_SIZE,24\nenv = HYPRCURSOR_SIZE,24/' "$f"
+        [ -f "$f" ] && ! grep -q "hyprctl setcursor" "$f" && echo "exec-once = hyprctl setcursor Adwaita 24" >> "$f"
+      done
+      for f in home/*/.config/sway/config; do
+        [ -f "$f" ] && ! grep -q xcursor_theme "$f" && echo "seat seat0 xcursor_theme Adwaita 24" >> "$f"
+      done
+      for h in home/*; do
+        [ -d "$h/.config" ] && [ ! -e "$h/.icons/default/index.theme" ] || continue
+        mkdir -p "$h/.icons/default"
+        printf '[Icon Theme]\nName=Default\nInherits=Adwaita\n' > "$h/.icons/default/index.theme"
+        chown -R --reference="$h" "$h/.icons" 2>/dev/null
+      done
       # Hyprland: NVIDIA-only variables were set for everyone and broke OpenGL / video decoding on
       # AMD and Intel. They live in ~/.config/auxo/hyprland-gpu.conf now (NVIDIA only).
       nv=$(sed -n 's/^NVIDIA="\{0,1\}\([a-z0-9]*\).*/\1/p' etc/auxo/auxo.conf 2>/dev/null)

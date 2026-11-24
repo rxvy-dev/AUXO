@@ -478,6 +478,7 @@ check "nvidia on: Hyprland gets NVIDIA's settings" "grep -q '__GLX_VENDOR_LIBRAR
 check "RTX 50 cards get the current driver"  "AUXO_TEST_GPU='10de:2c02 RTX 5080' \"$T\" nvidia status --json | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(d[\"fits\"] != \"nvidia\")'"
 "$T" nvidia off >/dev/null 2>&1
 check "nvidia off: NVIDIA settings removed again" "! grep -q '^env' $A/.config/auxo/hyprland-gpu.conf"
+check "a real cursor theme on Hyprland, Sway, GTK, X11" "grep -q 'XCURSOR_THEME,Adwaita' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'hyprctl setcursor Adwaita' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q 'xcursor_theme Adwaita' $PKG/share/auxo/rices/sway/sway/config && grep -q 'gtk-cursor-theme-name=Adwaita' $A/.config/gtk-3.0/settings.ini && grep -q 'Inherits=Adwaita' $A/.icons/default/index.theme"
 check "same keys on every rice (3 Hyprland styles, Sway, i3)" "python3 $HERE/tests/keymap-parity.py >/dev/null"
 check "no self-killing 'pkill -f X || X' launchers"  "! grep -rnE 'pkill -f [^|]*\\|\\|' $PKG/share/auxo/rices $PKG/bin"
 check "press-again closes only the app, not its shell" "python3 -c \"

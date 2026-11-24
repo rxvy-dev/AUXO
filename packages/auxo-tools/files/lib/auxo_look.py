@@ -268,6 +268,7 @@ def gtk_settings(look, gtk4=False):
     lines = ["[Settings]", f"gtk-font-name={look['ui_font']} {look['font_size']}",
              f"gtk-icon-theme-name={'Papirus-Dark' if dark else 'Papirus-Light'}",
              f"gtk-application-prefer-dark-theme={'1' if dark else '0'}",
+             "gtk-cursor-theme-name=Adwaita", "gtk-cursor-theme-size=24",
              f"gtk-enable-animations={'1' if on(look, 'animations') else '0'}"]
     if not gtk4:
         lines.insert(1, f"gtk-theme-name={'Adwaita-dark' if dark else 'Adwaita'}")
@@ -484,6 +485,9 @@ def write_user(home, look, accent, desktop=None):
         write_file(f"{home}/.config/gtk-3.0/settings.ini", gtk_settings(look))
         write_file(f"{home}/.config/gtk-4.0/settings.ini", gtk_settings(look, gtk4=True))
         touched += [".config/gtk-3.0/settings.ini", ".config/gtk-4.0/settings.ini"]
+        # X11/XWayland apps and anything without its own setting use ~/.icons/default
+        write_file(f"{home}/.icons/default/index.theme", "[Icon Theme]\nName=Default\nInherits=Adwaita\n")
+        touched.append(".icons/default/index.theme")
     if desktop == "chrono" or os.path.isdir(R(f"{home}/.config/chrono")):
         write_file(f"{home}/.config/chrono/themes/auxo.theme", chrono_theme(look, accent))
         conf = R(f"{home}/.config/chrono/chrono.conf")

@@ -17,6 +17,7 @@
   (ufw), `dns` (NetworkManager), `cleanup` (cache, orphans, old kernels), `flatpak`, `repo`.
 - Hyprland comes from the hyprland-void community repo (Void doesn't package it); the
   rice is back on `hyprland.conf` for that version.
+- **Fixed: the cursor was almost invisible on Hyprland.** No cursor theme was set, so Hyprland used a faint fallback; Hyprland, Sway, i3, GTK and X11 apps now all use Adwaita (repaired on update).
 - **Auxo App Store** (App Store in your menu, or `auxo-store`): hand-picked apps by category
   (Popular, Games, Create, Work, Chat & media, Tools), search across Void and Flathub, one-click
   install/remove, your installed apps, and Update everything. Adds Flathub for you in one click.
