@@ -116,7 +116,7 @@
     "custom/control": {
       "format": "\uf1de",
       "tooltip": false,
-      "on-click": "pkill -f auxo-control || auxo-control --style mac"
+      "on-click": "auxo-control --style mac"
     }
   },
   {
@@ -140,7 +140,7 @@
       "path": "/usr/share/icons/Papirus/64x64/apps/applications-all.svg",
       "size": 48,
       "tooltip": false,
-      "on-click": "pkill -f auxo-launcher || auxo-launcher --style mac"
+      "on-click": "auxo-launcher --style mac"
     },
     "image#files": {
       "path": "/usr/share/icons/Papirus/64x64/apps/system-file-manager.svg",

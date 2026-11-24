@@ -471,6 +471,8 @@ def main():
     args = sys.argv[1:]
     style = args[args.index("--style") + 1] if "--style" in args and args.index("--style") + 1 < len(args) else "mac"
     style = "windows" if style == "windows" else "mac"
+    if S.close_running("auxo-control"):            # pressed again: close it
+        return 0
     app = QApplication(sys.argv[:1])
     app.setDesktopFileName("auxo-quick" if style == "windows" else "auxo-control")
     w = Control(style)

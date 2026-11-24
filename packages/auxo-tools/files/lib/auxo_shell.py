@@ -190,6 +190,33 @@ def look():
                         "accent": "#a78bfa", "accent2": "#22d3ee", "inactive": "#2a2a38"}, "Inter"
 
 
+def close_running(name, proc="/proc"):
+    """Press-again-to-close: if `name` (e.g. auxo-launcher) is already open for this user, close
+    it and return True. Matches only the app itself (a python process running that script), never
+    the shell that started it — `pkill -f name || name` killed its own shell, so the menu never
+    opened."""
+    import signal
+    me, uid, found = os.getpid(), os.getuid(), False
+    for pid in (d for d in os.listdir(proc) if d.isdigit()):
+        if int(pid) == me:
+            continue
+        try:
+            if os.stat(f"{proc}/{pid}").st_uid != uid:
+                continue
+            with open(f"{proc}/{pid}/cmdline", "rb") as f:
+                argv = [a.decode(errors="replace") for a in f.read().split(b"\0") if a]
+        except OSError:
+            continue
+        if len(argv) >= 2 and os.path.basename(argv[0]).startswith("python") \
+                and os.path.basename(argv[1]) == name:
+            try:
+                os.kill(int(pid), signal.SIGTERM)
+                found = True
+            except OSError:
+                pass
+    return found
+
+
 def user_name():
     import pwd
     try:

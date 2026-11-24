@@ -463,6 +463,15 @@ check "cliphist, rofimoji, gammastep installed with the WMs" "python3 -c \"impor
 check "auxo-clipboard parses"                  "sh -n $PKG/bin/auxo-clipboard"
 out=$(env -u WAYLAND_DISPLAY -u DISPLAY AUXO_HOME="$A" "$PKG/bin/auxo-keys" --wm hyprland --print 2>&1)
 check "auxo-keys names them"                   "echo \"\$out\" | grep -q 'Clipboard history' && echo \"\$out\" | grep -q 'Emoji picker' && echo \"\$out\" | grep -q 'Start menu'"
+# `pkill -f X || X` kills the shell running it (its command line contains X): the menu never opened
+check "no self-killing 'pkill -f X || X' launchers"  "! grep -rnE 'pkill -f [^|]*\\|\\|' $PKG/share/auxo/rices $PKG/bin"
+check "press-again closes only the app, not its shell" "python3 -c \"
+import os, sys, tempfile, subprocess; sys.path.insert(0, '$PKG/lib'); import auxo_shell as S
+d = tempfile.mkdtemp()
+for pid, argv in (('7001', b'sh\\0-c\\0auxo-launcher --style windows\\0'), ('7002', b'python3\\0/usr/bin/auxo-launcher\\0--style\\0windows\\0')):
+    os.makedirs(f'{d}/{pid}'); open(f'{d}/{pid}/cmdline', 'wb').write(argv)
+killed = []; S.os.kill = lambda pid, sig: killed.append(pid)
+sys.exit(not (S.close_running('auxo-launcher', proc=d) and killed == [7002]))\""
 out=$(QT_QPA_PLATFORM=offscreen AUXO_HOME="$A" python3 "$HERE/tests/test-shell.py" 2>&1); rc=$?
 echo "$out" | sed 's/^/    /' | tail -3
 check "launcher + control center (offscreen)" "[ $rc = 0 ]"

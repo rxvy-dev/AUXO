@@ -29,12 +29,12 @@
   "custom/start": {
     "format": "\u25b2",
     "tooltip": false,
-    "on-click": "pkill -f auxo-launcher || auxo-launcher --style windows"
+    "on-click": "auxo-launcher --style windows"
   },
   "custom/search": {
     "format": "\uf002  Search",
     "tooltip": false,
-    "on-click": "pkill -f auxo-launcher || auxo-launcher --style windows"
+    "on-click": "auxo-launcher --style windows"
   },
   "image#files": {
     "path": "/usr/share/icons/Papirus/64x64/apps/system-file-manager.svg",
@@ -96,7 +96,7 @@
     "format-ethernet": "\uf6ff",
     "format-disconnected": "\uf071",
     "tooltip-format": "{essid} {ipaddr}",
-    "on-click": "pkill -f auxo-control || auxo-control --style windows"
+    "on-click": "auxo-control --style windows"
   },
   "pulseaudio": {
     "format": "{icon}",
@@ -109,7 +109,7 @@
       ]
     },
     "tooltip-format": "{volume}%",
-    "on-click": "pkill -f auxo-control || auxo-control --style windows",
+    "on-click": "auxo-control --style windows",
     "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
     "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
   },
@@ -123,7 +123,7 @@
       "\uf240"
     ],
     "tooltip-format": "{capacity}%",
-    "on-click": "pkill -f auxo-control || auxo-control --style windows"
+    "on-click": "auxo-control --style windows"
   },
   "custom/update": {
     "exec": "n=$(xbps-install -Mun 2>/dev/null | wc -l); [ \"$n\" -gt 0 ] && echo \"$n\" || echo ''",

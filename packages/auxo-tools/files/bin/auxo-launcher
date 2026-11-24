@@ -416,6 +416,8 @@ def main():
     if "-h" in sys.argv or "--help" in sys.argv:
         print(__doc__.strip())
         return 0
+    if S.close_running("auxo-launcher"):            # pressed again: close it
+        return 0
     app = QApplication(sys.argv[:1])          # --style is ours, not Qt's widget style
     app.setDesktopFileName("auxo-start" if style == "windows" else "auxo-launchpad")   # Wayland app id
     mode, pal, font = S.look()

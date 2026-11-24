@@ -50,6 +50,11 @@ post) if [ "$PWD" = / ] && [ -x /usr/bin/auxo-branding ]; then /usr/bin/auxo-bra
       # 4.0 Sway/i3 configs: a comment after "include …monitors" (Sway and i3 only allow comments
       # on their own line) made them skip your monitor settings, and Sway's one-line touchpad
       # block was rejected. Repair the copies in home folders.
+      # Mac/Windows styles: "pkill -f auxo-launcher || auxo-launcher" killed its own shell, so the
+      # Start menu / Launchpad / Control Center never opened. The apps toggle themselves now.
+      for f in home/*/.config/hypr/style.conf home/*/.config/waybar/config.jsonc; do
+        [ -f "$f" ] && sed -i -E 's/pkill -f (auxo-launcher|auxo-control) \|\| //' "$f"
+      done
       for f in home/*/.config/sway/config home/*/.config/i3/config etc/skel/.config/sway/config; do
         [ -f "$f" ] || continue
         sed -i -E 's|^(include ~/\.config/auxo/monitors-(sway\|i3))[[:space:]]+#.*$|\1|' "$f"
