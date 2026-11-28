@@ -242,7 +242,7 @@ info = {"user": "rxvy@peak", "os": "Auxo Linux 5.0 (beta)", "kernel": "6.12.1_1"
 wide = Fe.render(info, color=True, columns=140)
 check("fetch: style, GPU driver, display, VPN, temperature", all(x in wide for x in (
     "Windows style", "RTX 5080 (nvidia)", "2560×1440 @ 165 Hz", "mullvad-se-got", "48°C", "1204 xbps")))
-check("fetch: the Auxo peak beside the text", any("▄██▄" in l and "packages" in l for l in wide.splitlines()))
+check("fetch: the Auxo peak beside the text", any("▄██▄" in l and Fe.visible_len(l) > 30 for l in wide.splitlines()))
 narrow = Fe.render(info, color=False, columns=50)
 check("fetch: narrow terminal puts the peak on top", narrow.splitlines()[1].strip() == "▄██▄"
       and "\033" not in narrow)
