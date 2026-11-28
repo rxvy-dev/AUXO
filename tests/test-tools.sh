@@ -93,13 +93,13 @@ check "installs hyprland + session base"     "echo \"\$out\" | grep -E 'xbps-ins
 check "skips packages already installed"     "! echo \"\$out\" | grep -E 'xbps-install -y .* konsole( |$)' >/dev/null"
 check "enables dbus, elogind, NetworkManager" "enabled dbus && enabled elogind && enabled NetworkManager"
 check "dhcpcd handed over to NetworkManager" "! enabled dhcpcd"
-check "removes the live Plasma"              "echo \"\$out\" | grep -q 'xbps-remove -y -R plasma-desktop'"
+check "Plasma is gone from the desktops"     "! python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS; sys.exit('plasma' not in DESKTOPS)\""
 check "greetd on, sddm off"                  "enabled greetd && ! enabled sddm"
 check "rice copied: hyprland.conf (0.49 syntax)" "grep -q 'source = ~/.config/auxo/colors-hyprland.conf' $ROOT/home/alex/.config/hypr/hyprland.conf"
 check "rice uses the polkit launcher"        "grep -q 'exec-once = auxo-polkit-agent' $ROOT/home/alex/.config/hypr/hyprland.conf"
 check "hyprpaper 0.7 syntax"                 "grep -q '^preload = ~/.config/auxo/wallpaper.png' $ROOT/home/alex/.config/hypr/hyprpaper.conf"
 check "waybar imports colours"               "grep -q 'auxo/colors.css' $ROOT/home/alex/.config/waybar/style.css"
-check "login starts Hyprland with a D-Bus session" "grep -q \"\\-\\-cmd 'dbus-run-session Hyprland'\" $ROOT/etc/greetd/config.toml"
+check "login starts Hyprland via auxo-session (D-Bus + Sway fallback)" "grep -q \"\\-\\-cmd 'auxo-session hyprland'\" $ROOT/etc/greetd/config.toml && grep -q 'dbus-run-session Hyprland' $PKG/bin/auxo-session && grep -q 'WLR_RENDERER=pixman' $PKG/bin/auxo-session"
 check "username pre-filled"                  "grep -q '^alex$' $ROOT/var/cache/tuigreet/lastuser"
 check "auxo.conf DESKTOP=hyprland"           "grep -q 'DESKTOP=\"hyprland\"' $ROOT/etc/auxo/auxo.conf"
 mkdir -p "$ROOT/home/alex/.config/hypr"; echo "-- old" > "$ROOT/home/alex/.config/hypr/hyprland.lua"
@@ -124,21 +124,11 @@ check "old GNOME rice cleaned up"            "[ ! -e $ROOT/etc/dconf/db/local.d/
 "$T" desktop none --user alex >/dev/null 2>&1
 check "none → no display manager"            "! enabled gdm && ! enabled greetd && ! enabled sddm"
 
-echo "▲ KDE global theme"
-mkdir -p "$ROOT/usr/share/plasma/look-and-feel"; cp -r "$PKG/share/plasma/look-and-feel/." "$ROOT/usr/share/plasma/look-and-feel/"
-L="$PKG/share/plasma/look-and-feel/org.auxolinux.desktop"
-check "theme package complete"               "python3 -m json.tool $L/metadata.json >/dev/null && [ -s $L/contents/defaults ] && [ -s $L/contents/layouts/org.kde.plasma.desktop-layout.js ] && [ -s $L/contents/previews/preview.png ]"
+echo "▲ Qt colours (kdeglobals: Qt apps read it on every desktop)"
 "$T" accent rose --no-grub --no-initramfs --user alex >/dev/null 2>&1
 K="$ROOT/home/alex/.config/kdeglobals"
-check "user kdeglobals → Auxo theme"         "grep -q 'LookAndFeelPackage=org.auxolinux.desktop' $K && grep -q 'ColorScheme=AuxoDark' $K"
 check "colours written for first login"      "grep -q '^\\[Colors:Window\\]' $K && grep -q '^\\[Colors:Header\\]\\[Inactive\\]' $K"
-check "system default for new users"         "grep -q 'LookAndFeelPackage=org.auxolinux.desktop' $ROOT/etc/xdg/kdeglobals"
-check "Auxo Dark colour scheme installed"    "grep -q 'Name=Auxo Dark' $ROOT/usr/share/color-schemes/AuxoDark.colors"
-printf '[Containments]\n' > "$ROOT/home/alex/.config/plasma-org.kde.plasma.desktop-appletsrc"
-printf '[General]\nfoo=bar\n' >> "$K"
-"$T" rice kde --user alex >/dev/null 2>&1
-check "rice kde resets the panel layout"     "[ -e $ROOT/home/alex/.config/plasma-org.kde.plasma.desktop-appletsrc.auxo-bak ]"
-check "rice kde keeps other kdeglobals keys" "grep -q 'foo=bar' $K"
+check "no Plasma theme shipped (5.0)"        "[ ! -e $PKG/share/plasma ] && ! grep -q 'share/plasma' $HERE/packages/build-xbps.sh"
 
 echo "▲ live wallpaper change per desktop"
 FB="$ROOT/fakebin"; mkdir -p "$FB"
@@ -304,8 +294,9 @@ else
 fi
 rm -rf "$ST"
 check "ISO ships cybervis, not the CJK font"  "sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx cybervis && ! sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx noto-fonts-cjk-sans"
-check "ISO has Plasma without the meta package" "! sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx kde-plasma && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx plasma-desktop"
-check "ISO Plasma list = auxo-tweak's (offline install)" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS; import re; iso=set(re.sub(r'#.*','',open('$HERE/mklive/packages.txt').read()).split()); sys.exit(not all(p in iso for p in DESKTOPS['plasma']['packages']))\""
+check "ISO has no Plasma or SDDM (5.0)"     "! sed 's/#.*//' $HERE/mklive/packages.txt | grep -qE '^(plasma-desktop|sddm|konsole|dolphin)$' && ! grep -qx sddm $HERE/mklive/services.txt && grep -qx greetd $HERE/mklive/services.txt"
+check "ISO live desktop = auxo-tweak's Hyprland + Sway (offline install)" "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS, live_packages; import re; iso=set(re.sub(r'#.*','',open('$HERE/mklive/packages.txt').read()).split()); sys.exit(not all(p in iso for p in live_packages() + DESKTOPS['sway']['packages']))\""
+check "live session: Windows rice in /etc/skel, greetd autologin" "grep -q 'auxo-tweak rice hyprland-win --user auxoskel' $HERE/mklive/postsetup.sh && grep -q 'initial_session' $HERE/mklive/postsetup.sh && grep -q 'hyprland-repo' $HERE/scripts/build-iso-inner.sh"
 check "live initramfs config is removed on install" "grep -q '90-auxo-live.conf' $HERE/installer/auxo_install/plan.py && grep -q '90-auxo-live.conf' $HERE/mklive/postsetup.sh"
 check "package list has no stray comments"   "! sed 's/#.*//' $HERE/mklive/packages.txt | xargs | grep -q '#'"
 check "ISO build installs a compiler"        "grep -q 'xbps-install -y .* gcc' $HERE/scripts/build-iso-inner.sh"
@@ -325,7 +316,6 @@ check "invalid values are refused"            "! \"$T\" look set gaps=500 --user
 check "look --json is valid"                  "\"$T\" look --json --user alex | python3 -m json.tool >/dev/null"
 "$T" mode light --user alex --no-apply >/dev/null 2>&1
 check "light mode: lighter colours"           "grep -q '^mode=\"light' $LC/look.conf && grep -qi 'f5f5f8\|fafafa\|ffffff' $LC/colors.css"
-check "light mode: KDE Auxo Light scheme"     "grep -q 'ColorScheme=AuxoLight' $A/.config/kdeglobals && grep -q 'Name=Auxo Light' $ROOT/usr/share/color-schemes/AuxoLight.colors"
 "$T" wallpaper /usr/share/wallpapers/auxo-cyan.png --user alex --no-apply >/dev/null 2>&1
 check "wallpaper follows the choice"          "[ \$(readlink $LC/wallpaper.png) = /usr/share/wallpapers/auxo-cyan.png ]"
 check "missing wallpaper refused"             "! \"$T\" wallpaper /nope.png --user alex >/dev/null 2>&1"
@@ -370,7 +360,7 @@ check "desktop switch links WirePlumber + Pulse" "echo \"\$out\" | grep -q 'ln -
 check "PipeWire autostarts + ALSA goes through it" "echo \"\$out\" | grep -q 'ln -s /usr/share/applications/pipewire.desktop /etc/xdg/autostart/pipewire.desktop' && echo \"\$out\" | grep -q '99-pipewire-default.conf'"
 check "alsa-pipewire installed with every desktop" "[ -e $ROOT/var/db/xbps/.auxo-test/alsa-pipewire ] && python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS as D; sys.exit(not all('alsa-pipewire' in d['packages'] for k,d in D.items() if d['packages']))\""
 check "tiling rices start PipeWire themselves" "grep -q '^exec-once = pipewire' $PKG/share/auxo/rices/hyprland/hypr/hyprland.conf && grep -q '^exec pipewire' $PKG/share/auxo/rices/sway/sway/config && grep -q '^exec --no-startup-id pipewire' $PKG/share/auxo/rices/i3/i3/config"
-check "i3 + Cinnamon get a D-Bus session"    "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS as D; sys.exit(not all('dbus-run-session' in D[k]['cmd'] for k in ('i3','cinnamon','sway','hyprland','plasma')))\""
+check "i3 + Cinnamon get a D-Bus session"    "python3 -c \"import sys; sys.path.insert(0,'$PKG/lib'); from auxo_desktops import DESKTOPS as D; sys.exit(not all('dbus-run-session' in D[k]['cmd'] for k in ('i3','cinnamon','sway')))\""
 check "ISO sets up sound for the live session" "grep -q '10-wireplumber.conf' $HERE/mklive/postsetup.sh && sed 's/#.*//' $HERE/mklive/packages.txt | grep -qx alsa-pipewire"
 check "doctor checks sound"                  "\"$T\" doctor --json | python3 -c 'import json,sys; sys.exit(\"sound\" not in [c[\"id\"] for c in json.load(sys.stdin)])'"
 sed -i "s/^DESKTOP=.*/DESKTOP=\"$prev\"/" "$ROOT/etc/auxo/auxo.conf"

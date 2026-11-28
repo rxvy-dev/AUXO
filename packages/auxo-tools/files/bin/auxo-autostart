@@ -1,0 +1,17 @@
+#!/bin/sh
+# auxo-autostart — start Auxo's own autostart entries (auxo-*.desktop) on desktops that don't run
+# XDG autostart themselves: Hyprland, Sway and i3. That's the welcome app after an install and in
+# the live session. Your own ~/.config/autostart copy of an entry wins over the system one; an
+# entry with Hidden=true is switched off.
+seen=" "
+for f in "$HOME"/.config/autostart/auxo-*.desktop /etc/xdg/autostart/auxo-*.desktop; do
+  [ -f "$f" ] || continue
+  name=$(basename "$f")
+  case "$seen" in *" $name "*) continue ;; esac
+  seen="$seen$name "
+  grep -qi '^Hidden=true' "$f" && continue
+  case "$name" in auxo-session-apply.desktop) continue ;; esac   # the session does this itself
+  cmd=$(sed -n 's/^Exec=//p' "$f" | head -n1 | sed 's/ %[fFuUdDnNickvm]//g')
+  [ -n "$cmd" ] && setsid sh -c "$cmd" >/dev/null 2>&1 &
+done
+exit 0

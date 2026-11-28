@@ -13,7 +13,7 @@ sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 import auxo_shell as S  # noqa: E402
 import auxo_windows as W  # noqa: E402
 
-from PyQt6.QtCore import QRect, QRectF, QSize, Qt, pyqtSignal  # noqa: E402
+from PyQt6.QtCore import QRect, QRectF, Qt, pyqtSignal  # noqa: E402
 from PyQt6.QtGui import QColor, QFont, QGuiApplication, QIcon, QImage, QPainter, QPainterPath, QPen, QPixmap  # noqa: E402
 from PyQt6.QtWidgets import (QApplication, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,  # noqa: E402
                              QScrollArea, QVBoxLayout, QWidget)

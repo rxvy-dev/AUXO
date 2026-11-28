@@ -24,7 +24,7 @@ os.environ.setdefault("AUXO_LIB", os.path.join(HERE, "packages/auxo-tools/files/
 
 from auxo_install.config import InstallConfig, validate, validate_user  # noqa: E402
 from auxo_install.disks import parse_lsblk, part_path, human  # noqa: E402
-from auxo_install.plan import build_plan, Env, Cmd, Write, Py, rsync_percent  # noqa: E402
+from auxo_install.plan import build_plan, Env, Cmd, rsync_percent  # noqa: E402
 from auxo_install.runner import Context, execute, InstallError  # noqa: E402
 
 passed = failed = 0
@@ -88,7 +88,7 @@ check("human sizes", human(1000204886016) == "1.0 TB")
 check("rsync progress parse", rsync_percent("  1,234,567,890  45%   88.12MB/s    0:00:13 (xfr#12, to-chk=0/9)") == 45)
 
 # ── plans ─────────────────────────────────────────────────────────────
-print("▲ plan: UEFI, NVMe, btrfs, Plasma (offline)")
+print("▲ plan: UEFI, NVMe, btrfs, Hyprland Windows style (offline, the default)")
 cfg = InstallConfig(disk="/dev/nvme0n1", username="alex", password="pw", fullname="Alex", hostname="peak",
                     keyboard="de", locale="de_DE.UTF-8", timezone="Europe/Berlin", accent="rose")
 T, steps, notes, L = dry_run(cfg, Env(efi=True, online=False))
@@ -111,7 +111,7 @@ check("locale uncommented + locale.conf", "de_DE.UTF-8 UTF-8" in open(f"{T}/etc/
 check("timezone link", has(L, f"ln -sf /usr/share/zoneinfo/Europe/Berlin {T}/etc/localtime"))
 rc = open(f"{T}/etc/rc.conf").read()
 check("rc.conf keymap set once", rc.count("KEYMAP=") == 1 and 'KEYMAP="de"' in rc and 'TIMEZONE="x"' in rc)
-check("keyboard for X11, Wayland and Plasma", '"XkbLayout" "de"' in open(f"{T}/etc/X11/xorg.conf.d/00-keyboard.conf").read()
+check("keyboard for X11 and Wayland", '"XkbLayout" "de"' in open(f"{T}/etc/X11/xorg.conf.d/00-keyboard.conf").read()
       and "XKB_DEFAULT_LAYOUT=de" in open(f"{T}/etc/environment").read()
       and "LayoutList=de" in open(f"{T}/etc/xdg/kxkbrc").read())
 check("user gets only groups that exist", has(L, "useradd -m -G wheel,audio,video,input -s /bin/bash -c Alex alex"))
@@ -122,7 +122,10 @@ check("sudo for wheel", "%wheel ALL=(ALL:ALL) ALL" in open(f"{T}/etc/sudoers.d/1
 check("auxo-tweak sets accent/shell, no boot splash", has(L, "auxo-tweak accent rose --no-grub --no-initramfs --user alex")
       and not has(L, "auxo-tweak splash") and has(L, "auxo-tweak shell zsh --user alex"))
 check("auxo-tweak runs in installer mode", has(L, "env AUXO_IN_INSTALLER=1 auxo-tweak"))
-check("Plasma kept (no --replace)", has(L, "auxo-tweak desktop plasma --user alex") and not has(L, "--replace"))
+check("Hyprland from the live system, Windows style", has(L, "auxo-tweak desktop hyprland --replace --user alex")
+      and has(L, "auxo-tweak rice hyprland-win --user alex"))
+check("boot menu matches the style", has(L, "auxo-tweak grub-theme windows"))
+check("live desktop files cleared from /etc/skel", has(L, f"rm -rf {T}/etc/skel/.config"))
 check("extras: drivers + zram", has(L, "auxo-tweak drivers --prune") and has(L, "auxo-tweak zram on"))
 check("dracut, then GRUB for UEFI (+ fallback copy)", has(L, "dracut --regenerate-all --force")
       and has(L, "grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Auxo --recheck")
@@ -138,10 +141,11 @@ check("live user name read from live.conf", has(L2, "userdel -r liveguy"))
 check("xfs root: no fsck pass", "/ xfs defaults,noatime 0 0" in open(f"{T2}/etc/fstab").read())
 
 print("▲ plan: offline fallbacks")
-cfg2 = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland", kernel="linux-lts",
+cfg2 = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="gnome", kernel="linux-lts",
                      filesystem="ext4", extras=["snapshots", "gaming", "zram"])
 T, steps, notes, L = dry_run(cfg2, Env(efi=False, online=False))
-check("hyprland → Plasma offline, with a note", has(L, "auxo-tweak desktop plasma") and any("hyprland needs internet" in n for n in notes))
+check("gnome → Hyprland offline, with a note", has(L, "auxo-tweak desktop hyprland --replace")
+      and any("gnome needs internet" in n for n in notes))
 check("LTS → stable kernel offline", not has(L, "auxo-tweak kernel") and any("linux-lts needs internet" in n for n in notes))
 check("snapshots skipped on ext4", not has(L, "snapshots on") and any("need btrfs" in n for n in notes))
 check("gaming skipped offline", not has(L, "gaming on"))
@@ -149,13 +153,17 @@ cfg2b = InstallConfig(disk="/dev/sda", username="sam", password="pw")          #
 _, _, notes_b, L_b = dry_run(cfg2b, Env(efi=True, online=False))
 check("Steam + Discord skipped offline, with how to add them", not has(L_b, "gaming on") and not has(L_b, "apps discord")
       and any("sudo auxo-tweak apps discord" in n for n in notes_b))
-check("no Hyprland style when Plasma stands in", not has(L, "auxo-tweak rice"))
-for style, rice in (("mac", "hyprland-mac"), ("windows", "hyprland-win")):
+check("Hyprland stands in with the default Windows style", has(L, "auxo-tweak rice hyprland-win"))
+_, _, notes_s, L_s = dry_run(InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="sway"),
+                             Env(efi=True, online=False))
+check("Sway installs offline (it's on the ISO)", has(L_s, "auxo-tweak desktop sway --replace") and not notes_s[:1] == ["sway"])
+for style, rice in (("mac", "hyprland-mac"), ("windows", "hyprland-win"), ("neon", "hyprland-neon"),
+                    ("zen", "hyprland-zen"), ("candy", "hyprland-candy")):
     c = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland", style=style)
     _, _, _, Ls = dry_run(c, Env(efi=True, online=True))
     check(f"Hyprland {style} style: auxo-tweak rice {rice} after the desktop", has(Ls, f"auxo-tweak rice {rice} --user sam")
           and [l for l in Ls if "auxo-tweak desktop hyprland" in l or "auxo-tweak rice" in l][-1].endswith(f"rice {rice} --user sam"))
-c = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland")
+c = InstallConfig(disk="/dev/sda", username="sam", password="pw", desktop="hyprland", style="auxo")
 check("Auxo style: no extra rice", not has(dry_run(c, Env(efi=True, online=True))[3], "auxo-tweak rice"))
 check("unknown style refused", any("style" in e for e in validate(InstallConfig(disk="/dev/sda", username="sam",
                                                                                 password="pw", style="beos"))))
@@ -172,7 +180,7 @@ T, steps, notes, L = dry_run(cfg3, Env(efi=True, online=True))
 check("no repartitioning in manual mode", not has(L, "sgdisk") and not has(L, "wipefs -af /dev/nvme0n1\n"))
 check("only the chosen root is formatted", has(L, "mkfs.btrfs -f -L Auxo /dev/nvme0n1p3") and not has(L, "mkfs.vfat"))
 check("existing EFI partition mounted", has(L, f"mount /dev/nvme0n1p1 {T}/boot/efi"))
-check("sway replaces the live Plasma", has(L, "auxo-tweak desktop sway --replace --user kim"))
+check("sway replaces the live desktop", has(L, "auxo-tweak desktop sway --replace --user kim"))
 check("mainline kernel", has(L, "auxo-tweak kernel linux-mainline"))
 check("fish shell", has(L, "auxo-tweak shell fish --user kim"))
 check("root password set, not locked", not has(L, "passwd -l root") and sum(1 for l in L if "chpasswd" in l) == 2)
@@ -249,7 +257,7 @@ def tui_walkthrough(shots_dir=None):
     import curses
     curses.setupterm(env["TERM"], sys.__stdout__.fileno() if sys.__stdout__.isatty() else os.open(os.devnull, os.O_WRONLY))
     k = lambda cap: curses.tigetstr(cap).decode()
-    ENTER, TAB, ESC = "\r", "\t", "\x1b"
+    ENTER, TAB = "\r", "\t"
     DOWN, UP, END = k("kcud1"), k("kcuu1"), k("kend")
     pump(1.5)
     res = {}
@@ -271,10 +279,10 @@ def tui_walkthrough(shots_dir=None):
     send(DOWN); send(ENTER)                    # /dev/sda (2 TB)
     res["filesystem"] = "Filesystem" in text() and "btrfs" in text()
     send(ENTER)
-    res["desktop"] = "Desktop" in text() and "Hyprland" in text() and "needs internet" in text() and "Auxo global theme" in text()
+    res["desktop"] = "Desktop" in text() and "Hyprland" in text() and "needs internet" in text() and "installs offline" in text()
     res["styles listed"] = "Hyprland — Mac style" in text() and "Hyprland — Windows style" in text()
     snap("04-desktop")
-    send(ENTER)                                # Plasma
+    send(ENTER)                                # Hyprland, Windows style (the default)
     send(DOWN); send(ENTER)                    # accent: cyan
     res["accent"] = "Kernel" in text()
     snap("05-kernel")
@@ -290,7 +298,7 @@ def tui_walkthrough(shots_dir=None):
     res["extras"] = "Extras" in text() and "[x]" in text()
     snap("07-extras")
     send(ENTER)
-    res["review"] = "Ready to install" in text() and "ERASE /dev/sda" in text() and "KDE Plasma" in text() and "German" in text()
+    res["review"] = "Ready to install" in text() and "ERASE /dev/sda" in text() and "Windows style" in text() and "German" in text()
     snap("08-review")
     send(ENTER)
     res["confirm"] = "Install Auxo now?" in text() and "ALL DATA on /dev/sda" in text()

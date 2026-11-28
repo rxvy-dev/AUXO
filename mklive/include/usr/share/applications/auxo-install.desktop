@@ -10,4 +10,4 @@ Actions=text;
 
 [Desktop Action text]
 Name=Text installer
-Exec=konsole --fullscreen -e sudo auxo-installer --tui
+Exec=kitty --start-as=fullscreen sudo auxo-installer --tui

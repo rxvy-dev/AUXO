@@ -45,14 +45,14 @@ jobs:
           xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current -n \
             hyprland hyprlock hypridle hyprpaper xdg-desktop-portal-hyprland | tail -25
 
-      - name: Check Auxo's three Hyprland styles with Hyprland itself
+      - name: Check every Auxo Hyprland style with Hyprland itself
         run: |
           xbps-install -y -R /out/pkgs -R https://repo-ci.voidlinux.org/current hyprland python3 >/dev/null
           id hyprcheck >/dev/null 2>&1 || useradd -m hyprcheck   # Hyprland won't run as root
           export XDG_RUNTIME_DIR=$(mktemp -d); chown hyprcheck "$XDG_RUNTIME_DIR"
           sudo -u hyprcheck env XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR Hyprland --version | head -1
           fail=0
-          for style in hyprland hyprland-mac hyprland-win; do
+          for style in $(cd /src/packages/auxo-tools/files/share/auxo/rices && ls -d hyprland*); do
             FR=$(mktemp -d); mkdir -p "$FR/etc/auxo" "$FR/home/t" "$FR/usr/share/auxo"
             echo "t:x:1000:1000::/home/t:/bin/sh" > "$FR/etc/passwd"; echo 'DESKTOP="hyprland"' > "$FR/etc/auxo/auxo.conf"
             ln -s /src/packages/auxo-tools/files/share/auxo/rices "$FR/usr/share/auxo/rices"

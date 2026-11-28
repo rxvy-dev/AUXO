@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""auxo-bootanim — the Auxo boot animation, drawn on the text console while services start.
+
+Started in the background at the end of runit stage 1 (/etc/runit/core-services/99-auxo-bootanim.sh),
+it builds the Auxo peak line by line, types the name and runs a short progress sweep, then
+clears the screen. It only draws text, so nothing can hang the boot (unlike a Plymouth splash,
+which needs to be closed by an init system that knows about it).
+
+  auxo-bootanim [--tty /dev/tty1] [--seconds 4] [--accent violet]
+  Off: sudo auxo-tweak bootanim off  (or boot with auxo.noanim)
+"""
+import os
+import sys
+import time
+
+# the Linux console has 16 colours: accent → (normal, bright) ANSI colour numbers
+ACCENT_ANSI = {"violet": (35, 95), "cyan": (36, 96), "emerald": (32, 92), "amber": (33, 93),
+               "rose": (31, 91), "blue": (34, 94), "mono": (37, 97)}
+PEAK = [
+    "          ▄██▄          ",
+    "         ▄████▄         ",
+    "        ▄██▀▀██▄        ",
+    "       ▄██▀  ▀██▄       ",
+    "      ▄██▀ ▄▄ ▀██▄      ",
+    "     ▄██▀ ▄██▄ ▀██▄     ",
+    "    ▄██▀ ▄█▀▀█▄ ▀██▄    ",
+    "   ▄██▀ ▄█▀  ▀█▄ ▀██▄   ",
+    "  ▀▀▀▀ ▀▀▀    ▀▀▀ ▀▀▀▀  ",
+]
+NAME = "A U X O   L I N U X"
+
+
+def conf(path="/etc/auxo/auxo.conf"):
+    c = {}
+    try:
+        for line in open(path):
+            k, sep, v = line.strip().partition("=")
+            if sep and not k.startswith("#"):
+                c[k.strip()] = v.strip().strip('"')
+    except OSError:
+        pass
+    return c
+
+
+def frames(cols, rows, accent="violet", seconds=4.0):
+    """The animation as [(delay, text)] — pure, so it can be tested without a console."""
+    dim, bright = ACCENT_ANSI.get(accent, ACCENT_ANSI["violet"])
+    top = max(0, (rows - len(PEAK) - 6) // 2)
+    left = max(0, (cols - len(PEAK[0])) // 2)
+    at = lambda r, c: f"\033[{r + 1};{c + 1}H"   # noqa: E731
+    out = [(0, "\033[?25l\033[2J\033[H")]
+    build = seconds * 0.35 / len(PEAK)
+    for i in range(len(PEAK) - 1, -1, -1):        # the peak rises from the bottom row up
+        row = PEAK[i]
+        out.append((build, at(top + i, left) + f"\033[{dim}m" + row + "\033[0m"))
+    for i, row in enumerate(PEAK):                # then lights up top to bottom
+        out.append((seconds * 0.2 / len(PEAK), at(top + i, left) + f"\033[1;{bright}m" + row + "\033[0m"))
+    name_left = max(0, (cols - len(NAME)) // 2)
+    step = seconds * 0.2 / len(NAME)
+    for n in range(1, len(NAME) + 1):
+        out.append((step, at(top + len(PEAK) + 2, name_left) + "\033[1;97m" + NAME[:n] + "\033[0m"))
+    width = 24
+    bar_left = max(0, (cols - width) // 2)
+    sweeps = 18
+    for k in range(sweeps):
+        pos = k % (width + 6) - 3
+        cells = "".join("═" if pos <= j < pos + 6 else "─" for j in range(width))
+        colored = "".join((f"\033[1;{bright}m" if ch == "═" else "\033[90m") + ch for ch in cells)
+        out.append((seconds * 0.25 / sweeps, at(top + len(PEAK) + 4, bar_left) + colored + "\033[0m"))
+    out.append((0.15, "\033[0m\033[2J\033[H\033[?25h"))
+    return out
+
+
+def main(argv):
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
+    tty = argv[argv.index("--tty") + 1] if "--tty" in argv else "/dev/tty1"
+    c = conf()
+    if c.get("BOOTANIM", "on") == "off":
+        return 0
+    try:
+        if "auxo.noanim" in open("/proc/cmdline").read().split():
+            return 0
+    except OSError:
+        pass
+    seconds = float(argv[argv.index("--seconds") + 1]) if "--seconds" in argv else float(c.get("BOOTANIM_SECONDS", 4))
+    accent = argv[argv.index("--accent") + 1] if "--accent" in argv else c.get("ACCENT", "violet")
+    try:
+        fd = os.open(tty, os.O_WRONLY | os.O_NOCTTY)
+    except OSError:
+        return 0
+    try:
+        try:
+            size = os.get_terminal_size(fd)
+            cols, rows = size.columns, size.lines
+        except OSError:
+            cols, rows = 80, 25
+        for delay, text in frames(cols, rows, accent, seconds):
+            os.write(fd, text.encode())
+            time.sleep(delay)
+    except OSError:
+        pass
+    finally:
+        try:
+            os.write(fd, b"\033[0m\033[?25h")
+        except OSError:
+            pass
+        os.close(fd)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

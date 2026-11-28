@@ -24,44 +24,67 @@ cryptsetup
 lvm2
 ntfs-3g
 
-# live desktop: KDE Plasma (installs offline)
+# live desktop: Hyprland in the Windows style (AUXO 5.0). Hyprland comes from Auxo's own repository
+# (built by .github/workflows/build-hyprland.yml); Sway is the fallback when a PC or VM has no 3D.
+# Same lists as DESKTOPS["hyprland"] + live_packages() in auxo_desktops.py (tests check they match),
+# so Hyprland (every style) and Sway install offline.
 dbus
 elogind
 polkit
+polkit-gnome
 NetworkManager
-# Plasma without the kde-plasma meta package: it adds a 254 MB wallpaper pack, the Oxygen
-# theme and extras. Same list as PLASMA_CORE in auxo_desktops.py (keep them in sync).
-plasma-desktop
-plasma-workspace-x11
-plasma-nm
-plasma-pa
-powerdevil
-bluedevil
-kscreen
-kinfocenter
-kwallet-pam
-ksshaskpass
-kwrited
-sddm-kcm
-plasma-thunderbolt
-kf6-kded
-upower
-udisks2
-xdg-user-dirs
-xdg-utils
-konsole
-dolphin
-kate
-ark
-spectacle
-xdg-desktop-portal-kde
-kde-gtk-config
-breeze-gtk
-sddm
-firefox
+network-manager-applet
 pipewire
 wireplumber
 alsa-pipewire
+pulseaudio-utils
+xdg-user-dirs
+xdg-utils
+upower
+udisks2
+hyprland
+hyprpaper
+hypridle
+hyprlock
+xdg-desktop-portal-hyprland
+sway
+swaybg
+swayidle
+swaylock
+xdg-desktop-portal-wlr
+xdg-desktop-portal-gtk
+Waybar
+wofi
+mako
+grim
+slurp
+wl-clipboard
+swappy
+cliphist
+rofimoji
+gammastep
+swww
+mpvpaper
+qt6-wayland
+qt5-wayland
+kitty
+foot
+Thunar
+thunar-archive-plugin
+gvfs
+blueman
+brightnessctl
+playerctl
+power-profiles-daemon
+font-awesome6
+breeze-gtk
+breeze-icons
+adwaita-icon-theme
+# desktop widgets + VPNs
+python3-gobject
+gtk-layer-shell
+wireguard-tools
+firefox
 
 # login + theming used by the installed system
 greetd

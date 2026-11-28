@@ -1,0 +1,66 @@
+name: Check Hyprland styles
+
+# Every Auxo Hyprland style, checked by the real Hyprland (`Hyprland --verify-config`) with the
+# newest packages Auxo built — in minutes, without rebuilding Hyprland. Runs when a rice changes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, auxo-beta]
+    paths: ["packages/auxo-tools/files/share/auxo/rices/**", "packages/auxo-tools/files/bin/auxo-tweak",
+            "packages/auxo-tools/files/lib/**", ".github/workflows/check-styles.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: ghcr.io/void-linux/void-glibc-full:latest
+      options: --platform linux/amd64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Prepare the container
+        shell: sh
+        run: |
+          mkdir -p /etc/xbps.d && cp /usr/share/xbps.d/*-repository-*.conf /etc/xbps.d/
+          sed -i 's|repo-default|repo-ci|g' /etc/xbps.d/*-repository-*.conf
+          xbps-install -Syu xbps && xbps-install -yu && xbps-install -y sudo bash git github-cli python3
+
+      - name: Get the source
+        run: |
+          git clone --depth 1 "https://github.com/${GITHUB_REPOSITORY}.git" /src
+          git -C /src fetch --depth 1 origin "$GITHUB_SHA" && git -C /src checkout -q "$GITHUB_SHA"
+
+      - name: Install Auxo's newest Hyprland packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd /src
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("hyprland-"))] | sort_by(.createdAt) | reverse | .[0].tagName')
+          echo "Hyprland packages: $tag"
+          mkdir -p /pkgs && gh release download "$tag" -R "$GITHUB_REPOSITORY" -p hyprland-x86_64.tar -D /tmp
+          tar -xf /tmp/hyprland-x86_64.tar -C /pkgs
+          xbps-install -y -R /pkgs -R https://repo-ci.voidlinux.org/current hyprland >/dev/null
+
+      - name: Hyprland --verify-config on every style
+        run: |
+          id hyprcheck >/dev/null 2>&1 || useradd -m hyprcheck   # Hyprland won't run as root
+          export XDG_RUNTIME_DIR=$(mktemp -d); chown hyprcheck "$XDG_RUNTIME_DIR"
+          sudo -u hyprcheck env XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR Hyprland --version | head -1
+          fail=0
+          for style in $(cd /src/packages/auxo-tools/files/share/auxo/rices && ls -d hyprland*); do
+            FR=$(mktemp -d); mkdir -p "$FR/etc/auxo" "$FR/home/t" "$FR/usr/share/auxo"
+            echo "t:x:1000:1000::/home/t:/bin/sh" > "$FR/etc/passwd"; echo 'DESKTOP="hyprland"' > "$FR/etc/auxo/auxo.conf"
+            ln -s /src/packages/auxo-tools/files/share/auxo/rices "$FR/usr/share/auxo/rices"
+            AUXO_ROOT=$FR AUXO_DRY_RUN=1 AUXO_LIB=/src/packages/auxo-tools/files/lib \
+              python3 /src/packages/auxo-tools/files/bin/auxo-tweak rice "$style" --user t >/dev/null
+            chmod -R a+rX "$FR"
+            out=$(sudo -u hyprcheck env HOME=$FR/home/t XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR Hyprland --verify-config -c "$FR/home/t/.config/hypr/hyprland.conf" 2>&1 || true)
+            echo "── $style"; echo "$out" | tail -15
+            echo "$out" | grep -qi "config ok" || { echo "::error::Hyprland rejects the $style config"; fail=1; }
+          done
+          exit $fail

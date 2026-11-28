@@ -12,7 +12,7 @@ import textwrap
 
 from .config import InstallConfig, KEYBOARDS, LOCALES, FILESYSTEMS, EXTRAS, STYLES, validate_user, validate
 from . import disks as disklib
-from .plan import build_plan, describe, Env, ONLINE_DESKTOPS
+from .plan import build_plan, describe, ONLINE_DESKTOPS
 from .runner import Context, execute, InstallError, LOG
 
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))

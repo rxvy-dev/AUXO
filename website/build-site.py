@@ -778,7 +778,6 @@ def head(title, desc, canon):
 
 def nav(page):
     cur = lambda p: ' aria-current="page"' if p == page else ""
-    h = "" if page == "home" else HOME
     return f"""<header class="nav"><div class="wrap">
 <a class="brand" href="{HOME}">{mark()}auxo<small>4.0</small></a>
 <nav class="links" aria-label="Main"><a href="{DL}"{cur('dl')}>Get Auxo</a><a href="{DESKP}"{cur('desktops')}>Desktops</a><a href="{DOCS}"{cur('docs')}>Docs</a><a href="{RELP}"{cur('releases')}>Releases</a><a href="{COMP}"{cur('community')}>Community</a></nav>
@@ -877,7 +876,6 @@ faq_html = "".join(f"<details><summary>{q}</summary><p>{a}</p></details>" for q,
 
 LOGOS = open("assets/logos.html").read()
 TOPO = '<svg class="topo" viewBox="0 0 520 440" aria-hidden="true"><g transform="translate(10.4 -26.8) scale(3.9)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.72" opacity="0.1"/></g><g transform="translate(42.4 29.2) scale(3.4)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.82" opacity="0.14"/></g><g transform="translate(71.2 79.6) scale(2.95)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="0.95" opacity="0.18"/></g><g transform="translate(100.0 130.0) scale(2.5)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="1.12" opacity="0.24"/></g><g transform="translate(125.6 174.8) scale(2.1)"><path class="c" d="M16 112 L64 22 L112 112" stroke-width="1.33" opacity="0.3"/></g><g transform="translate(157 118) scale(1.6)">{MARK_PATHS}</g></svg>'.replace("{MARK_PATHS}", MARK_PATHS)
-import re as _re
 d_layers_k = d_layers  # only real Auxo 4 screenshots on the site; no 4.0 desktop screenshot yet
 
 IC = {

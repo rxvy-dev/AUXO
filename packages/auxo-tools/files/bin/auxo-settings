@@ -1283,6 +1283,9 @@ class Settings(QMainWindow):
         combo_row("Login shell", [(k, k) for k in SHELLS], my_shell(), ["shell"])
         combo_row("Power profile", [(k, k.replace("-", " ").title()) for k in ("balanced", "performance", "power-saver")],
                   c.get("POWER", "balanced"), ["power"])
+        import auxo_theme
+        combo_row("Boot menu theme", [(k, f"{k.title()} — {v[0]}") for k, v in auxo_theme.GRUB_STYLES.items()],
+                  c.get("GRUB_STYLE", "auxo"), ["grub-theme"])
         combo_row("DNS servers", [("auto", "From your network"), ("cloudflare", "Cloudflare"), ("quad9", "Quad9"),
                                   ("google", "Google")], c.get("DNS", "auto"), ["dns"])
 
@@ -1292,11 +1295,12 @@ class Settings(QMainWindow):
         toggles = [("Snapshots", "SNAPSHOTS", ["snapshots"], "a bootable btrfs snapshot before every update"),
                    ("Firewall", "FIREWALL", ["firewall"], "block incoming connections"),
                    ("zram swap", "ZRAM", ["zram"], "compressed swap in RAM"),
+                   ("Boot animation", "BOOTANIM", ["bootanim"], "the Auxo logo animation while your PC starts"),
                    ("Gaming setup", "GAMING", ["gaming"], "installs Steam, GameMode, MangoHud, gamescope + tweaks "
                     "(Gaming mode itself is Super+G)")]
         for i, (title, key, cmd, desc) in enumerate(toggles):
             box = QCheckBox(title)
-            box.setChecked(c.get(key, "off") not in ("off", "", "nouveau", "0", "no"))
+            box.setChecked(c.get(key, "on" if key == "BOOTANIM" else "off") not in ("off", "", "nouveau", "0", "no"))
             box.toggled.connect(lambda v, box=box, cmd=cmd, title=title: self.toggle(box, cmd, title, v))
             sub = QLabel(desc)
             sub.setObjectName("reach")
@@ -1508,7 +1512,6 @@ class Settings(QMainWindow):
     # ── Ask Auxo (local AI) ──
     # ── Taskbar & widgets ──
     def page_taskbar(self):
-        import auxo_pins
         import auxo_shell
         w, lay = self.page()
         self.heading(lay, "Taskbar & widgets", "The apps pinned to your taskbar (Windows style), dock (Mac style) or bar, "

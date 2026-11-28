@@ -21,6 +21,8 @@ COMMON_WM = [
 WAYLAND_WM = ["Waybar", "wofi", "mako", "grim", "slurp", "wl-clipboard", "swappy", "cliphist", "rofimoji",
               "gammastep", "swww", "mpvpaper",
               "qt6-wayland", "qt5-wayland", "xdg-desktop-portal-gtk"]
+# desktop widgets (auxo-widgets: GTK on the desktop layer) and VPNs (auxo-tweak vpn)
+WIDGETS_VPN = ["python3-gobject", "gtk-layer-shell", "playerctl", "wireguard-tools"]
 X11 = ["xorg-minimal", "xinit", "xorg-fonts", "xrandr", "xsetroot"]
 
 # Chrono (rxvy's own Wayland desktop) is built from source by auxo-tweak; these are the Void
@@ -49,6 +51,25 @@ AUXO_PACKAGES_URL = "https://github.com/rxvy-dev/AUXO/releases/latest/download/a
 AUXO_REPO = "/var/lib/auxo/auxo-repo"
 
 DESKTOPS = {
+    "hyprland": {
+        "name": "Hyprland (Auxo rice)",
+        "packages": GUI_BASE + ["hyprland", "hyprpaper", "hypridle", "hyprlock", "xdg-desktop-portal-hyprland",
+                                "kitty"] + WAYLAND_WM + COMMON_WM + WIDGETS_VPN,
+        "repo": HYPRLAND_REPO,
+        "dm": "greetd",
+        "session": "hyprland",
+        "cmd": "auxo-session hyprland",   # falls back to Sway when Hyprland can't start (no 3D)
+        "rice": "hyprland",
+    },
+    "sway": {
+        "name": "Sway (Auxo rice)",
+        "packages": GUI_BASE + ["sway", "swaybg", "swayidle", "swaylock", "xdg-desktop-portal-wlr",
+                                "foot"] + WAYLAND_WM + COMMON_WM + WIDGETS_VPN,
+        "dm": "greetd",
+        "session": "sway",
+        "cmd": "dbus-run-session sway",
+        "rice": "sway",
+    },
     "gnome": {
         "name": "GNOME",
         # GNOME is Wayland-only and has to be started by its own login screen (GDM).
@@ -76,25 +97,6 @@ DESKTOPS = {
         "session": "cinnamon",
         "cmd": "startx /usr/bin/dbus-run-session /usr/bin/cinnamon-session",   # PipeWire needs a D-Bus session
         "rice": "cinnamon",              # applied through its own settings (auxo_theme.session_apply)
-    },
-    "hyprland": {
-        "name": "Hyprland (Auxo rice)",
-        "packages": GUI_BASE + ["hyprland", "hyprpaper", "hypridle", "hyprlock", "xdg-desktop-portal-hyprland",
-                                "kitty", "polkit-kde-agent"] + WAYLAND_WM + COMMON_WM,
-        "repo": HYPRLAND_REPO,
-        "dm": "greetd",
-        "session": "hyprland",
-        "cmd": "dbus-run-session Hyprland",
-        "rice": "hyprland",
-    },
-    "sway": {
-        "name": "Sway (Auxo rice)",
-        "packages": GUI_BASE + ["sway", "swaybg", "swayidle", "swaylock", "xdg-desktop-portal-wlr",
-                                "foot"] + WAYLAND_WM + COMMON_WM,
-        "dm": "greetd",
-        "session": "sway",
-        "cmd": "dbus-run-session sway",
-        "rice": "sway",
     },
     "i3": {
         "name": "i3 (Auxo rice)",

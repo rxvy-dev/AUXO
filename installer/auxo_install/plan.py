@@ -8,7 +8,6 @@ The install follows the same sequence as Void's own installer (copy the live
 system, then configure it), with Auxo's choices applied through auxo-tweak so the
 installer and the post-install tool share one code path.
 """
-import os
 import re
 from dataclasses import dataclass, field
 
@@ -29,6 +28,9 @@ LIVE_FILES = ["/etc/auxo/live", "/etc/xdg/autostart/auxo-live-welcome.desktop",
               "/usr/share/applications/auxo-install.desktop", "/etc/profile.d/auxo-live.sh",
               "/etc/sudoers.d/99-void-live", "/etc/polkit-1/rules.d/void-live.rules",
               "/etc/sddm.conf", "/etc/default/live.conf", "/etc/greetd/auxo-live.toml", "/etc/dracut.conf.d/90-auxo-live.conf"]
+
+
+LIVE_SKEL = [".config", ".icons", ".local", ".cache"]
 
 
 @dataclass
@@ -283,6 +285,9 @@ def build_plan(cfg, env):
              Cmd(chroot(T, "dbus-uuidgen", "--ensure=/etc/machine-id")),
              Cmd(["ln", "-sf", "/etc/machine-id", f"{T}/var/lib/dbus/machine-id"], soft=True),
              Cmd(["rm", "-f", *[f"{T}{p}" for p in LIVE_FILES]]),
+             # the live session's desktop files in /etc/skel (Void's own skel has only shell dotfiles):
+             # your account gets the desktop you pick, set up by auxo-tweak below
+             Cmd(["rm", "-rf", *[f"{T}/etc/skel/{d}" for d in LIVE_SKEL]]),
              Cmd(["sed", "-i", 's/GETTY_ARGS="--noclear -a [^"]*"/GETTY_ARGS="--noclear"/',
                   f"{T}/etc/sv/agetty-tty1/conf"], soft=True),
              Cmd(["xbps-remove", "-r", T, "-Ry", "auxo-installer"], soft=True)]
@@ -322,6 +327,8 @@ def build_plan(cfg, env):
     acts.append(tweak(T, "desktop", desktop, "--replace", *u))
     if desktop == "hyprland" and cfg.style != "auxo":
         acts.append(tweak(T, "rice", STYLES[cfg.style][2], *u))
+    if desktop == "hyprland" and cfg.style != "auxo":
+        acts.append(tweak(T, "grub-theme", cfg.style))       # the boot menu matches the style
     if "drivers" in extras:
         acts.append(tweak(T, "drivers", "--prune", "--no-initramfs"))
     for x in ("zram",):

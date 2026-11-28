@@ -51,7 +51,9 @@ if [[ -f $OUT/hyprland-x86_64.tar ]]; then
   chown -R root:root "$INCLUDE/var/lib/auxo"
   echo "Hyprland packages on the ISO: $(ls "$INCLUDE"/var/lib/auxo/hyprland-repo/*.xbps | wc -l)"
 else
-  echo "warning: no out/hyprland-x86_64.tar — Hyprland won't install from this ISO" >&2
+  # 5.0: the live session IS Hyprland, so the ISO can't be built without Auxo's Hyprland packages
+  echo "error: no out/hyprland-x86_64.tar (run the 'Build Hyprland packages' workflow first)" >&2
+  exit 1
 fi
 
 # leftovers of an interrupted mklive run (their mounts were already released by build.sh)
@@ -63,6 +65,7 @@ SERVICES=$(grep -v '^\s*#' "$SRC/mklive/services.txt" | xargs)
 cd "$MK"
 ./mklive.sh -a x86_64 \
   -r "$OUT/repo" \
+  -r "$INCLUDE/var/lib/auxo/hyprland-repo" \
   -p "$PKGS" \
   -S "$SERVICES" \
   -I "$INCLUDE" \

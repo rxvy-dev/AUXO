@@ -104,7 +104,7 @@ def log():
     return open(calls).read() if os.path.exists(calls) else ""
 
 
-check("opens with seven pages", win.nav.count() == 7 and win.pages.count() == 7)
+check("opens with nine pages", win.nav.count() == 9 and win.pages.count() == 9)
 check("reads the accent from auxo.conf", S.accent_hex() == S.ACCENTS["emerald"])
 names = [b.toolTip() for b in win.swatches.buttons()]
 check("one swatch per accent, current one ticked", names == list(S.ACCENTS) and
@@ -115,7 +115,7 @@ wait(); shot("look")
 win.swatches.buttons()[0].click(); wait_proc()
 check("accent swatch runs pkexec auxo-tweak accent", f"root accent {names[0]}" in log())
 
-for i, name in ((1, "windows"), (2, "desktop"), (3, "displays"), (4, "system")):
+for i, name in ((1, "windows"), (2, "desktop"), (3, "displays"), (4, "taskbar"), (5, "vpn"), (6, "system")):
     win.nav.setCurrentRow(i); wait(); shot(name)
 
 win.nav.setCurrentRow(1)
@@ -131,7 +131,7 @@ check("light mode restyles the app", "#f5f5f8" in win.styleSheet())
 
 win.nav.setCurrentRow(2); wait()
 cards = [w for w in win.findChildren(QPushButton) if w.text().startswith(("Switch to", "Re-apply"))]
-check("a card for every desktop, Chrono included", len(cards) == 8 and any("Chrono" in c.text() for c in cards))
+check("a card for every desktop, Chrono included", len(cards) == 7 and any("Chrono" in c.text() for c in cards))
 check("the current desktop offers to re-apply its rice", any(c.text() == "Re-apply the Auxo rice" for c in cards))
 next(c for c in cards if c.text() == "Re-apply the Auxo rice").click(); wait_proc()
 check("re-apply runs pkexec auxo-tweak rice hyprland", "root rice hyprland" in log())
@@ -166,7 +166,7 @@ b = {"name": "B", "x": 130, "y": 400, "w": 80, "h": 50}
 S.snap(b, [a])
 check("dropped screens snap against their neighbour", (b["x"], b["y"]) in ((0, 50), (100, 0), (100, 49)))
 
-win.nav.setCurrentRow(4); wait()
+win.nav.setCurrentRow(6); wait()
 fw = next(b for b in win.findChildren(QCheckBox) if b.text() == "Firewall")
 check("switches show the current state", fw.isChecked())
 fw.setChecked(False); wait_proc()
@@ -178,11 +178,11 @@ check("status line reports success", win.status.text().startswith("✓"))
 
 # search jumps to the right page
 win.jump("bluetooth"); wait()
-check("search: “bluetooth” opens System → Services", win.nav.currentRow() == 4)
+check("search: “bluetooth” opens System → Services", win.nav.currentRow() == 6)
 win.jump("gaps"); wait()
 check("search: “gaps” opens Windows & bar", win.nav.currentRow() == 1)
 win.jump("password"); wait()
-check("search: “password” opens Health", win.nav.currentRow() == 5)
+check("search: “password” opens Health", win.nav.currentRow() == 7)
 win.jump("refresh rate"); wait()
 check("search: “refresh rate” opens Displays", win.nav.currentRow() == 3)
 
@@ -199,14 +199,14 @@ win.import_rice(); wait_proc(); wait(300); wait_proc()
 check("importing a rice runs look import, then offers its accent", f"look import {rice}" in log() and "root accent rose" in log())
 
 # health
-win.nav.setCurrentRow(5); win.check_health(); wait(800); shot("health")
+win.nav.setCurrentRow(7); win.check_health(); wait(800); shot("health")
 check("health lists problems and the fix", "shares tty1" in win.health_box.itemAt(0).widget().text() and win.fix_btn.isEnabled())
-check("sidebar shows how many to fix", "1 to fix" in win.nav.item(5).text())
+check("sidebar shows how many to fix", "1 to fix" in win.nav.item(7).text())
 win.fix_btn.click(); wait_proc()
 check("Fix everything runs pkexec auxo-tweak doctor --fix", "root doctor --fix" in log())
 
 # Ask Auxo
-win.nav.setCurrentRow(6); wait()
+win.nav.setCurrentRow(8); wait()
 check("AI on: no setup card, chat ready", not win.ai_setup.isVisible() and win.ask.isEnabled())
 win.ask.setText("how do I turn on bluetooth?"); win.send_question()
 for _ in range(40):

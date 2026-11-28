@@ -45,8 +45,9 @@ FETCH=/usr/libexec/auxo/auxo-fetch-repo
 if [[ -x $FETCH ]]; then
   step "Auxo tools"
   if $SUDO "$FETCH" https://github.com/rxvy-dev/AUXO/releases/latest/download/auxo-packages-x86_64.tar /var/lib/auxo/auxo-repo; then
-    $SUDO xbps-install -u "${yes[@]}" -R /var/lib/auxo/auxo-repo $(xbps-query auxo-installer >/dev/null 2>&1 && echo auxo-installer) \
-      $(xbps-query cybervis >/dev/null 2>&1 && echo cybervis) auxo-tools || note "couldn't update Auxo's tools"
+    mine=(auxo-tools)
+    for p in auxo-installer cybervis; do xbps-query "$p" >/dev/null 2>&1 && mine+=("$p"); done
+    $SUDO xbps-install -u "${yes[@]}" -R /var/lib/auxo/auxo-repo "${mine[@]}" || note "couldn't update Auxo's tools"
   else
     note "couldn't download Auxo's tools (offline?)"
   fi

@@ -13,12 +13,11 @@ import sys
 import tempfile
 import threading
 
-from PyQt6.QtCore import QObject, QPointF, QProcess, QRectF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QPointF, QProcess, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QFont, QIcon, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
 from PyQt6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QCompleter, QFrame, QGridLayout,
                              QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-                             QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QSizePolicy,
-                             QStackedWidget, QVBoxLayout, QWidget)
+                             QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
 
 from . import disks as disklib
 from .config import EXTRAS, FILESYSTEMS, KEYBOARDS, LOCALES, STYLES, InstallConfig, validate, validate_user

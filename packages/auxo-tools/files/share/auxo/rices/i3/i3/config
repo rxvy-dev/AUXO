@@ -27,6 +27,7 @@ exec --no-startup-id blueman-applet
 exec --no-startup-id auxo-polkit-agent
 exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock -n -c 0b0b10
 exec --no-startup-id auxo-tweak session-apply --once
+exec --no-startup-id auxo-autostart
 
 bindsym $mod+Return exec $term
 bindsym $mod+d exec --no-startup-id rofi -show drun

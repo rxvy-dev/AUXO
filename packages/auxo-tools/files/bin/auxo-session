@@ -1,0 +1,36 @@
+#!/bin/sh
+# auxo-session [hyprland|sway] — start an Auxo desktop from the login screen.
+#
+# Hyprland needs working 3D graphics. When it can't start (a virtual machine without 3D, a
+# broken driver), it quits within seconds; Auxo then starts Sway in software-rendering mode
+# instead, so you always get a desktop (and the installer) instead of a black screen.
+# The reason is kept in ~/.cache/auxo-session.log.
+want=${1:-hyprland}
+mkdir -p "$HOME/.cache"
+log="$HOME/.cache/auxo-session.log"
+: > "$log"
+note() { echo "auxo-session: $*" >> "$log"; }
+
+if [ "$want" = hyprland ] && command -v Hyprland >/dev/null 2>&1 && [ -z "${AUXO_SAFE_GRAPHICS:-}" ]; then
+  start=$(date +%s)
+  dbus-run-session Hyprland >> "$log" 2>&1
+  rc=$?
+  ran=$(( $(date +%s) - start ))
+  # a normal logout: Hyprland ran for a while
+  [ "$ran" -ge 20 ] && exit "$rc"
+  note "Hyprland stopped after ${ran}s (exit $rc): starting Sway with software rendering"
+  export AUXO_SAFE_GRAPHICS=1
+fi
+
+if command -v sway >/dev/null 2>&1; then
+  if [ -n "${AUXO_SAFE_GRAPHICS:-}" ]; then
+    export WLR_RENDERER=pixman WLR_NO_HARDWARE_CURSORS=1
+  fi
+  # the live ISO keeps the Sway rice's bar config apart from Hyprland's
+  if [ -f "$HOME/.config/auxo/sway-waybar/config.jsonc" ] && [ "$want" != sway ]; then
+    export AUXO_WAYBAR_DIR="$HOME/.config/auxo/sway-waybar"
+  fi
+  exec dbus-run-session sway --unsupported-gpu >> "$log" 2>&1
+fi
+note "no desktop could start"
+exit 1

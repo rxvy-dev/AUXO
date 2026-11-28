@@ -1,0 +1,51 @@
+name: Lint & security checks
+
+# Every push and pull request: shellcheck on every shell script, ruff on every Python file,
+# and bandit (a security scanner for Python). A failure here blocks the ISO build from being
+# trusted — see SECURITY.md for what each check is for.
+on:
+  push:
+    branches: [main, auxo-beta]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          sudo apt-get install -y -qq shellcheck >/dev/null
+          pip install --quiet ruff bandit
+
+      - name: Find the scripts (by their first line, so scripts without an extension count too)
+        run: |
+          { git ls-files '*.sh'; grep -rlI -e '^#!/bin/sh' -e '^#!/bin/bash' -e '^#!/usr/bin/env bash' -e '^#!/usr/bin/env sh' \
+              packages/auxo-tools/files/bin packages/auxo-tools/files/libexec build.sh installer; } | sort -u > /tmp/shell.txt
+          { git ls-files '*.py'; grep -rlI '^#!/usr/bin/env python3' packages/auxo-tools/files/bin \
+              packages/auxo-tools/files/libexec installer/auxo-installer; } | sort -u > /tmp/python.txt
+          echo "shell scripts: $(wc -l < /tmp/shell.txt) · Python files: $(wc -l < /tmp/python.txt)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: shellcheck (warnings and errors)
+        run: xargs -a /tmp/shell.txt shellcheck -S warning
+
+      - name: ruff (syntax errors, undefined names, unused code)
+        run: xargs -a /tmp/python.txt ruff check --select E9,F63,F7,F82,F401,F811,F841 --output-format github
+
+      - name: bandit (security; fails on high-severity findings)
+        run: |
+          xargs -a /tmp/python.txt bandit -q -lll -f txt
+          # medium findings are listed for review (most are fixed https:// URLs and /tmp fallbacks)
+          xargs -a /tmp/python.txt bandit -q -ll -f txt >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: No secrets or binaries committed
+        run: |
+          ! git ls-files | grep -E '\.(pem|key|p12|env)$|id_rsa|credentials' || { echo "::error::a secret-looking file is committed"; exit 1; }
+          big=$(git ls-files -z | xargs -0 file --mime-type | grep -E 'application/(x-executable|x-sharedlib|x-pie-executable)' || true)
+          [ -z "$big" ] || { echo "::error::compiled binaries are committed (everything must be built from source): $big"; exit 1; }

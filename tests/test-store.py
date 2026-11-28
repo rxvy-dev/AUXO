@@ -4,7 +4,6 @@
 import importlib.machinery
 import importlib.util
 import os
-import subprocess
 import sys
 import tempfile
 import time

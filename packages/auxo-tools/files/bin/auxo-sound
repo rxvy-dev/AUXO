@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
 
 from PyQt6.QtCore import Qt, QTimer  # noqa: E402
-from PyQt6.QtGui import QColor, QIcon  # noqa: E402
+from PyQt6.QtGui import QColor  # noqa: E402
 from PyQt6.QtWidgets import (QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QSlider,  # noqa: E402
                              QToolButton, QVBoxLayout, QWidget)
 

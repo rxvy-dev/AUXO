@@ -1,5 +1,5 @@
 dbus
 elogind
 NetworkManager
-sddm
+greetd
 chronyd

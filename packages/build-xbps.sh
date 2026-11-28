@@ -17,13 +17,12 @@ mkdir -p "$OUT"
 # ── auxo-tools ─────────────────────────────────────────────────────────
 src=$HERE/packages/auxo-tools/files
 d=$WORK/auxo-tools
-install -d "$d"/usr/{bin,lib/auxo,share/{auxo,applications,pixmaps,wallpapers,plasma/look-and-feel}} \
+install -d "$d"/usr/{bin,lib/auxo,share/{auxo,applications,pixmaps,wallpapers}} \
            "$d"/etc/auxo "$d"/etc/kernel.d/post-install "$d"/usr/lib/dracut/dracut.conf.d \
            "$d"/usr/libexec/auxo "$d"/usr/local/share/dbus-1/system-services
 find "$src/bin" -maxdepth 1 -type f -exec install -m755 {} "$d/usr/bin/" \;
 install -m644 "$src"/lib/*.py "$d/usr/lib/auxo/"
 cp -r "$src"/share/auxo/. "$d/usr/share/auxo/"
-cp -r "$src"/share/plasma/look-and-feel/. "$d/usr/share/plasma/look-and-feel/"
 install -m644 "$src"/share/wallpapers/* "$d/usr/share/wallpapers/"
 install -m644 "$src"/share/pixmaps/* "$d/usr/share/pixmaps/"
 install -m644 "$src"/applications/*.desktop "$d/usr/share/applications/"
@@ -32,7 +31,10 @@ install -m755 "$src/etc/kernel.d/post-install/49-auxo-default-kernel" "$d/etc/ke
 # no boot splash: keep Plymouth out of every initramfs
 install -m644 "$src/dracut/90-auxo-no-plymouth.conf" "$d/usr/lib/dracut/dracut.conf.d/"
 # D-Bus must start elogind through runit (Void's wrapper), never as a bare unsupervised copy
-install -m755 "$src/libexec/elogind-activate" "$src/libexec/auxo-fetch-repo" "$d/usr/libexec/auxo/"
+install -m755 "$src/libexec/elogind-activate" "$src/libexec/auxo-fetch-repo" "$src/libexec/auxo-bootanim" "$d/usr/libexec/auxo/"
+# the boot animation starts at the end of runit stage 1
+install -d "$d/etc/runit/core-services"
+install -m644 "$src/etc/runit/core-services/99-auxo-bootanim.sh" "$d/etc/runit/core-services/"
 install -m644 "$src/share/dbus-1/system-services/org.freedesktop.login1.service" \
   "$d/usr/local/share/dbus-1/system-services/"
 find "$d/usr/share/auxo" -name '*.sh' -exec chmod 755 {} +

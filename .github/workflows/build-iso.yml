@@ -42,6 +42,9 @@ jobs:
           sh tests/test-wallpaper.sh
           python3 tests/test-store.py
           python3 tests/test-sound.py
+          pip install --quiet pillow
+          python3 tests/test-features.py
+          python3 tests/keymap-parity.py
 
       - name: Get Auxo's Hyprland packages (newest build-hyprland release)
         env:

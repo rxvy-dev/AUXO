@@ -20,6 +20,8 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak power balanced|performance|power-saver       power profile
   auxo-tweak firewall on|off|status   ufw: block incoming, allow outgoing
   auxo-tweak dns cloudflare|quad9|google|auto             DNS servers for every connection
+  auxo-tweak grub-theme [NAME]        boot menu look: auxo | windows | mac | neon | zen | candy | minimal
+  auxo-tweak bootanim on|off|preview  the Auxo boot animation
   auxo-tweak vpn [mullvad [ACCOUNT]|proton|import FILE|on|off]   Mullvad, Proton VPN or any WireGuard/OpenVPN file
   auxo-tweak snapshots on|off|status  btrfs time-travel: snapper + bootable snapshots in GRUB
   auxo-tweak gaming on|off|status     Steam, GameMode, MangoHud, gamescope + low-latency tweaks
@@ -35,7 +37,6 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak doctor [--fix]           find (and repair) common problems, like a login screen that rejects your password
 """
 import argparse
-import glob
 import os
 import re
 import shutil
@@ -995,6 +996,36 @@ def cmd_dns(args):
     write_conf({"DNS": args.provider})
 
 
+# ── boot: GRUB theme + boot animation ─────────────────────────────────
+def cmd_grub_theme(args):
+    """auxo-tweak grub-theme [NAME]: the look of the boot menu."""
+    styles = auxo_theme.GRUB_STYLES
+    cur = read_conf().get("GRUB_STYLE", "auxo")
+    if not args.name:
+        for k, (desc, _bg, _c) in styles.items():
+            print(f"  {'●' if k == cur else '○'} {k:<9} {desc}")
+        print(f"\n{DIM}change it: sudo auxo-tweak grub-theme NAME{RESET}")
+        return
+    require_root()
+    write_conf({"GRUB_STYLE": args.name})
+    auxo_theme.apply_grub(auxo_theme.current(), style=args.name)
+    log(f"boot menu → {args.name} ({styles[args.name][0]}). You'll see it at the next boot.")
+
+
+def cmd_bootanim(args):
+    """auxo-tweak bootanim on|off|status|preview"""
+    cur = read_conf().get("BOOTANIM", "on")
+    if args.state in (None, "status"):
+        print(f"boot animation: {cur}  (sudo auxo-tweak bootanim on|off · auxo-tweak bootanim preview)")
+        return
+    if args.state == "preview":
+        run(["/usr/libexec/auxo/auxo-bootanim", "--tty", "/dev/tty"], check=False)
+        return
+    require_root()
+    write_conf({"BOOTANIM": args.state})
+    log(f"boot animation {args.state}")
+
+
 # ── VPN (Mullvad, Proton, any WireGuard / OpenVPN file) ────────────────
 def cmd_vpn(args):
     """auxo-tweak vpn [status|mullvad|proton|import FILE|on NAME|off|remove NAME|auto NAME on|off|check]"""
@@ -1618,6 +1649,10 @@ def main():
     s = sub.add_parser("power"); s.add_argument("profile", choices=["balanced", "performance", "power-saver"])
     s.set_defaults(fn=cmd_power)
     s = sub.add_parser("firewall"); s.add_argument("state", choices=["on", "off", "status"]); s.set_defaults(fn=cmd_firewall)
+    s = sub.add_parser("grub-theme", help="the boot menu's look: " + ", ".join(auxo_theme.GRUB_STYLES))
+    s.add_argument("name", nargs="?", choices=list(auxo_theme.GRUB_STYLES)); s.set_defaults(fn=cmd_grub_theme)
+    s = sub.add_parser("bootanim", help="the Auxo boot animation: on, off, status or preview")
+    s.add_argument("state", nargs="?", choices=["on", "off", "status", "preview"]); s.set_defaults(fn=cmd_bootanim)
     s = sub.add_parser("vpn", help="Mullvad, Proton VPN or any WireGuard/OpenVPN file, on and off")
     s.add_argument("action", nargs="?", default="status"); s.add_argument("rest", nargs="*")
     s.add_argument("--country", help="Mullvad: servers in this country (code or name)")

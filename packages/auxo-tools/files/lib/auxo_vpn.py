@@ -17,7 +17,9 @@ Everything is a NetworkManager connection: `nmcli connection up NAME` works as w
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -101,7 +103,7 @@ class VPN:
     def __init__(self, runner=None, fetch=None, tmpdir=None):
         self.run = runner or _run
         self.fetch = fetch or _fetch
-        self.tmpdir = tmpdir or "/tmp"
+        self.tmpdir = tmpdir         # None: a private folder (0700) per import, removed afterwards
 
     # ── NetworkManager ──
     def connections(self):
@@ -134,9 +136,12 @@ class VPN:
             return m.group(1) if m else os.path.splitext(os.path.basename(path))[0]
         parse_wireguard(text)
         conn = nm_name(name or path, PROVIDERS.get(provider, {}).get("prefix", ""))
-        os.makedirs(self.tmpdir, exist_ok=True)
-        tmp = os.path.join(self.tmpdir, f"{conn}.conf")     # nmcli names the interface after the file
-        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        work = self.tmpdir or tempfile.mkdtemp(prefix="auxo-vpn-")   # never a guessable path in /tmp
+        os.makedirs(work, mode=0o700, exist_ok=True)
+        tmp = os.path.join(work, f"{conn}.conf")            # nmcli names the interface after the file
+        if os.path.lexists(tmp):
+            os.remove(tmp)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "w") as f:
             f.write(text)
         try:
@@ -147,6 +152,8 @@ class VPN:
                 os.remove(tmp)
             except OSError:
                 pass
+            if not self.tmpdir:
+                shutil.rmtree(work, ignore_errors=True)
         if rc != 0:
             raise VPNError("NetworkManager couldn't import it: " + out.strip())
         # connect when you say so, not at every boot (change with auxo-tweak vpn auto NAME)
@@ -238,15 +245,18 @@ class VPN:
             conf = (f"# Mullvad {host} — added by auxo-tweak vpn mullvad\n[Interface]\nPrivateKey = {priv}\n"
                     f"Address = {addr}\nDNS = {MULLVAD_DNS}\n\n[Peer]\nPublicKey = {key}\n"
                     f"AllowedIPs = 0.0.0.0/0, ::/0\nEndpoint = {ip}:51820\n")
-            os.makedirs(self.tmpdir, exist_ok=True)
-            tmp = os.path.join(self.tmpdir, f"auxo-{host}.conf")
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            work = self.tmpdir or tempfile.mkdtemp(prefix="auxo-vpn-")
+            os.makedirs(work, mode=0o700, exist_ok=True)
+            tmp = os.path.join(work, f"auxo-{host}.conf")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as f:
                 f.write(conf)
             try:
                 made.append(self.import_file(tmp, name=f"mullvad-{host.split('-wg')[0]}", provider="mullvad"))
             finally:
                 os.remove(tmp)
+                if not self.tmpdir:
+                    shutil.rmtree(work, ignore_errors=True)
         return made
 
 

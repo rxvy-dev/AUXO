@@ -9,7 +9,7 @@
   "modules-center": ["group/pins"],
   "modules-right": ["cpu", "memory", "network", "pulseaudio", "battery", "custom/update", "tray", "clock"],
   "custom/auxo": {
-    "format": "▲ auxo",
+    "format": "\uf120 auxo",
     "tooltip": false,
     "on-click": "auxo-launcher --style mac"
   },
