@@ -377,7 +377,7 @@ class Settings(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Auxo Settings")
-        self.setWindowIcon(QIcon.fromTheme("auxo", QIcon.fromTheme("preferences-system")))
+        self.setWindowIcon(QIcon.fromTheme("auxo-settings", QIcon.fromTheme("preferences-system")))
         self.resize(1040, 720)
         self.look = auxo_look.load(HOME)
         self.proc = None
@@ -1901,8 +1901,8 @@ PAGES = [("Look", "preferences-desktop-theme", "page_look"),
          ("Windows & bar", "preferences-system-windows", "page_windows"),
          ("Desktop", "preferences-desktop", "page_desktop"),
          ("Displays", "video-display", "page_displays"),
-         ("Taskbar & widgets", "preferences-desktop-icons", "page_taskbar"),
-         ("VPN", "network-vpn", "page_vpn"),
+         ("Taskbar & widgets", "auxo-widgets", "page_taskbar"),
+         ("VPN", "auxo-vpn", "page_vpn"),
          ("System", "preferences-system", "page_system"),
          ("Health", "help-faq", "page_health"),
          ("Ask Auxo", "dialog-information", "page_ai")]

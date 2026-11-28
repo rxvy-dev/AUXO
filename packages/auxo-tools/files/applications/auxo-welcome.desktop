@@ -3,6 +3,6 @@ Type=Application
 Name=Welcome to Auxo
 Comment=Install, update and customise Auxo Linux
 Exec=auxo-welcome
-Icon=/usr/share/pixmaps/auxo-logo.png
+Icon=auxo-welcome
 Categories=System;Settings;
 StartupWMClass=auxo-welcome

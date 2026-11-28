@@ -3,6 +3,6 @@ Type=Application
 Name=Auxo Tweak
 Comment=Change accent, desktop, kernel, shell and more
 Exec=auxo-tweak
-Icon=/usr/share/pixmaps/auxo-logo.png
+Icon=auxo-tweak
 Terminal=true
 Categories=System;Settings;

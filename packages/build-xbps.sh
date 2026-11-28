@@ -25,6 +25,9 @@ install -m644 "$src"/lib/*.py "$d/usr/lib/auxo/"
 cp -r "$src"/share/auxo/. "$d/usr/share/auxo/"
 install -m644 "$src"/share/wallpapers/* "$d/usr/share/wallpapers/"
 install -m644 "$src"/share/pixmaps/* "$d/usr/share/pixmaps/"
+# AUXO 5.0 app icons (branding/gen-app-icons.py)
+install -d "$d/usr/share/icons/hicolor/scalable/apps"
+install -m644 "$src"/share/icons/hicolor/scalable/apps/*.svg "$d/usr/share/icons/hicolor/scalable/apps/"
 install -m644 "$src"/applications/*.desktop "$d/usr/share/applications/"
 install -m644 "$src/etc/auxo/auxo.conf" "$d/etc/auxo/auxo.conf"
 install -m755 "$src/etc/kernel.d/post-install/49-auxo-default-kernel" "$d/etc/kernel.d/post-install/"
@@ -32,6 +35,9 @@ install -m755 "$src/etc/kernel.d/post-install/49-auxo-default-kernel" "$d/etc/ke
 install -m644 "$src/dracut/90-auxo-no-plymouth.conf" "$d/usr/lib/dracut/dracut.conf.d/"
 # D-Bus must start elogind through runit (Void's wrapper), never as a bare unsupervised copy
 install -m755 "$src/libexec/elogind-activate" "$src/libexec/auxo-fetch-repo" "$src/libexec/auxo-bootanim" "$d/usr/libexec/auxo/"
+# performance defaults: sysctl + I/O schedulers (overridable from /etc)
+install -Dm644 "$src/sysctl/60-auxo-performance.conf" "$d/usr/lib/sysctl.d/60-auxo-performance.conf"
+install -Dm644 "$src/udev/60-auxo-ioschedulers.rules" "$d/usr/lib/udev/rules.d/60-auxo-ioschedulers.rules"
 # the boot animation starts at the end of runit stage 1
 install -d "$d/etc/runit/core-services"
 install -m644 "$src/etc/runit/core-services/99-auxo-bootanim.sh" "$d/etc/runit/core-services/"

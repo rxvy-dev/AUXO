@@ -3,6 +3,6 @@ Type=Application
 Name=Auxo Update
 Comment=Snapshot and update the whole system
 Exec=auxo-update
-Icon=/usr/share/pixmaps/auxo-logo.png
+Icon=auxo-update
 Terminal=true
 Categories=System;

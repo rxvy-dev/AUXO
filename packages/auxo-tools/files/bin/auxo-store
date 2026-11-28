@@ -155,7 +155,7 @@ class StoreWindow(QWidget):
         line = "#e3e3ea" if light else pal.get("inactive", "#2a2a38")
         acc = pal.get("accent", "#a78bfa")
         self.setWindowTitle("Auxo App Store")
-        self.setWindowIcon(QIcon.fromTheme("system-software-install"))
+        self.setWindowIcon(QIcon.fromTheme("auxo-store", QIcon.fromTheme("system-software-install")))
         self.resize(1080, 720)
         self.setStyleSheet(f"""
             QWidget {{ background: {bg}; color: {fg}; font-family: "{font}"; font-size: 13px; }}

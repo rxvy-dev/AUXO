@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=VPN
+GenericName=Mullvad, Proton VPN, WireGuard
+Comment=Add Mullvad or Proton VPN in a few clicks, connect and disconnect
+Exec=auxo-settings vpn
+Icon=auxo-vpn
+Terminal=false
+Categories=Settings;Network;Security;
+Keywords=vpn;mullvad;proton;protonvpn;wireguard;openvpn;privacy;

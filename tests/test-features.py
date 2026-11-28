@@ -232,5 +232,26 @@ post = open(f"{HERE}/mklive/postsetup.sh").read()
 check("live user gets the Windows style + Sway fallback bar", "rice hyprland-win" in post and "sway-waybar" in post)
 check("ISO desktop entry has no konsole", "konsole" not in open(f"{HERE}/mklive/include/usr/share/applications/auxo-install.desktop").read())
 
+print("▲ auxo-fetch")
+Fe = load_script("auxo_fetch", f"{PKG}/bin/auxo-fetch")
+info = {"user": "rxvy@peak", "os": "Auxo Linux 5.0 (beta)", "kernel": "6.12.1_1", "init": "runit", "uptime": "2h 5m",
+        "shell": "zsh", "terminal": "kitty", "desktop": "Hyprland (wayland) · Windows style", "cpu": "AMD Ryzen 7 ×16",
+        "cpu_temp": 48, "memory": [6.2, 31.2], "swap": [0.0, 7.8], "battery": None, "accent": "violet",
+        "packages": "1204 xbps · 3 flatpak", "gpu": ["NVIDIA GeForce RTX 5080 (nvidia)"], "displays": ["2560×1440 @ 165 Hz"],
+        "vpn": "mullvad-se-got", "disk": [120.0, 1000.0, "btrfs"]}
+wide = Fe.render(info, color=True, columns=140)
+check("fetch: style, GPU driver, display, VPN, temperature", all(x in wide for x in (
+    "Windows style", "RTX 5080 (nvidia)", "2560×1440 @ 165 Hz", "mullvad-se-got", "48°C", "1204 xbps")))
+check("fetch: the Auxo peak beside the text", any("▄██▄" in l and "packages" in l for l in wide.splitlines()))
+narrow = Fe.render(info, color=False, columns=50)
+check("fetch: narrow terminal puts the peak on top", narrow.splitlines()[1].strip() == "▄██▄"
+      and "\033" not in narrow)
+check("fetch: no colour codes when piped / NO_COLOR", "\033[" not in Fe.render(info, color=False))
+small = Fe.render(info, small=True, color=False)
+check("fetch --small: a few lines", len([l for l in small.splitlines() if l.strip()]) <= 5)
+r = subprocess.run([sys.executable, f"{PKG}/bin/auxo-fetch", "--json"], capture_output=True, text=True,
+                   env={**os.environ, "AUXO_LIB": f"{PKG}/lib"})
+check("fetch --json: every field", r.returncode == 0 and {"gpu", "displays", "vpn", "packages", "desktop"} <= set(json.loads(r.stdout)))
+
 print(f"\n{passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

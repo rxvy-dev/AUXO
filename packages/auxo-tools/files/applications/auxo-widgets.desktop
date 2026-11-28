@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Taskbar & Widgets
+Comment=Pin apps to the taskbar or dock, and put widgets on your desktop
+Exec=auxo-settings taskbar
+Icon=auxo-widgets
+Terminal=false
+Categories=Settings;DesktopSettings;
+Keywords=pin;unpin;dock;taskbar;widget;clock;weather;

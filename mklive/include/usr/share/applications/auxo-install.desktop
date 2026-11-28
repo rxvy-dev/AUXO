@@ -2,7 +2,7 @@
 Type=Application
 Name=Install Auxo Linux
 Comment=Install Auxo on this computer
-Icon=auxo-logo
+Icon=auxo-installer
 Exec=auxo-installer --gui
 Terminal=false
 Categories=System;

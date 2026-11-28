@@ -38,8 +38,8 @@ gh attestation verify auxo-linux-*.iso -R rxvy-dev/AUXO
 
 ## What AUXO does on your computer
 
-- `auxo-tweak` and the installer change your system only when you run them, and they print every
-  command first (`AUXO_DRY_RUN=1 auxo-tweak …` shows the commands without running anything).
+- `auxo-tweak` and the installer change your system only when you run them.
+  `AUXO_DRY_RUN=1 auxo-tweak …` lists the commands a change would run, without running any of them.
 - AUXO doesn't collect analytics or telemetry. The only servers it talks to are:
   - Void's package mirrors, for updates and for the bar's "updates available" check every 30 minutes
   - this repository's releases, for Auxo's own packages

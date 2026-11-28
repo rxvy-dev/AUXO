@@ -56,11 +56,17 @@ check "Auxo Linux" "Auxo branding on the console"
 check "login:" "reached a login prompt"
 
 if (( ok )); then
-  echo "booted — waiting 90s for the Plasma live session, then taking a screenshot"
+  echo "booted — waiting 90s for the live desktop (Hyprland, Windows style; Sway without 3D), then a screenshot"
   sleep 90
   qmp "{\"execute\":\"screendump\",\"arguments\":{\"filename\":\"$OUT/screen.ppm\"}}"
   sleep 2
-  command -v convert >/dev/null && [[ -f $OUT/screen.ppm ]] && convert "$OUT/screen.ppm" "$OUT/screen.png" && rm -f "$OUT/screen.ppm"
+  if command -v convert >/dev/null && [[ -f $OUT/screen.ppm ]]; then
+    convert "$OUT/screen.ppm" "$OUT/screen.png" && rm -f "$OUT/screen.ppm"
+    # a desktop on the light Windows-style wallpaper, not a black text console or login screen
+    bright=$(convert "$OUT/screen.png" -colorspace Gray -format '%[fx:int(mean*100)]' info: 2>/dev/null || echo 0)
+    echo "  screen brightness: ${bright}%"
+    if (( bright >= 25 )); then echo "  ✓ the live desktop is on screen"; else echo "  ✗ no live desktop on screen (black or text only)"; fail=1; fi
+  fi
 fi
 qmp '{"execute":"quit"}'
 echo "serial log: $LOG"

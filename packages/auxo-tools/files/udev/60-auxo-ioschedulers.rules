@@ -1,0 +1,8 @@
+# AUXO 5.0: the right I/O scheduler for each kind of disk (shipped in /usr/lib/udev/rules.d;
+# a file with the same name in /etc/udev/rules.d replaces it).
+# NVMe: none (the drive schedules itself, any extra work only adds latency)
+ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/scheduler}="none"
+# SATA/USB SSDs and SD cards: mq-deadline
+ACTION=="add|change", KERNEL=="sd[a-z]*|mmcblk[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+# spinning hard drives: BFQ keeps the desktop responsive while the disk is busy
+ACTION=="add|change", KERNEL=="sd[a-z]*", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
