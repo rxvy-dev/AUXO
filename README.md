@@ -46,13 +46,16 @@ On top it adds:
 
 ```bash
 auxo-tweak desktop hyprland           # switch your whole desktop
-auxo-tweak accent rose                # recolour GRUB, login, prompt, terminals, bars, Plasma
+auxo-tweak accent rose                # recolour GRUB, login, prompt, terminals, bars
 auxo-tweak mode light                 # light or dark, on every desktop
 auxo-tweak look set gaps=4 rounding=0 bar=bottom   # your own rice, on every desktop
 auxo-tweak apps creative dev          # popular app bundles in one go
 auxo-tweak look preset lite           # Auxo, glass, minimal, cozy, retro, mac or lite
-auxo-tweak rice hyprland-mac          # Hyprland, Mac style in Liquid Glass: menu bar, dock, Control Center
-auxo-tweak rice hyprland-win          # Hyprland, Windows style: taskbar, Start menu, Quick settings
+auxo-tweak style windows              # Hyprland styles: windows | mac | auxo | neon | zen | candy
+auxo-pins add firefox                 # pin an app to the taskbar / dock (or right-click it in Start)
+auxo-widgets add weather calendar     # desktop widgets: clock, weather, music, system, calendar
+auxo-tweak vpn mullvad                # Mullvad or Proton VPN in a few clicks (or: vpn import FILE.conf)
+auxo-tweak grub-theme neon            # boot menu: auxo | windows | mac | neon | zen | candy | minimal
 auxo-clipboard                        # clipboard history (Super+Shift+V on Hyprland/Sway)
 auxo-tweak monitors set DP-1 mode=2560x1440@144 scale=1.25 workspaces=1-5
 auxo-tweak doctor --fix               # find and repair common problems
@@ -69,17 +72,22 @@ auxo-rollback --list                  # list snapshots
 
 | | |
 |---|---|
-| **Installer** | Graphical, with your disks drawn as bars, desktop and Hyprland-style previews, live accent colours and a summary page; or retro, keyboard-driven text (`sudo auxo-installer`). Both use one install engine. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Works offline (installs Plasma); other desktops download what they need. |
-| **9 desktop choices, all riced** | KDE Plasma 6 with the **Auxo global theme** (the live desktop, installs offline), Hyprland, Sway, i3, GNOME, Xfce and Cinnamon with **Auxo rices**, [Chrono](https://github.com/rxvy-dev/chrono) (rxvy's own Wayland desktop, built from source with an Auxo theme), or no desktop. Hyprland comes from the [hyprland-void](https://github.com/Makrennel/hyprland-void) community repo, since Void doesn't package it. |
-| **One accent, everywhere** | 7 accents applied to the GRUB theme, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, the KDE colour scheme and the GNOME accent, and the wallpaper changes straight away on every desktop. |
+| **Live session** | Boots straight into Hyprland in the Windows style (taskbar, Start, Quick settings). Without 3D graphics (some VMs), `auxo-session` falls back to Sway with software rendering instead of a black screen. |
+| **Installer** | Graphical, with your disks drawn as bars, desktop and Hyprland-style previews, live accent colours and a summary page; or retro, keyboard-driven text (`sudo auxo-installer`). Both use one install engine. Erase a disk (UEFI or BIOS) or use existing partitions to dual boot. btrfs (with subvolumes), ext4 or xfs. Hyprland (every style) and Sway install offline; other desktops download what they need. |
+| **Hyprland in 6 styles** | **Windows** (taskbar, Start menu, Quick settings), **Mac** (Liquid Glass menu bar, dock, Launchpad, Control Center), **Auxo** (floating bar), **Neon** (cyberpunk), **Zen** (minimal) and **Candy** (pastel), each with its own original 2K wallpaper and lock screen, and the same keys. Hyprland 0.49 is built by Auxo from source (`packages/hyprland`), since Void doesn't package it. |
+| **Pinned apps & widgets** | Pin and unpin apps on the taskbar, dock or bar (right-click in Start / Launchpad or on a pin, or `auxo-pins`). Desktop widgets: clock, weather, now playing, system stats and calendar (`auxo-widgets`). |
+| **VPN** | Mullvad (with your account number) and Proton VPN (free plan too) in a few clicks, or any WireGuard/OpenVPN file, through NetworkManager. Auxo Settings → VPN or `auxo-tweak vpn`. |
+| **Boot** | An Auxo boot animation that can't hang the boot, and 7 GRUB themes (`auxo-tweak grub-theme`). |
+| **8 desktop choices, all riced** | Hyprland and Sway (on the ISO), i3, GNOME, Xfce and Cinnamon with **Auxo rices**, [Chrono](https://github.com/rxvy-dev/chrono) (rxvy's own Wayland desktop, built from source with an Auxo theme), or no desktop. KDE Plasma was dropped in 5.0. |
+| **One accent, everywhere** | 7 accents applied to the GRUB theme, login screen, MOTD, zsh/fish/bash prompts, kitty/foot/alacritty, waybar/polybar, mako/dunst, Qt apps and the GNOME accent, and the wallpaper changes straight away on every desktop. |
 | **Your own rice** | One set of look settings (light/dark, wallpaper, interface and terminal fonts, gaps, rounded corners, borders, blur, transparency, animations, bar top or bottom) applied to every desktop, from Auxo Settings or `auxo-tweak look`. Saved in `~/.config/auxo/look.conf`; your own config edits stay. |
 | **Auxo AI** | A free, private assistant that runs on your PC (Ollama with a 1.3, 2 or 5 GB model). It knows every `auxo-tweak` command and your settings, and can run the fixes it suggests after you confirm. `auxo-ai` in a terminal, or **Ask Auxo** in Auxo Settings. |
 | **Self-repair** | `auxo-tweak doctor` (Health in Auxo Settings) checks the login screen, services, network, accounts, sudo and disk space, and `--fix` repairs what it can. |
 | **Kernels** | Void's `linux`, `linux-lts` or `linux-mainline`. A kernel hook keeps your pick as the default GRUB entry after every update. |
 | **NVIDIA** | `auxo-tweak nvidia on` picks `nvidia` (Turing and newer, open kernel modules), `nvidia580` (Maxwell–Volta) or `nvidia470` (Kepler) from Void's nonfree repo, with DKMS for every installed kernel. `nvidia prime` adds `prime-run` for laptops. |
-| **Performance** | sched-ext CPU schedulers through `scx-loader` (`lavd`, `bpfland`, `flash`, `cosmos`, `rusty`) with gaming/low-latency/power-save modes, power profiles, zram. |
+| **Performance** | Tuned defaults (the right I/O scheduler per disk, no copy stalls, game-ready memory maps), sched-ext CPU schedulers through `scx-loader` (`lavd`, `bpfland`, `flash`, `cosmos`, `rusty`) with gaming/low-latency/power-save modes, power profiles, zram. |
 | **Time-travel snapshots** | Flat btrfs layout (`@ @home @log @cache @snapshots`). snapper snapshots before every `auxo-update` and hourly, grub-btrfs makes them bootable, and `auxo-rollback` turns one back into your live system. `/home` is never touched. |
-| **Network & security** | `auxo-tweak firewall on` (ufw), `auxo-tweak dns cloudflare\|quad9\|google` (NetworkManager, every connection). |
+| **Network & security** | `auxo-tweak firewall on` (ufw), `auxo-tweak dns cloudflare\|quad9\|google` (NetworkManager, every connection), VPNs. Every build is linted, security-scanned and signed: see [SECURITY.md](SECURITY.md). |
 | **Gaming** | `auxo-tweak gaming on`: nonfree + multilib repos, Steam with its 32-bit libraries, GameMode, MangoHud, gamescope, `vm.max_map_count`, split-lock and ntsync tweaks. |
 | **Housekeeping** | `auxo-tweak cleanup` (package cache, orphans, old kernels via `vkpurge`), `auxo-tweak flatpak on` (Flathub), `auxo-tweak mirrors` (xmirror). |
 | **runit** | No systemd. Services are runit services in `/etc/sv`; Auxo enables them by linking into the default runlevel, the Void way. |
@@ -88,13 +96,16 @@ auxo-rollback --list                  # list snapshots
 
 | Tool | What it does |
 |---|---|
-| `auxo-settings` | The graphical settings app (Super+I on Hyprland/Sway/i3), with search: Look (presets, share your rice), Windows & bar, Desktop, System (services, snapshots, maintenance, apps), Health, Ask Auxo. Runs `auxo-tweak` underneath; asks for your password only for system changes. |
-| `auxo-tweak` | Menu + CLI: `accent`, `mode`, `look`, `wallpaper`, `apps`, `ai`, `doctor`, `desktop`, `rice`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
+| `auxo-settings` | The graphical settings app (Super+I on Hyprland/Sway/i3), with search: Look (presets, share your rice), Windows & bar, Desktop, Displays, Taskbar & widgets, VPN, System (services, snapshots, boot, maintenance, apps), Health, Ask Auxo. Runs `auxo-tweak` underneath; asks for your password only for system changes. |
+| `auxo-tweak` | Menu + CLI: `accent`, `mode`, `look`, `wallpaper`, `apps`, `ai`, `doctor`, `desktop`, `rice`, `style`, `vpn`, `grub-theme`, `bootanim`, `kernel`, `shell`, `drivers`, `nvidia`, `scheduler`, `power`, `firewall`, `dns`, `snapshots`, `gaming`, `flatpak`, `cleanup`, `mirrors`, `zram`, `repo`, `service`, `info`. Asks for sudo by itself when needed. |
 | `auxo-keys` | Every keyboard shortcut of your Hyprland, Sway or i3 setup in plain words (Super+/). |
 | `auxo-ai` | Auxo AI in the terminal: `auxo-ai` to chat, or `auxo-ai "question"`. |
 | `auxo-update` | Snapshots, updates xbps itself and then every package, updates Flatpak, then reports new config files, orphans and whether to reboot. `-y` |
 | `auxo-rollback` | Pick a snapshot and make it your live system again. `--list`, or pass a snapshot number. |
-| `auxo-fetch` | A fast system summary in your accent colour. `--json`, `--small`, `--no-logo` |
+| `auxo-fetch` | A fast system summary in your accent colour: style, GPU + driver, displays, temperatures, VPN. `--json`, `--small`, `--no-logo` |
+| `auxo-pins` | The apps pinned to the taskbar / dock / bar: `add`, `remove`, `move`, `list`. |
+| `auxo-widgets` | Desktop widgets: `add`, `remove`, `place`, `city`, `list`. |
+| `auxo-session` | Starts Hyprland from the login screen, with the Sway fallback when there's no 3D. |
 | `auxo-motd` | The greeting in each new terminal: your accent logo, uptime, disk, when you last updated, and a tip. `--off` / `--on` |
 | `auxo-welcome` | First-run hub. In the live session it opens the installer; on an installed system it offers accent, drivers, snapshots and updates. |
 | `auxo-installer` | The installer (`installer/`): graphical in the live desktop, text with `sudo`. Shipped on the live ISO only. |
@@ -112,7 +123,7 @@ auxo/
 ├── installer/                  # auxo-installer: config, disks, plan (pure), runner, curses TUI
 ├── packages/
 │   ├── build-xbps.sh           # builds auxo-tools + auxo-installer .xbps packages into a local repo
-│   └── auxo-tools/files/       # auxo-tweak & friends, rices, accents, Plasma theme
+│   └── auxo-tools/files/       # auxo-tweak & friends, rices, accents, icons, wallpapers
 ├── branding/                   # logo/ (official logo files), gen-assets.py
 ├── scripts/
 │   ├── build-iso-inner.sh      # what build.sh runs inside the Void container
@@ -137,6 +148,9 @@ system in `out/void-root` (once) and builds inside it with `chroot`. It only nee
 `curl` or `wget`, `tar` and `xz`, and about 15 GB free. Alternatives: `./build.sh --docker`
 (Void's official container) or `sudo ./build.sh --native` on a Void host.
 
+The live session is Hyprland, so the build needs Auxo's Hyprland packages: it downloads the newest
+published ones (or uses `out/hyprland-x86_64.tar` if it's there).
+
 The build packages `auxo-tools` and `auxo-installer` as `.xbps` files in a local repository,
 then runs Void's own ISO builder, [void-mklive](https://github.com/void-linux/void-mklive)
 (pinned to a tested commit), with the package list in `mklive/packages.txt`.
@@ -149,6 +163,7 @@ python3 tests/test-installer.py  # installer plans + a full walkthrough of the r
 python3 tests/test-installer-gui.py  # the graphical installer offscreen, through to a dry-run install
 python3 tests/test-shell.py      # Launchpad / Start menu / Control Center offscreen
 python3 tests/test-settings.py   # Auxo Settings offscreen: every page, clicks, the commands it runs
+python3 tests/test-features.py   # 5.0: pins, widgets, VPN, boot animation, GRUB themes, styles, auxo-fetch
 ./scripts/smoke-test.sh out/*.iso   # boots the real ISO headless and takes a screenshot
 ```
 
@@ -160,7 +175,7 @@ through `auxo-tweak`:
 partition (GPT: EFI + root, or BIOS boot + root) → format → mount (btrfs subvolumes, uncompressed
 `/boot`) → copy the live system (rsync) → fstab by UUID → remove the live user and live-only files →
 hostname, locale, time zone, keyboard → your account (root locked, sudo for wheel) →
-**auxo-tweak** `accent / shell / kernel / desktop / drivers / zram / extras` →
+**auxo-tweak** `accent / shell / kernel / desktop / style / grub-theme / drivers / zram / extras` →
 dracut → GRUB (UEFI with a fallback copy, or BIOS) → first snapshot → done.
 
 ## Website

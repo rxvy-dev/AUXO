@@ -11,7 +11,7 @@ step() { printf '\n\e[1;35m▲ %s\e[0m\n' "$*"; }
 step "Preparing the build environment"
 xbps-install -Syu xbps
 xbps-install -yu
-xbps-install -y bash make git kmod xz lzo outils dosfstools e2fsprogs gcc   # gcc: cybervis
+xbps-install -y bash make git kmod xz lzo outils dosfstools e2fsprogs gcc curl   # gcc: cybervis
 
 step "Building Auxo packages"
 "$SRC/packages/build-xbps.sh" "$OUT/repo"
@@ -44,6 +44,11 @@ find "$INCLUDE" -type f -exec chmod go-w {} +
 # Hyprland, built by Auxo (Void doesn't package it): a local repository on the live system, so
 # the installer and auxo-tweak can install it without a signing key (Void's own packages it
 # needs still come from the internet)
+if [[ ! -f $OUT/hyprland-x86_64.tar ]]; then   # local builds: Auxo's newest published Hyprland packages
+  echo "getting Auxo's Hyprland packages (releases/latest/download/hyprland-x86_64.tar)"
+  curl -fL --retry 3 -o "$OUT/hyprland-x86_64.tar" \
+    https://github.com/rxvy-dev/AUXO/releases/latest/download/hyprland-x86_64.tar || rm -f "$OUT/hyprland-x86_64.tar"
+fi
 if [[ -f $OUT/hyprland-x86_64.tar ]]; then
   mkdir -p "$INCLUDE/var/lib/auxo/hyprland-repo"
   tar -xf "$OUT/hyprland-x86_64.tar" -C "$INCLUDE/var/lib/auxo/hyprland-repo"

@@ -1,5 +1,135 @@
 # Changelog
 
+## 5.0.0 beta (public testing)
+> **THIS IS A BETA VERSION OF AUXO LIKELY TO BE UNSTABLE!** Built from the `auxo-beta` branch.
+> Please report what breaks in [Issues](https://github.com/rxvy-dev/AUXO/issues) or on
+> [Discord](https://discord.gg/XbQ66dH5a7).
+
+AUXO 5.0 is a new generation of AUXO. It boots straight into Hyprland, has six Hyprland styles,
+lets you pin apps and add desktop widgets, sets up a VPN in a few clicks, and gives every Auxo app
+its own icon. The ISO is smaller (KDE Plasma is gone), and every build is checked and signed.
+
+### Highlights
+- **The live session is Hyprland in the Windows style.** Boot the ISO and you're on the desktop with
+  a taskbar, a Start menu and Quick settings. No login screen and no KDE. Install Auxo Linux is on the
+  desktop and in Start.
+- **Safe graphics fallback.** Hyprland needs 3D graphics. When it can't start (a virtual machine
+  without 3D, or a broken driver), Auxo starts Sway with software rendering instead, so you get a
+  desktop and the installer instead of a black screen. This is `auxo-session`, and installed systems
+  use it too.
+- **Six Hyprland styles.** Windows, Mac and Auxo, plus three new ones, each with its own bar, window
+  look, animations, lock screen and an original 2560×1440 wallpaper:
+  - **Neon**: cyberpunk. Pink-to-cyan borders that keep moving, a terminal-style top bar, a synthwave horizon.
+  - **Zen**: calm and minimal. Wide gaps, no borders, a slim bottom bar, misty mountains.
+  - **Candy**: pastel and round. Floating island bars, bouncy windows, soft clouds.
+
+  Switch with `auxo-tweak style neon|zen|candy|windows|mac|auxo`, in Auxo Settings → Desktop, or pick
+  one in the installer. The keys are the same in every style.
+- **Pin apps to the taskbar and dock.** Right-click an app in Start or Launchpad and choose *Pin to
+  taskbar* / *Keep in Dock*. Right-click a pin for *Open / Move left / Move right / Unpin*, or
+  middle-click it to unpin. Clicking a pinned app that's already open switches to it instead of
+  opening a second copy. Pinned apps don't show twice. You can also use Auxo Settings → Taskbar & widgets,
+  or `auxo-pins add|remove|move`. Works on every Hyprland style (taskbar, dock or bar).
+- **Desktop widgets.** A clock, weather (wttr.in), now playing (with play/pause/skip), CPU / memory
+  / disk, and a calendar sit on the desktop under your windows (frosted on Hyprland). Turn them on
+  or off, pick a corner and a weather city in Auxo Settings → Taskbar & widgets, or with `auxo-widgets`.
+- **VPN in a few clicks: Mullvad and Proton VPN.** Neither has a Void Linux app, so Auxo uses the
+  WireGuard support both offer, through NetworkManager (so VPNs also show up in the network menu):
+  - **Mullvad**: type your account number. Auxo makes a WireGuard key on your computer (the
+    private key never leaves it), registers the public key with Mullvad and adds servers in the
+    country you pick.
+  - **Proton VPN** (free plan included): Auxo opens Proton's download page, and the WireGuard file is
+    added the moment it lands in Downloads.
+  - Any WireGuard (`.conf`) or OpenVPN (`.ovpn`) file: *Import*.
+  - Auxo Settings → VPN (connect, disconnect, connect at startup, remove), or
+    `auxo-tweak vpn mullvad [ACCOUNT] | proton | import FILE | on | off | check`.
+- **Boot animation.** The Auxo peak builds itself, the name types in and a progress sweep runs while
+  your PC starts. It's drawn on the text console, so unlike a Plymouth splash it can never hang the
+  boot. Turn it off with `auxo-tweak bootanim off` or in Settings → System. `auxo-tweak bootanim preview`
+  shows it.
+- **GRUB themes.** Seven boot-menu looks, all with the Auxo logo: Auxo (your accent), Windows, Mac,
+  Neon, Zen, Candy and Minimal. Pick one with `auxo-tweak grub-theme NAME` or in Settings → System.
+  The installer matches the boot menu to the Hyprland style you pick.
+
+### New
+- **Every Auxo app has its own icon**: Settings, App Store, System Monitor, Tweak, Update, Welcome,
+  the installer, Ask Auxo, VPN, Taskbar & Widgets and more. One family of rounded tiles, each in
+  its own colours.
+- **A new `auxo-fetch`**: the Auxo peak in your accent gradient, with sections for system, hardware
+  and auxo. It shows your Hyprland style, GPU and its driver, displays and refresh rates, CPU
+  temperature, swap, battery and VPN. Slow lookups run side by side, so it's still instant. It also
+  has `--small`, `--json` and `--no-logo`, fits narrow terminals, and outputs plain text when piped.
+- New launchers: **VPN** and **Taskbar & Widgets** (they open the matching Settings page).
+- Auxo Settings has two new pages, **Taskbar & widgets** and **VPN**, plus a boot menu theme picker
+  and a boot animation switch under System.
+
+### Improved
+- **Faster defaults**: the right I/O scheduler for every disk (NVMe: none, SSD: mq-deadline, hard
+  drive: BFQ), and fewer freezes when copying to USB sticks (smaller dirty-page batches). File
+  metadata stays cached longer, the memory-map limit is higher for games, there are more inotify
+  watches for editors, and fq_codel and TCP Fast Open are on. Override any of them from `/etc`.
+- **Hyprland and Sway install offline.** Both are on the ISO, so the installer no longer needs the
+  internet for them. Hyprland in the Windows style is the installer's default.
+- **The installer lists Hyprland first**, with all six styles previewed. The text installer shows them too.
+- **The ISO is smaller.** KDE Plasma, SDDM, Konsole, Dolphin, Kate and the KDE frameworks they pulled
+  in are gone.
+- `auxo-tweak rice` and `style` take the new styles and nicknames (`cyberpunk`, `minimal`, `pastel`…).
+
+### Fixed
+- **The welcome app never opened on Hyprland, Sway or i3.** They don't run XDG autostart, so the
+  first-login welcome was skipped. `auxo-autostart` now starts Auxo's own autostart entries on them.
+- VPN configs are written to a private, randomly named folder, never a predictable path in `/tmp`
+  (found by the new security scan).
+- `auxo-update` quotes its package list, and the ISO's firmware cleanup can't expand to `/`
+  (found by shellcheck).
+
+### Removed
+- **KDE Plasma.** It's no longer on the ISO or offered by the installer and Settings. Existing
+  Plasma installs keep working, but Auxo no longer themes them.
+- The `polkit-kde-agent` dependency of the Hyprland rice (polkit-gnome does the job).
+
+### Security & transparency
+Some of you asked how you'd know if something bad got into AUXO. Now you can check:
+- **[SECURITY.md](SECURITY.md)** explains how AUXO is built and what it connects to (no telemetry), and
+  how to report a problem privately.
+- **Every push is checked** by a new *Lint & security checks* workflow: shellcheck on every shell
+  script, ruff on every Python file, bandit (a Python security scanner, failing on high-severity
+  findings), and a guard against committed secrets or compiled binaries.
+- **Signed build provenance**: each ISO and package carries a GitHub attestation proving which commit
+  and workflow built it. Check yours with `gh attestation verify auxo-linux-*.iso -R rxvy-dev/AUXO`.
+- Every Hyprland style is checked by Hyprland itself (`Hyprland --verify-config`) on each change.
+- Over 600 automated tests. New in 5.0: `tests/test-features.py` (pins, widgets, VPN, boot animation,
+  GRUB themes, styles, live session, auxo-fetch).
+
+### Install the beta
+1. Download the newest **beta-5.0-…** ISO from the
+   [releases page](https://github.com/rxvy-dev/AUXO/releases). It's a *Pre-release*: the newest
+   stable ISO stays at Releases → Latest.
+2. Check it: `sha256sum -c auxo-linux-*.iso.sha256` (and, if you have the GitHub CLI,
+   `gh attestation verify auxo-linux-*.iso -R rxvy-dev/AUXO`).
+3. Write it to a USB stick (4 GB or more) with [Ventoy](https://www.ventoy.net),
+   [balenaEtcher](https://etcher.balena.io), Rufus (DD mode) or
+   `sudo dd if=auxo-linux-….iso of=/dev/sdX bs=4M status=progress oflag=sync`.
+4. Boot from the stick. You land on the Hyprland desktop in the Windows style. To try another
+   style first, open Auxo Settings → Desktop.
+5. Double-click **Install Auxo Linux** (or Start → Install Auxo Linux). For the text installer, run
+   `sudo auxo-installer` in a terminal.
+6. Pick your disk, desktop and style, accent, kernel, shell, account and extras. Nothing is changed
+   until you press Install.
+
+Virtual machines: turn on 3D acceleration (VirtualBox: VMSVGA + *Enable 3D Acceleration*;
+virt-manager: Virtio + *OpenGL*) for Hyprland. Without it, you get the Sway fallback.
+
+**From 4.x:** the beta isn't sent to `auxo-update`. Stable installs only update to stable
+releases. To test 5.0, use the ISO (a spare disk, a VM or dual boot).
+
+### Known issues
+- Hyprland needs working 3D. In VMs without it, you get Sway (the reason is in
+  `~/.cache/auxo-session.log`).
+- Mullvad's account-number setup uses Mullvad's public WireGuard API. If Mullvad changes it, use the
+  file from their website (*Use a file from the website* in Settings → VPN).
+- The weather widget needs the internet, and guesses your city from your connection until you set one.
+
 ## 4.0.0 (in development)
 **Auxo moves from Arch Linux to Void Linux.** The Arch-based 3.x line is kept on the
 `arch` branch.
