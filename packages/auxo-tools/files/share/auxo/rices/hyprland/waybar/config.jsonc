@@ -9,6 +9,7 @@
     "hyprland/window"
   ],
   "modules-center": [
+    "group/pins",
     "clock"
   ],
   "modules-right": [
@@ -91,5 +92,8 @@
   },
   "tray": {
     "spacing": 8
-  }
+  },
+  "include": [
+    "~/.config/waybar/pins-22.jsonc"
+  ]
 }

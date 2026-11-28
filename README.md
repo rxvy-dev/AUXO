@@ -20,6 +20,13 @@
 
 ---
 
+> [!WARNING]
+> **THIS IS A BETA VERSION OF AUXO LIKELY TO BE UNSTABLE!**
+>
+> You're on the `auxo-beta` branch: AUXO Linux 5.0 in public testing. Beta ISOs are on the
+> [releases page](../../releases) as `beta-5.0-…` prereleases. Report problems in
+> [Issues](../../issues) or on [Discord](https://discord.gg/XbQ66dH5a7). The stable release is on `main`.
+
 > **Auxo 4.0 moves from Arch to Void Linux.** Auxo 3.x (Arch-based, Calamares installer) is kept
 > on the [`arch`](../../tree/arch) branch.
 

@@ -4,12 +4,14 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
-    branches: [main]      # only builds when the commit message says [build iso] (see the job's if:)
+    branches: [main, auxo-beta]   # only builds when the commit message says [build iso] (see the job's if:)
   schedule:
     - cron: "17 4 * * 1"   # weekly fresh ISO (Mondays)
 
 permissions:
   contents: write
+  id-token: write       # build provenance: anyone can check an ISO really came from this workflow
+  attestations: write
 
 jobs:
   build:
@@ -98,6 +100,14 @@ jobs:
             out/*.sha256
           compression-level: 0
 
+      - name: Attest build provenance (gh attestation verify <iso> -R rxvy-dev/AUXO)
+        uses: actions/attest-build-provenance@v2
+        continue-on-error: true
+        with:
+          subject-path: |
+            out/auxo-linux-*.iso
+            out/repo/*.xbps
+
       - name: Publish (a release for tags, a dated nightly marked "latest" otherwise)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -111,7 +121,19 @@ jobs:
           files="$files auxo-packages-x86_64.tar"
           [[ -f hyprland-x86_64.tar ]] && files="$files hyprland-x86_64.tar"
           note="Verify with: sha256sum -c $iso.sha256"
-          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+          if [[ "$GITHUB_REF_NAME" == auxo-beta ]]; then
+            # public beta: a prerelease that never becomes "latest", so auxo-update on stable installs
+            # ignores it. The tag points at main's commit (GITHUB_TOKEN may not tag a commit whose
+            # workflows differ from main's); the notes name the real beta commit.
+            ver=$(cut -d. -f1,2 ../VERSION 2>/dev/null || echo 5.0)
+            tag="beta-${ver}-$(date -u +%Y.%m.%d-%H%M)-${GITHUB_SHA::7}"
+            main_sha=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+            gh release create "$tag" $files --target "$main_sha" --prerelease --latest=false \
+              --title "AUXO Linux ${ver} beta ($(date -u +%Y-%m-%d), ${GITHUB_SHA::7})" \
+              --notes "THIS IS A BETA VERSION OF AUXO LIKELY TO BE UNSTABLE! Built from the auxo-beta branch, commit $GITHUB_SHA (https://github.com/$GITHUB_REPOSITORY/commit/$GITHUB_SHA), and booted in a VM before upload. What's new: https://github.com/$GITHUB_REPOSITORY/blob/auxo-beta/CHANGELOG.md — $note"
+            gh release list --limit 100 --json tagName,createdAt --jq '[.[] | select(.tagName | startswith("beta-"))] | sort_by(.createdAt) | reverse | .[3:] | .[].tagName' \
+              | while read -r old; do gh release delete "$old" --yes --cleanup-tag || true; done
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
             gh release create "${GITHUB_REF_NAME}" $files --title "Auxo Linux ${GITHUB_REF_NAME}" --notes "$note" \
               || gh release upload "${GITHUB_REF_NAME}" $files --clobber
           else

@@ -50,9 +50,13 @@ EXTRAS = {
 }
 DEFAULT_EXTRAS = ["snapshots", "zram", "drivers", "gaming", "discord"]
 # Hyprland styles: the rices `auxo-tweak rice` applies on top of the Auxo Hyprland rice
-STYLES = {"auxo": ("Auxo", "Floating bar, tiling with gaps", "hyprland"),
-          "mac": ("Mac", "Liquid Glass menu bar, dock, Control Center", "hyprland-mac"),
-          "windows": ("Windows", "Taskbar, Start menu, Quick settings", "hyprland-win")}
+# (kept in step with auxo_desktops.HYPR_STYLES; tests/test-installer.py checks)
+STYLES = {"windows": ("Windows", "Taskbar with Start in the middle, Quick settings", "hyprland-win"),
+          "mac": ("Mac", "Liquid Glass menu bar, dock, Launchpad, Control Center", "hyprland-mac"),
+          "auxo": ("Auxo", "Floating bar, tiling with gaps: the classic Auxo look", "hyprland"),
+          "neon": ("Neon", "Cyberpunk: glowing borders and a terminal-style top bar", "hyprland-neon"),
+          "zen": ("Zen", "Minimal: a slim bar, wide gaps, calm colours, nothing extra", "hyprland-zen"),
+          "candy": ("Candy", "Pastel and round: floating island bars, bouncy windows", "hyprland-candy")}
 
 
 @dataclass
@@ -66,8 +70,8 @@ class InstallConfig:
     efi_part: str = ""             # manual mode, UEFI only
     format_efi: bool = False       # manual mode: format the EFI partition (only if it's new)
     filesystem: str = "btrfs"
-    desktop: str = "plasma"
-    style: str = "auxo"            # Hyprland only: auxo | mac | windows (the rice's look)
+    desktop: str = "hyprland"      # what the live session runs, so it installs offline
+    style: str = "windows"         # Hyprland only: a key of STYLES (the rice's look)
     accent: str = "violet"
     kernel: str = "linux"
     shell: str = "zsh"

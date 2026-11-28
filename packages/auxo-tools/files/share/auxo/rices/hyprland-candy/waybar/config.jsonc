@@ -1,0 +1,41 @@
+// Auxo Hyprland · Candy style: three floating islands along the top.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 36,
+  "margin": "10 14 0 14",
+  "include": ["~/.config/waybar/pins-22.jsonc"],
+  "modules-left": ["custom/auxo", "hyprland/workspaces"],
+  "modules-center": ["group/pins", "clock"],
+  "modules-right": ["tray", "network", "pulseaudio", "battery", "custom/update"],
+  "custom/auxo": { "format": "", "tooltip": false, "on-click": "auxo-launcher --style mac" },
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": { "1": "", "2": "", "3": "", "4": "", "5": "", "default": "" },
+    "on-click": "activate"
+  },
+  "clock": { "format": "{:%H:%M  ·  %a %d}", "tooltip-format": "<tt>{calendar}</tt>" },
+  "network": {
+    "format-wifi": "",
+    "format-ethernet": "",
+    "format-disconnected": "",
+    "tooltip-format": "{essid} {ipaddr}",
+    "on-click": "auxo-control --style mac"
+  },
+  "pulseaudio": {
+    "format": "{icon} {volume}%",
+    "format-muted": "",
+    "format-icons": { "default": ["", "", ""] },
+    "on-click": "auxo-sound",
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+  },
+  "battery": { "format": "{icon} {capacity}%", "format-icons": ["", "", "", "", ""] },
+  "custom/update": {
+    "exec": "n=$(xbps-install -Mun 2>/dev/null | wc -l); [ \"$n\" -gt 0 ] && echo \" $n\" || echo ''",
+    "interval": 1800,
+    "tooltip": false,
+    "on-click": "kitty -e auxo-update"
+  },
+  "tray": { "spacing": 8, "icon-size": 15 }
+}

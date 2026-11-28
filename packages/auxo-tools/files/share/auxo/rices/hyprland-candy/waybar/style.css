@@ -1,0 +1,28 @@
+/* Auxo Hyprland · Candy style */
+@import url("../auxo/colors.css");
+@import url("../auxo/look.css");
+
+@define-color candy_pink #ff8fc6;
+@define-color candy_lilac #a98bff;
+@define-color candy_mint #6fdcbf;
+
+* { min-height: 0; border: none; font-size: 13px; }
+window#waybar { background: transparent; color: #4a3a5c; }
+.modules-left, .modules-center, .modules-right {
+  background: alpha(#ffffff, 0.72);
+  border: 2px solid alpha(@candy_lilac, 0.35);
+  border-radius: 18px;
+  padding: 0 8px;
+}
+#custom-auxo { color: @candy_pink; font-size: 15px; padding: 0 8px; }
+#workspaces button { color: alpha(#4a3a5c, 0.45); padding: 0 6px; border-radius: 12px; margin: 4px 1px; }
+#workspaces button.active { color: #ffffff; background: linear-gradient(90deg, @candy_pink, @candy_lilac); }
+#workspaces button:hover { background: alpha(@candy_mint, 0.35); }
+#clock { font-weight: 700; padding: 0 10px; color: #6a4f8a; }
+#network, #pulseaudio, #battery, #custom-update, #tray { padding: 0 8px; }
+#pulseaudio { color: @candy_lilac; }
+#network { color: #3fb89a; }
+#battery { color: #e86aa8; }
+#custom-update { color: @candy_pink; }
+#image { padding: 0 4px; border-radius: 12px; }
+#image:hover { background: alpha(@candy_pink, 0.25); }

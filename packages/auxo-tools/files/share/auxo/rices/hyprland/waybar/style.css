@@ -14,3 +14,7 @@ window#waybar { border: 1px solid alpha(@accent, 0.35); color: @fg; }
 #battery.critical { color: @urgent; }
 #network.disconnected { color: @urgent; }
 #custom-update { color: @accent; }
+/* pinned apps (auxo-pins: right-click one to unpin it) */
+#pins { margin: 0 12px; }
+#image { padding: 0 5px; border-radius: 8px; }
+#image:hover { background: alpha(@accent, 0.22); }

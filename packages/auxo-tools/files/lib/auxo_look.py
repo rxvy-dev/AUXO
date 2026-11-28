@@ -524,6 +524,13 @@ PRESETS = {
         "gaps": "10", "rounding": "16", "border": "1", "blur": "on", "transparency": "on", "animations": "on"}),
     "win": ("Windows-style", "Small gaps, 8px corners, thin borders, a little blur", {
         "gaps": "6", "rounding": "8", "border": "1", "blur": "on", "transparency": "on", "animations": "on"}),
+    "neon": ("Neon", "Cyberpunk: sharp corners, glowing borders, monospaced", {
+        "gaps": "6", "rounding": "2", "border": "2", "blur": "on", "transparency": "on", "animations": "on",
+        "ui_font": "Fira Code"}),
+    "zen": ("Zen", "Calm: wide gaps, soft corners, no borders, no blur", {
+        "gaps": "18", "rounding": "10", "border": "0", "blur": "off", "transparency": "off", "animations": "on"}),
+    "candy": ("Candy", "Pastel and round: big corners, soft blur", {
+        "gaps": "12", "rounding": "20", "border": "2", "blur": "on", "transparency": "on", "animations": "on"}),
     "lite": ("Lite", "No blur, transparency or animations: the fastest on older PCs", {
         "gaps": "6", "rounding": "8", "border": "2", "blur": "off", "transparency": "off", "animations": "off"}),
 }

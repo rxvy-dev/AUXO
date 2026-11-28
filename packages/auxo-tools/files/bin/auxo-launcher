@@ -4,7 +4,8 @@
   auxo-launcher --style mac        Applications panel: search, categories, a big icon grid
   auxo-launcher --style windows    Start menu: search, Pinned, All apps, Recommended files, power
 Type to search, Enter opens the first match, Esc or clicking elsewhere closes it.
-Right-click an app in the Start menu to pin or unpin it (saved in ~/.config/auxo/pinned).
+Right-click an app to pin or unpin it: to Start / Launchpad (~/.config/auxo/pinned) or to the
+taskbar / dock (~/.config/auxo/bar-pins, see auxo-pins).
 """
 import os
 import sys
@@ -21,6 +22,7 @@ except ImportError:
     print("auxo-launcher needs PyQt6: sudo xbps-install python3-pyqt6-widgets", file=sys.stderr)
     sys.exit(1)
 
+import auxo_pins  # noqa: E402
 import auxo_shell as S  # noqa: E402
 from auxo_glass import GlassPanel, glass_css, place  # noqa: E402
 
@@ -73,6 +75,19 @@ def save_pinned(ids):
     os.makedirs(os.path.dirname(PINNED_FILE), exist_ok=True)
     with open(PINNED_FILE, "w") as f:
         f.write("# Start menu pins (auxo-launcher) — right-click an app to change them\n" + "\n".join(ids) + "\n")
+
+
+def bar_pin(app_id, apps, pin):
+    """Pin an app to the taskbar / dock / bar, or unpin it (auxo-pins), and reload the bar."""
+    (auxo_pins.add if pin else auxo_pins.remove)(app_id, apps)
+    auxo_pins.write_waybar(apps)
+    auxo_pins.reload_waybar()
+
+
+def bar_pin_action(menu, a, apps, pin_text, unpin_text):
+    if a["id"] in auxo_pins.load(apps):
+        return menu.addAction(unpin_text, lambda: bar_pin(a["id"], apps, False))
+    return menu.addAction(pin_text, lambda: bar_pin(a["id"], apps, True))
 
 
 def open_app(app, win):
@@ -139,6 +154,8 @@ class MacLauncher(GlassPanel):
         self.grid.setWordWrap(True)
         self.grid.itemClicked.connect(lambda it: open_app(it.data(Qt.ItemDataRole.UserRole), self))
         self.grid.itemActivated.connect(lambda it: open_app(it.data(Qt.ItemDataRole.UserRole), self))
+        self.grid.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.grid.customContextMenuRequested.connect(self._menu)
         lay.addWidget(self.grid, 1)
         self.search.textChanged.connect(self.refill)
         self.search.returnPressed.connect(self.first)
@@ -162,6 +179,16 @@ class MacLauncher(GlassPanel):
     def first(self):
         if self.grid.count():
             open_app(self.grid.item(0).data(Qt.ItemDataRole.UserRole), self)
+
+    def _menu(self, pos):
+        it = self.grid.itemAt(pos)
+        a = it.data(Qt.ItemDataRole.UserRole) if it else None
+        if not a:
+            return
+        m = QMenu(self)
+        m.addAction("Open", lambda: open_app(a, self))
+        bar_pin_action(m, a, self.apps, "Keep in Dock", "Remove from Dock")
+        m.exec(self.grid.mapToGlobal(pos))
 
 
 # ── Windows style: the Start menu ─────────────────────────────────────
@@ -407,6 +434,7 @@ class StartMenu(GlassPanel):
             m.addAction("Unpin from Start", lambda: (save_pinned([p for p in pins if p != a["id"]]), self.refill()))
         else:
             m.addAction("Pin to Start", lambda: (save_pinned(pins + [a["id"]]), self.refill()))
+        bar_pin_action(m, a, self.apps, "Pin to taskbar", "Unpin from taskbar")
         m.exec(widget.mapToGlobal(pos))
 
 

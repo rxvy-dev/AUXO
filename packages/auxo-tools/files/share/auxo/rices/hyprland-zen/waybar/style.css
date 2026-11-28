@@ -1,0 +1,20 @@
+/* Auxo Hyprland · Zen style */
+@import url("../auxo/colors.css");
+@import url("../auxo/look.css");
+
+* { min-height: 0; border: none; font-size: 12px; }
+window#waybar { background: transparent; color: @fg; }
+.modules-left, .modules-center, .modules-right {
+  background: alpha(@bg, 0.78);
+  border-radius: 15px;
+  padding: 0 10px;
+  margin: 0 12px;
+}
+#workspaces button { color: @muted; padding: 0 5px; font-size: 11px; }
+#workspaces button.active { color: @accent; }
+#clock { font-weight: 600; padding: 0 8px; }
+#network, #pulseaudio, #battery, #custom-update { padding: 0 7px; color: @muted; }
+#custom-update { color: @accent; }
+#battery.critical, #network.disconnected { color: @urgent; }
+#image { padding: 0 4px; border-radius: 8px; }
+#image:hover { background: alpha(@fg, 0.08); }

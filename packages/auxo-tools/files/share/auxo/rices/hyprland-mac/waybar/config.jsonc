@@ -128,12 +128,7 @@
     "exclusive": true,
     "modules-center": [
       "image#launcher",
-      "image#files",
-      "image#firefox",
-      "image#terminal",
-      "image#steam",
-      "image#discord",
-      "image#settings",
+      "group/pins",
       "wlr/taskbar"
     ],
     "image#launcher": {
@@ -142,58 +137,8 @@
       "tooltip": false,
       "on-click": "auxo-launcher --style mac"
     },
-    "image#files": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/system-file-manager.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "thunar"
-    },
-    "image#firefox": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/firefox.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "firefox"
-    },
-    "image#terminal": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/utilities-terminal.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "kitty"
-    },
-    "image#steam": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/steam.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "steam || notify-send 'Steam isn\u2019t installed' 'sudo auxo-tweak gaming on'"
-    },
-    "image#discord": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/discord.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "flatpak run com.discordapp.Discord || notify-send 'Discord isn\u2019t installed' 'sudo auxo-tweak apps discord'"
-    },
-    "image#settings": {
-      "path": "/usr/share/icons/Papirus/64x64/apps/preferences-system.svg",
-      "size": 48,
-      "tooltip": false,
-      "on-click": "auxo-settings"
-    },
-    "wlr/taskbar": {
-      "format": "{icon}",
-      "icon-size": 48,
-      "icon-theme": "Papirus-Dark",
-      "tooltip-format": "{title}",
-      "on-click": "activate",
-      "on-click-middle": "close",
-      "ignore-list": [
-        "firefox",
-        "kitty",
-        "thunar",
-        "Thunar",
-        "steam",
-        "com.discordapp.Discord",
-        "auxo-settings"
-      ]
-    }
+    "include": [
+      "~/.config/waybar/pins-48.jsonc"
+    ]
   }
 ]

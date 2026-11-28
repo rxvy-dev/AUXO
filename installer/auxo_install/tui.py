@@ -25,7 +25,7 @@ except ImportError:  # running from the source tree
     from auxo_desktops import DESKTOPS, KERNELS, SHELLS
     from auxo_accents import ACCENTS
 
-VERSION = "4.0"
+VERSION = "5.0 beta"
 STEPS = ["Welcome", "Keyboard", "Language", "Time zone", "Disk", "Desktop", "Look", "System",
          "Account", "Extras", "Install"]
 LOGO = [
@@ -41,12 +41,11 @@ ACCENT_COLORS = {"violet": (141, curses.COLOR_MAGENTA), "cyan": (45, curses.COLO
                  "rose": (204, curses.COLOR_RED), "blue": (75, curses.COLOR_BLUE),
                  "mono": (252, curses.COLOR_WHITE)}
 DESKTOP_INFO = {
-    "plasma": "Modern and flexible, with the Auxo global theme. Installs offline.",
     "gnome": "Clean and simple, with its own login screen. Auxo rice: Papirus icons, Inter, dark mode.",
     "xfce": "Light and traditional. Great on older PCs. Riced by Auxo.",
     "cinnamon": "Familiar layout, like Windows. Riced by Auxo.",
-    "hyprland": "Animated tiling with gaps and a floating bar, fully riced by Auxo.",
-    "sway": "Tiling Wayland, riced by Auxo. Keyboard-driven.",
+    "hyprland": "Animated tiling, riced by Auxo in six styles (Windows, Mac, Auxo, Neon, Zen, Candy). Installs offline.",
+    "sway": "Tiling Wayland, riced by Auxo. Keyboard-driven. Installs offline.",
     "i3": "The classic tiling window manager (X11), riced by Auxo.",
     "chrono": "rxvy's own Wayland desktop: 40+ retro and modern themes. Built from source (a few minutes).",
     "none": "No desktop: log in to a text console.",
@@ -380,7 +379,7 @@ class TUI:
                 "",
                 "Everything you pick here can be changed later with auxo-tweak.",
             ])
-            net = "connected" if self.env.online else "offline — Plasma and the stable kernel still install; press N for Wi-Fi"
+            net = "connected" if self.env.online else "offline — Hyprland, Sway and the stable kernel still install; press N for Wi-Fi"
             self.put(y + 1, left, "Internet: ", curses.color_pair(C_DIM))
             self.put(y + 1, left + 10, net, curses.color_pair(C_OK if self.env.online else C_WARN))
             self.put(y + 2, left, f"Boot mode: {'UEFI' if self.env.efi else 'BIOS (legacy)'}", curses.color_pair(C_DIM))
@@ -501,7 +500,7 @@ class TUI:
                     info[key] = DESKTOP_INFO.get(k, "") if style == "auxo" else sdesc + "."
             else:
                 items.append((k, d["name"], tag, True))
-        intro = None if self.env.online else ["You're offline: desktops that need internet are swapped for Plasma."]
+        intro = None if self.env.online else ["You're offline: desktops that need internet are swapped for Hyprland."]
         current = f"hyprland:{self.cfg.style}" if self.cfg.desktop == "hyprland" else self.cfg.desktop
         choice = self.menu("Desktop", items, current, intro=intro, describe=lambda k: info.get(k, ""))
         desk, _, style = choice.partition(":")

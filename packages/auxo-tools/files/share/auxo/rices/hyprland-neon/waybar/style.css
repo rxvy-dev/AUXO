@@ -1,0 +1,28 @@
+/* Auxo Hyprland · Neon style */
+@import url("../auxo/colors.css");
+@import url("../auxo/look.css");
+
+@define-color neon_pink #ff2bd6;
+@define-color neon_cyan #22e6ff;
+@define-color neon_bg #090914;
+
+* { min-height: 0; font-family: "Fira Code", monospace; font-size: 12px; }
+window#waybar {
+  background: alpha(@neon_bg, 0.86);
+  border: 1px solid alpha(@neon_cyan, 0.55);
+  border-radius: 2px;
+  color: #e6f7ff;
+}
+#custom-auxo { color: @neon_pink; font-weight: 700; padding: 0 12px; }
+#workspaces button { color: alpha(@neon_cyan, 0.55); padding: 0 4px; border-radius: 0; }
+#workspaces button.active { color: @neon_pink; text-shadow: 0 0 6px @neon_pink; }
+#workspaces button:hover { background: alpha(@neon_cyan, 0.12); }
+#window { color: @neon_cyan; padding-left: 10px; }
+#cpu, #memory, #network, #pulseaudio, #battery, #custom-update, #tray, #clock { padding: 0 9px; color: @neon_cyan; }
+#clock { color: @neon_pink; font-weight: 700; }
+#battery.warning { color: #ffd23f; }
+#battery.critical, #network.disconnected { color: #ff3b5c; }
+#custom-update { color: @neon_pink; }
+#pins { margin: 0 8px; }
+#image { padding: 0 5px; border-bottom: 2px solid transparent; }
+#image:hover { border-bottom: 2px solid @neon_pink; background: alpha(@neon_pink, 0.12); }

@@ -1,0 +1,42 @@
+// Auxo Hyprland · Zen style: a slim bar at the bottom, only what you need.
+// auxo: bars stay where they are
+{
+  "layer": "top",
+  "position": "bottom",
+  "height": 30,
+  "margin": "0 0 10 0",
+  "include": ["~/.config/waybar/pins-22.jsonc"],
+  "modules-left": ["hyprland/workspaces"],
+  "modules-center": ["group/pins", "clock"],
+  "modules-right": ["network", "pulseaudio", "battery", "custom/update"],
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": { "active": "●", "default": "○" },
+    "persistent-workspaces": { "*": 4 },
+    "on-click": "activate"
+  },
+  "clock": { "format": "{:%H:%M}", "format-alt": "{:%A %d %B}", "tooltip-format": "<tt>{calendar}</tt>" },
+  "network": {
+    "format-wifi": "",
+    "format-ethernet": "",
+    "format-disconnected": "",
+    "tooltip-format": "{essid}",
+    "on-click": "auxo-control --style mac"
+  },
+  "pulseaudio": {
+    "format": "{icon}",
+    "format-muted": "",
+    "format-icons": { "default": ["", "", ""] },
+    "tooltip-format": "{volume}%",
+    "on-click": "auxo-sound",
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+  },
+  "battery": { "format": "{capacity}%", "states": { "warning": 25, "critical": 10 } },
+  "custom/update": {
+    "exec": "n=$(xbps-install -Mun 2>/dev/null | wc -l); [ \"$n\" -gt 0 ] && echo \"\" || echo ''",
+    "interval": 1800,
+    "tooltip": false,
+    "on-click": "kitty -e auxo-update"
+  }
+}

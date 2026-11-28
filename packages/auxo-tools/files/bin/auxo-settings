@@ -30,7 +30,7 @@ except ImportError:
 
 from auxo_accents import ACCENTS, DEFAULT  # noqa: E402
 import auxo_look  # noqa: E402
-from auxo_desktops import DESKTOPS, KERNELS, SHELLS  # noqa: E402
+from auxo_desktops import DESKTOPS, HYPR_STYLES, KERNELS, SHELLS  # noqa: E402
 
 ROOT = os.environ.get("AUXO_ROOT", "/").rstrip("/")
 TWEAK = os.environ.get("AUXO_TWEAK", "auxo-tweak")
@@ -48,7 +48,6 @@ SERVICES = [("bluetooth", "bluetoothd", "Bluetooth", "headphones, mice, controll
             ("power-profiles", "power-profiles-daemon", "Power profiles", "battery / balanced / performance switching")]
 
 DESKTOP_INFO = {
-    "plasma": "Modern and flexible, with the Auxo global theme.",
     "gnome": "Clean and simple. Auxo rice: Papirus icons, Inter, dark mode, Super+Enter terminal.",
     "xfce": "Light and traditional, great on older PCs. Riced by Auxo.",
     "cinnamon": "A familiar layout, like Windows. Riced by Auxo.",
@@ -1037,14 +1036,11 @@ class Settings(QMainWindow):
                 styles.addWidget(QLabel("Style:"))
                 cur_style = conf().get("RICE_HYPRLAND", "hyprland")
                 grp = QButtonGroup(c)
-                tips = {"hyprland": "Floating bar, the classic Auxo look",
-                        "hyprland-mac": "Liquid Glass: menu bar, dock, Launchpad, Control Center, Spotlight search",
-                        "hyprland-win": "Taskbar with Start in the middle, Quick settings, Windows keys"}
-                for rice_name, text in (("hyprland", "Auxo"), ("hyprland-mac", "Mac"), ("hyprland-win", "Windows")):
+                for _style, rice_name, text, tip in HYPR_STYLES:
                     sb = QPushButton(text)
                     sb.setCheckable(True)
                     sb.setChecked(rice_name == cur_style)
-                    sb.setToolTip(tips[rice_name])
+                    sb.setToolTip(tip)
                     sb.clicked.connect(lambda _=False, r=rice_name, t=text: self.run(
                         ["rice", r], root=True, label=f"Hyprland style → {t}",
                         done=lambda code: (self.reload_look(), self.refresh_desktops())))
@@ -1054,7 +1050,7 @@ class Settings(QMainWindow):
                 v.addLayout(styles)
             if k == current:
                 b = QPushButton("Re-apply the Auxo rice")
-                rice = "kde" if k == "plasma" else (conf().get("RICE_HYPRLAND", k) if k == "hyprland" else k)
+                rice = conf().get("RICE_HYPRLAND", k) if k == "hyprland" else k
                 b.clicked.connect(lambda _=False, r=rice: self.run(["rice", r], root=True, label=f"Auxo {r} rice"))
             else:
                 b = QPushButton("Switch to " + name.split(" (")[0])
@@ -1510,6 +1506,232 @@ class Settings(QMainWindow):
             it.setText(f"  Health  ·  {len(bad)} to fix" if bad else "  Health")
 
     # ── Ask Auxo (local AI) ──
+    # ── Taskbar & widgets ──
+    def page_taskbar(self):
+        import auxo_pins
+        import auxo_shell
+        w, lay = self.page()
+        self.heading(lay, "Taskbar & widgets", "The apps pinned to your taskbar (Windows style), dock (Mac style) or bar, "
+                                               "and the widgets on your desktop. You can also right-click an app in the "
+                                               "Start menu or Launchpad, or right-click a pin on the bar.")
+        self.section(lay, "Pinned apps", "Hyprland (every style)", keys="pin unpin dock taskbar favourites favorites")
+        self.pin_apps = auxo_shell.load_apps()
+        self.pin_list = QListWidget()
+        self.pin_list.setIconSize(QSize(28, 28))
+        self.pin_list.setMinimumHeight(260)
+        lay.addWidget(self.pin_list)
+        row = QHBoxLayout()
+        self.pin_add = QComboBox()
+        self.pin_add.setEditable(True)
+        self.pin_add.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        for a in self.pin_apps:
+            self.pin_add.addItem(QIcon.fromTheme(a["icon"]), a["name"], a["id"])
+        self.pin_add.completer().setFilterMode(Qt.MatchFlag.MatchContains)
+        row.addWidget(self.pin_add, 1)
+        for text, fn in (("Pin", self.pin_selected), ("Move up", lambda: self.pin_move(-1)),
+                         ("Move down", lambda: self.pin_move(1)), ("Unpin", self.unpin_selected)):
+            b = QPushButton(text)
+            if text == "Pin":
+                b.setObjectName("primary")
+            b.clicked.connect(fn)
+            row.addWidget(b)
+        lay.addLayout(row)
+        self.refresh_pins()
+
+        self.section(lay, "Desktop widgets", "Hyprland and Sway", keys="widget clock weather music calendar system")
+        wid = self.widgets_conf()
+        on = [x for x in wid.get("WIDGETS", "clock,system,music").split(",") if x]
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(24)
+        self.widget_boxes = {}
+        for i, (key, title, desc) in enumerate(WIDGETS):
+            box = QCheckBox(title)
+            box.setChecked(key in on)
+            box.toggled.connect(lambda v, key=key: self.run_prog("auxo-widgets", ["add" if v else "remove", key],
+                                                                   label=f"Widget {key} {'on' if v else 'off'}",
+                                                                   shown="auxo-widgets"))
+            sub = QLabel(desc)
+            sub.setObjectName("reach")
+            grid.addWidget(box, i, 0)
+            grid.addWidget(sub, i, 1)
+            self.widget_boxes[key] = box
+        grid.setColumnStretch(1, 1)
+        lay.addLayout(grid)
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Corner:"))
+        place = QComboBox()
+        for key in ("top-right", "top-left", "bottom-right", "bottom-left"):
+            place.addItem(key.replace("-", " ").capitalize(), key)
+        place.setCurrentIndex(max(0, place.findData(wid.get("PLACE", "top-right"))))
+        place.activated.connect(lambda _i: self.run_prog("auxo-widgets", ["place", place.currentData()],
+                                                          label="Widgets moved", shown="auxo-widgets"))
+        row.addWidget(place)
+        row.addSpacing(16)
+        row.addWidget(QLabel("Weather city:"))
+        city = QLineEdit(wid.get("CITY", ""))
+        city.setPlaceholderText("Automatic (from your connection)")
+        city.editingFinished.connect(lambda: self.run_prog("auxo-widgets", ["city", city.text().strip()],
+                                                            label="Weather city set", shown="auxo-widgets"))
+        row.addWidget(city, 1)
+        lay.addLayout(row)
+        lay.addStretch(1)
+        return w
+
+    def widgets_conf(self):
+        c = {}
+        try:
+            for line in open(os.path.join(HOME, ".config/auxo/widgets.conf")):
+                k, sep, v = line.strip().partition("=")
+                if sep and not k.startswith("#"):
+                    c[k] = v
+        except OSError:
+            pass
+        return c
+
+    def refresh_pins(self):
+        import auxo_pins
+        by_id = {a["id"]: a for a in self.pin_apps}
+        cur = self.pin_list.currentRow()
+        self.pin_list.clear()
+        for i in auxo_pins.load(self.pin_apps):
+            a = by_id[i]
+            it = QListWidgetItem(QIcon.fromTheme(a["icon"]), a["name"])
+            it.setData(Qt.ItemDataRole.UserRole, i)
+            self.pin_list.addItem(it)
+        if self.pin_list.count():
+            self.pin_list.setCurrentRow(max(0, min(cur, self.pin_list.count() - 1)))
+
+    def _pins_changed(self, label):
+        import auxo_pins
+        auxo_pins.write_waybar(self.pin_apps)
+        auxo_pins.reload_waybar()
+        self.refresh_pins()
+        self.status.setText(f"✓ {label}")
+
+    def pin_selected(self):
+        import auxo_pins
+        app = self.pin_add.currentData()
+        if app:
+            auxo_pins.add(app, self.pin_apps)
+            self._pins_changed(f"Pinned {self.pin_add.currentText()}")
+
+    def unpin_selected(self):
+        import auxo_pins
+        it = self.pin_list.currentItem()
+        if it:
+            auxo_pins.remove(it.data(Qt.ItemDataRole.UserRole), self.pin_apps)
+            self._pins_changed(f"Unpinned {it.text()}")
+
+    def pin_move(self, delta):
+        import auxo_pins
+        it = self.pin_list.currentItem()
+        if it:
+            auxo_pins.move(it.data(Qt.ItemDataRole.UserRole), delta, self.pin_apps)
+            self.pin_list.setCurrentRow(self.pin_list.currentRow() + delta)
+            self._pins_changed(f"Moved {it.text()}")
+
+    # ── VPN ──
+    def page_vpn(self):
+        import auxo_vpn
+        w, lay = self.page()
+        self.heading(lay, "VPN", "Mullvad and Proton VPN in a few clicks, or any WireGuard / OpenVPN file. Your VPNs "
+                                 "also appear in the network menu on the bar.")
+        self.section(lay, "Your VPNs", keys="vpn wireguard openvpn connect disconnect")
+        self.vpn_list = QListWidget()
+        self.vpn_list.setMinimumHeight(150)
+        lay.addWidget(self.vpn_list)
+        row = QHBoxLayout()
+        for text, fn in (("Connect", lambda: self.vpn_do("on")), ("Disconnect", lambda: self.vpn_do("off")),
+                         ("Connect at startup", lambda: self.vpn_do("auto", "on")),
+                         ("Remove", lambda: self.vpn_do("remove"))):
+            b = QPushButton(text)
+            if text == "Connect":
+                b.setObjectName("primary")
+            b.clicked.connect(fn)
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.refresh_vpns()
+
+        self.section(lay, "Add Mullvad", keys="mullvad account")
+        t = QLabel("Type your 16-digit account number: Auxo makes a key on this computer (the private key never "
+                   "leaves it), registers it with Mullvad and adds three servers. Or download a WireGuard file "
+                   "from Mullvad's website.")
+        t.setWordWrap(True)
+        t.setObjectName("sub")
+        lay.addWidget(t)
+        row = QHBoxLayout()
+        acct = QLineEdit()
+        acct.setPlaceholderText("Account number")
+        acct.setEchoMode(QLineEdit.EchoMode.Password)
+        country = QComboBox()
+        for code, name in (("", "Any country"), ("se", "Sweden"), ("ch", "Switzerland"), ("nl", "Netherlands"),
+                           ("de", "Germany"), ("gb", "United Kingdom"), ("us", "United States"), ("ca", "Canada"),
+                           ("jp", "Japan"), ("au", "Australia")):
+            country.addItem(name, code)
+        add = QPushButton("Add Mullvad")
+        add.setObjectName("primary")
+        add.clicked.connect(lambda: self.run(["vpn", "mullvad", acct.text().replace(" ", "")] +
+                                             (["--country", country.currentData()] if country.currentData() else []),
+                                             label="Mullvad added", done=lambda _c: (acct.clear(), self.refresh_vpns())))
+        web = QPushButton("Use a file from the website")
+        web.clicked.connect(lambda: self.run(["vpn", "mullvad", "--wait", "900"], label="Mullvad added",
+                                             done=lambda _c: self.refresh_vpns()))
+        row.addWidget(acct, 1)
+        row.addWidget(country)
+        row.addWidget(add)
+        row.addWidget(web)
+        lay.addLayout(row)
+
+        self.section(lay, "Add Proton VPN", keys="proton protonvpn free")
+        t = QLabel(auxo_vpn.PROVIDERS["proton"]["how"] + " Auxo opens the page and adds the file the moment it's "
+                   "downloaded. The free plan works.")
+        t.setWordWrap(True)
+        t.setObjectName("sub")
+        lay.addWidget(t)
+        b = QPushButton("Open Proton VPN downloads")
+        b.setObjectName("primary")
+        b.clicked.connect(lambda: self.run(["vpn", "proton", "--wait", "900"], label="Proton VPN added",
+                                           done=lambda _c: self.refresh_vpns()))
+        row = QHBoxLayout()
+        row.addWidget(b)
+        imp = QPushButton("Import a .conf or .ovpn file…")
+        imp.clicked.connect(self.vpn_import)
+        row.addWidget(imp)
+        row.addStretch(1)
+        lay.addLayout(row)
+        lay.addStretch(1)
+        return w
+
+    def refresh_vpns(self):
+        import auxo_vpn
+        if not hasattr(self, "vpn_list"):
+            return
+        self.vpn_list.clear()
+        conns = auxo_vpn.VPN().connections()
+        for c in conns:
+            it = QListWidgetItem(("●  " if c["active"] else "○  ") + c["name"] + f"   ·  {c['type']}"
+                                 + ("  ·  connected" if c["active"] else ""))
+            it.setData(Qt.ItemDataRole.UserRole, c["name"])
+            self.vpn_list.addItem(it)
+        if not conns:
+            self.vpn_list.addItem("No VPNs yet: add Mullvad or Proton VPN below")
+        self.vpn_list.setCurrentRow(0)
+
+    def vpn_do(self, action, *extra):
+        it = self.vpn_list.currentItem()
+        name = it.data(Qt.ItemDataRole.UserRole) if it else None
+        if action != "off" and not name:
+            return
+        self.run(["vpn", action] + ([name] if name else []) + list(extra),
+                 label=f"VPN {action} {name or ''}".strip(), done=lambda _c: self.refresh_vpns())
+
+    def vpn_import(self):
+        f, _ = QFileDialog.getOpenFileName(self, "VPN config", os.path.join(HOME, "Downloads"),
+                                           "VPN configs (*.conf *.ovpn)")
+        if f:
+            self.run(["vpn", "import", f], label="VPN added", done=lambda _c: self.refresh_vpns())
+
     def page_ai(self):
         w, lay = self.page()
         self.heading(lay, "Ask Auxo", "Auxo AI runs on your own PC: free, private, and it works offline once it's set up. "
@@ -1668,10 +1890,16 @@ class Settings(QMainWindow):
         self.proc.start(PKEXEC, ["auxo-update", "-y"])
 
 
+WIDGETS = [("clock", "Clock", "the time and date, big"), ("weather", "Weather", "from wttr.in"),
+           ("music", "Now playing", "what's playing, with play / pause / skip"),
+           ("system", "System", "CPU, memory and disk"), ("calendar", "Calendar", "this month")]
+
 PAGES = [("Look", "preferences-desktop-theme", "page_look"),
          ("Windows & bar", "preferences-system-windows", "page_windows"),
          ("Desktop", "preferences-desktop", "page_desktop"),
          ("Displays", "video-display", "page_displays"),
+         ("Taskbar & widgets", "preferences-desktop-icons", "page_taskbar"),
+         ("VPN", "network-vpn", "page_vpn"),
          ("System", "preferences-system", "page_system"),
          ("Health", "help-faq", "page_health"),
          ("Ask Auxo", "dialog-information", "page_ai")]
@@ -1682,7 +1910,8 @@ def main():
     app.setApplicationName("Auxo Settings")
     app.setDesktopFileName("auxo-settings")
     win = Settings()
-    page = {"look": 0, "windows": 1, "desktop": 2, "displays": 3, "system": 4, "health": 5, "ai": 6}.get(
+    page = {"look": 0, "windows": 1, "desktop": 2, "displays": 3, "taskbar": 4, "widgets": 4, "pins": 4, "vpn": 5,
+            "system": 6, "health": 7, "ai": 8}.get(
         (sys.argv[1:2] or [""])[0].lstrip("-"), 0)
     win.nav.setCurrentRow(page)
     win.show()

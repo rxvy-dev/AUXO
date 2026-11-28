@@ -4,8 +4,9 @@
 Run with no arguments for the interactive menu, or use a sub-command:
 
   auxo-tweak accent [NAME]            system + user accent colour (GRUB, login screen, MOTD, terminals, bars)
-  auxo-tweak desktop NAME             plasma | gnome | xfce | cinnamon | hyprland | sway | i3 | chrono | none
-  auxo-tweak rice NAME                re-apply the Auxo rice: kde | gnome | xfce | cinnamon | hyprland | sway | i3 | chrono
+  auxo-tweak desktop NAME             hyprland | sway | gnome | xfce | cinnamon | i3 | chrono | none
+  auxo-tweak rice NAME                re-apply the Auxo rice: hyprland[-mac|-win|-neon|-zen|-candy] | sway | i3 | gnome | xfce | cinnamon | chrono
+  auxo-tweak style NAME               Hyprland style: windows | mac | auxo | neon | zen | candy
   auxo-tweak look [set K=V…|reset]    your look: light/dark, wallpaper, fonts, gaps, corners, borders, blur,
                                       transparency, animations, bar position (also in the Auxo Settings app)
   auxo-tweak mode dark|light          light or dark, on every desktop
@@ -19,6 +20,7 @@ Run with no arguments for the interactive menu, or use a sub-command:
   auxo-tweak power balanced|performance|power-saver       power profile
   auxo-tweak firewall on|off|status   ufw: block incoming, allow outgoing
   auxo-tweak dns cloudflare|quad9|google|auto             DNS servers for every connection
+  auxo-tweak vpn [mullvad [ACCOUNT]|proton|import FILE|on|off]   Mullvad, Proton VPN or any WireGuard/OpenVPN file
   auxo-tweak snapshots on|off|status  btrfs time-travel: snapper + bootable snapshots in GRUB
   auxo-tweak gaming on|off|status     Steam, GameMode, MangoHud, gamescope + low-latency tweaks
   auxo-tweak flatpak on|status        Flatpak + Flathub
@@ -38,6 +40,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import sys
 
 sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
@@ -47,7 +50,7 @@ from auxo_core import (R, DRY, AuxoError, del_kv, get_kv, log, warn, run, have, 
                        require_root, read_conf, write_conf, set_kv, write_file, chown, home_of, normal_users,
                        invoking_user, xbps_install, xbps_remove, repo_enable, regen_initramfs,
                        sv_enable, sv_disable, sv_enabled, audio_setup, audio_missing, SHARE, RESET, BOLD, DIM)
-from auxo_desktops import DESKTOPS, LIVE_PLASMA, KERNELS, SHELLS, GUI_SERVICES  # noqa: E402
+from auxo_desktops import DESKTOPS, KERNELS, SHELLS, GUI_SERVICES, live_packages  # noqa: E402
 import auxo_desktops  # noqa: E402
 import auxo_theme  # noqa: E402
 import auxo_gnome  # noqa: E402
@@ -245,11 +248,16 @@ SESSION_RICES = {"gnome", "xfce", "cinnamon", "chrono"}
 
 
 # Rice styles layered on a base rice: the base is applied first, then the style's files on top
-RICE_LAYERS = {"hyprland-mac": "hyprland", "hyprland-win": "hyprland"}
-RICE_PRESET = {"hyprland-mac": "mac", "hyprland-win": "win"}       # the look preset that goes with a style
+# every Hyprland style is layered on the Auxo Hyprland rice
+RICE_LAYERS = {r: "hyprland" for _s, r, _n, _d in auxo_desktops.HYPR_STYLES if r != "hyprland"}
+RICE_PRESET = {"hyprland-mac": "mac", "hyprland-win": "win", "hyprland-neon": "neon", "hyprland-zen": "zen",
+               "hyprland-candy": "candy"}       # the look preset that goes with a style
 # each style starts light, on its own wallpaper (change both freely afterwards)
 RICE_LOOK = {"hyprland-mac": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-lagoon.jpg"},
-             "hyprland-win": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-bloom.jpg"}}
+             "hyprland-win": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-bloom.jpg"},
+             "hyprland-neon": {"mode": "dark", "wallpaper": "/usr/share/wallpapers/auxo-neon.jpg"},
+             "hyprland-zen": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-zen.jpg"},
+             "hyprland-candy": {"mode": "light", "wallpaper": "/usr/share/wallpapers/auxo-candy.jpg"}}
 
 
 def apply_rice(name, user):
@@ -317,6 +325,8 @@ def refresh_session(name, user):
         run(["swaymsg", "reload"], check=False, user=user, env=env)
     else:
         return False
+    if name.startswith("hyprland"):          # the taskbar / dock pins (auxo-pins) for this style's icon size
+        run(["auxo-pins", "refresh", "--no-reload"], check=False, user=user, env={**env, "HOME": home_of(user)})
     run(["pkill", "-x", "waybar"], check=False, user=user, env=env)
     run(["sh", "-c", "sleep 0.3; setsid waybar >/dev/null 2>&1 &"], check=False, user=user, env=env)
     return True
@@ -392,18 +402,18 @@ def cmd_desktop(args):
         rice = rice if os.path.isdir(R(f"{SHARE}/rices/{rice}")) or rice in SESSION_RICES else d["rice"]
         for u in users:
             apply_rice(rice, u)
-    if args.name == "plasma":
-        import auxo_kde
-        auxo_kde.apply_system(auxo_theme.current())
     if args.name == "gnome":
         auxo_gnome.cleanup()
         for u in users:  # the installer already asked these questions: skip GNOME's first-login wizard
             write_file(f"{home_of(u)}/.config/gnome-initial-setup-done", "yes", owner=u)
-    if args.replace and args.name != "plasma":
-        keep = set(d["packages"])
-        remove = [p for p in LIVE_PLASMA if p not in keep and (installed(p) or DRY)]
+    if args.replace:
+        keep = set(d["packages"]) | set(GUI_SERVICES)
+        if args.name == "sway":
+            keep |= set(DESKTOPS["sway"]["packages"])
+        remove = [p for p in live_packages() if p not in keep and p not in auxo_desktops.GUI_BASE
+                  and (installed(p) or DRY)]
         if remove:
-            log("removing the live Plasma desktop")
+            log("removing what only the live desktop needed")
             if xbps_remove(*remove) != 0:
                 for p in remove:  # something still needs one of them: remove what we can
                     xbps_remove(p)
@@ -417,11 +427,11 @@ def cmd_desktop(args):
 
 
 # short names people type for the Hyprland styles
-STYLE_ALIASES = {"macos": "mac", "osx": "mac", "apple": "mac", "glass": "mac", "liquid-glass": "mac",
+STYLE_ALIASES = {"cyber": "neon", "cyberpunk": "neon", "synthwave": "neon", "minimal": "zen", "clean": "zen",
+                 "pastel": "candy", "cute": "candy", "macos": "mac", "osx": "mac", "apple": "mac", "glass": "mac", "liquid-glass": "mac",
                  "win": "windows", "win11": "windows", "windows11": "windows", "default": "auxo", "normal": "auxo"}
 RICE_ALIASES = {"mac": "hyprland-mac", "hyprland-macos": "hyprland-mac", "hypr-mac": "hyprland-mac",
-                "windows": "hyprland-win", "hyprland-windows": "hyprland-win", "hypr-win": "hyprland-win",
-                "plasma": "kde", "kde-plasma": "kde"}
+                "windows": "hyprland-win", "hyprland-windows": "hyprland-win", "hypr-win": "hyprland-win"}
 
 
 def rice_name(value):
@@ -431,21 +441,26 @@ def rice_name(value):
 
 
 def forgiving_argv(argv):
-    """`rice hyprland -mac`, `rice hyprland mac`, `desktop hyprland-mac` → what was meant."""
+    """`rice hyprland -mac`, `rice hyprland neon`, `desktop hyprland-mac` → what was meant."""
     a = list(argv)
     for i in range(len(a) - 1):
-        if a[i].lower() in ("hyprland", "hypr") and a[i + 1].lower().lstrip("-") in ("mac", "macos", "win", "windows"):
-            a[i:i + 2] = ["hyprland-" + ("mac" if a[i + 1].lower().lstrip("-").startswith("mac") else "win")]
-            break
-    if len(a) >= 2 and a[0] == "desktop" and a[1].lower() in ("hyprland-mac", "hyprland-win", "mac", "windows"):
-        log(f"Installing Hyprland; then run: sudo auxo-tweak style {'mac' if 'mac' in a[1] else 'windows'}")
-        a[1] = "hyprland"
+        if a[i].lower() in ("hyprland", "hypr"):
+            st = STYLE_ALIASES.get(a[i + 1].lower().lstrip("-"), a[i + 1].lower().lstrip("-"))
+            if st in auxo_desktops.STYLE_RICE and st != "auxo":
+                a[i:i + 2] = [auxo_desktops.STYLE_RICE[st]]
+                break
+    if len(a) >= 2 and a[0] == "desktop":
+        st = STYLE_ALIASES.get(a[1].lower(), a[1].lower()).removeprefix("hyprland-")
+        st = {"win": "windows"}.get(st, st)
+        if st in auxo_desktops.STYLE_RICE and st != "auxo" and a[1].lower() not in DESKTOPS:
+            log(f"Installing Hyprland; then run: sudo auxo-tweak style {st}")
+            a[1] = "hyprland"
     return a
 
 
 def cmd_style(args):
-    """auxo-tweak style mac|windows|auxo: the Hyprland rice for that style."""
-    args.name = {"auxo": "hyprland", "mac": "hyprland-mac", "windows": "hyprland-win"}[args.name]
+    """auxo-tweak style auxo|mac|windows|neon|zen|candy: the Hyprland rice for that style."""
+    args.name = auxo_desktops.STYLE_RICE[args.name]
     cmd_rice(args)
 
 
@@ -454,19 +469,6 @@ def cmd_rice(args):
     if args.name.startswith("hyprland") and not (have("Hyprland") or have("hyprland")):
         log("Hyprland isn't installed yet, so this style is saved for when it is. Install it with: "
             "sudo auxo-tweak desktop hyprland")
-    if args.name == "kde":
-        import auxo_kde
-        accent = auxo_theme.current()
-        auxo_kde.apply_system(accent)
-        for u in target_users(args):
-            env = None if args.user else auxo_theme.session_env(u)
-            if env and "KDE" in env.get("XDG_CURRENT_DESKTOP", ""):
-                auxo_kde.apply_user(u, accent)
-                run(["plasma-apply-lookandfeel", "--apply", auxo_kde.LAF, "--resetLayout"], check=False, user=u, env=env)
-            else:
-                auxo_kde.apply_user(u, accent, reset_layout=True)
-                log(f"{u}: the Auxo panel layout appears at the next Plasma login")
-        return
     for u in target_users(args):
         apply_rice(args.name, u)
 
@@ -993,6 +995,79 @@ def cmd_dns(args):
     write_conf({"DNS": args.provider})
 
 
+# ── VPN (Mullvad, Proton, any WireGuard / OpenVPN file) ────────────────
+def cmd_vpn(args):
+    """auxo-tweak vpn [status|mullvad|proton|import FILE|on NAME|off|remove NAME|auto NAME on|off|check]"""
+    import auxo_vpn
+    if DRY:
+        log(f"[dry-run] vpn {args.action} {' '.join(args.rest)}")
+        return
+    if not have("nmcli"):
+        raise AuxoError("VPNs need NetworkManager: sudo auxo-tweak desktop … sets it up, or sudo xbps-install NetworkManager")
+    v = auxo_vpn.VPN()
+    a, rest = args.action, args.rest
+    try:
+        if a in ("status", "list"):
+            conns = v.connections()
+            if not conns:
+                print("No VPNs yet. Add one:\n  auxo-tweak vpn mullvad        (or: vpn mullvad ACCOUNT-NUMBER)\n"
+                      "  auxo-tweak vpn proton\n  auxo-tweak vpn import FILE.conf")
+            for c in conns:
+                print(f"  {'● connected ' if c['active'] else '○           '} {c['name']:<16} {c['type']}")
+        elif a in ("mullvad", "proton"):
+            prov = auxo_vpn.PROVIDERS[a]
+            if a == "mullvad" and rest:
+                if not have("wg"):
+                    require_root()
+                    xbps_install("wireguard-tools")
+                made = v.mullvad_account(" ".join(rest[:1] if len(rest[0]) >= 16 else rest[:4]).replace(" ", ""),
+                                         country=args.country, count=args.servers)
+                log(f"Mullvad: added {', '.join(made)}. Connect: auxo-tweak vpn on {made[0]}")
+                return
+            downloads = os.path.join(home_of(invoking_user() or os.environ.get("USER", "root")), "Downloads")
+            since = time.time()
+            log(f"{prov['name']}: opening your account page. {prov['how']}")
+            log(f"Auxo imports the file as soon as it's in {downloads} (Ctrl+C to stop waiting).")
+            run(["xdg-open", prov["page"]], check=False)
+            path = auxo_vpn.wait_for_download(downloads, since, timeout=args.wait)
+            if not path:
+                raise AuxoError(f"no config file showed up. Import it yourself: auxo-tweak vpn import FILE")
+            name = v.import_file(path, provider=a)
+            log(f"{prov['name']}: added {name}. Connect: auxo-tweak vpn on {name}  (or the network menu)")
+        elif a == "import" and rest:
+            for f in rest:
+                name = v.import_file(os.path.expanduser(f), name=args.name)
+                log(f"added {name}. Connect: auxo-tweak vpn on {name}")
+        elif a in ("on", "up", "connect"):
+            conns = v.connections()
+            name = rest[0] if rest else (conns[0]["name"] if conns else None)
+            if not name:
+                raise AuxoError("no VPN to connect to yet (auxo-tweak vpn mullvad / proton / import FILE)")
+            v.up(name)
+            log(f"VPN on: {name}")
+            prov = auxo_vpn.provider_of("", name)
+            if prov:
+                print("  " + v.check(prov))
+        elif a in ("off", "down", "disconnect"):
+            gone = v.down(rest[0] if rest else None)
+            log("VPN off" + (f": {', '.join(gone)}" if gone else " (nothing was connected)"))
+        elif a in ("remove", "delete") and rest:
+            v.remove(rest[0])
+            log(f"removed {rest[0]}")
+        elif a == "auto" and rest:
+            on = (rest[1:2] or ["on"])[0] in ("on", "yes", "1")
+            v.autoconnect(rest[0], on)
+            log(f"{rest[0]}: {'connects at startup' if on else 'connects only when you say so'}")
+        elif a == "check":
+            for prov in auxo_vpn.PROVIDERS:
+                print(f"{auxo_vpn.PROVIDERS[prov]['name']}: {v.check(prov)}")
+        else:
+            raise AuxoError("usage: auxo-tweak vpn [status|mullvad [ACCOUNT]|proton|import FILE|on [NAME]|off|"
+                            "remove NAME|auto NAME on|off|check]")
+    except auxo_vpn.VPNError as e:
+        raise AuxoError(str(e))
+
+
 # ── housekeeping ──────────────────────────────────────────────────────
 def _du(path):
     if DRY or not os.path.isdir(path):
@@ -1510,14 +1585,14 @@ def main():
     s = sub.add_parser("shell"); s.add_argument("name", choices=list(SHELLS)); s.add_argument("--user")
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_shell)
     s = sub.add_parser("desktop"); s.add_argument("name", choices=list(DESKTOPS)); s.add_argument("--user")
-    s.add_argument("--replace", action="store_true", help="remove the live Plasma desktop")
+    s.add_argument("--replace", action="store_true", help="remove what only the live desktop needed")
     s.add_argument("--chrono-ref", help="build this Chrono commit instead of the tested one"); s.set_defaults(fn=cmd_desktop)
     s = sub.add_parser("rice"); s.add_argument("name", type=rice_name,
-                                               choices=["kde", "gnome", "xfce", "cinnamon", "hyprland", "hyprland-mac",
-                                                        "hyprland-win", "sway", "i3", "chrono"])
+                                               choices=["gnome", "xfce", "cinnamon", *auxo_desktops.STYLE_RICE.values(),
+                                                        "sway", "i3", "chrono"])
     s.add_argument("--user"); s.set_defaults(fn=cmd_rice)
-    s = sub.add_parser("style", help="Hyprland's look: auxo, mac (Liquid Glass) or windows")
-    s.add_argument("name", type=lambda v: STYLE_ALIASES.get(v.lower(), v.lower()), choices=["auxo", "mac", "windows"])
+    s = sub.add_parser("style", help="Hyprland's look: " + ", ".join(auxo_desktops.STYLE_RICE))
+    s.add_argument("name", type=lambda v: STYLE_ALIASES.get(v.lower(), v.lower()), choices=list(auxo_desktops.STYLE_RICE))
     s.add_argument("--user"); s.set_defaults(fn=cmd_style)
     s = sub.add_parser("look"); s.add_argument("action", nargs="?", choices=["show", "get", "set", "reset", "presets", "preset",
                                                                        "export", "import"])
@@ -1543,6 +1618,12 @@ def main():
     s = sub.add_parser("power"); s.add_argument("profile", choices=["balanced", "performance", "power-saver"])
     s.set_defaults(fn=cmd_power)
     s = sub.add_parser("firewall"); s.add_argument("state", choices=["on", "off", "status"]); s.set_defaults(fn=cmd_firewall)
+    s = sub.add_parser("vpn", help="Mullvad, Proton VPN or any WireGuard/OpenVPN file, on and off")
+    s.add_argument("action", nargs="?", default="status"); s.add_argument("rest", nargs="*")
+    s.add_argument("--country", help="Mullvad: servers in this country (code or name)")
+    s.add_argument("--servers", type=int, default=3, help="Mullvad: how many servers to add")
+    s.add_argument("--name", help="import: the connection's name"); s.add_argument("--wait", type=int, default=600)
+    s.set_defaults(fn=cmd_vpn)
     s = sub.add_parser("dns"); s.add_argument("provider", choices=list(DNS) + ["auto"]); s.set_defaults(fn=cmd_dns)
     s = sub.add_parser("cleanup"); s.add_argument("--user"); s.add_argument("--user-cache", action="store_true",
                                                                          help="also clear your thumbnail cache")

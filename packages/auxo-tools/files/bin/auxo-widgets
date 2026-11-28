@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""auxo-widgets — desktop widgets for the Auxo Hyprland and Sway rices.
+
+  auxo-widgets                 show the widgets (started at login when any are on)
+  auxo-widgets list            which widgets exist and which are on
+  auxo-widgets add NAME        turn one on:  clock  weather  music  system  calendar
+  auxo-widgets remove NAME     turn one off
+  auxo-widgets place WHERE     top-left | top-right | bottom-left | bottom-right
+  auxo-widgets city NAME       the weather's city (empty: guess from your connection)
+  auxo-widgets stop | restart
+
+The widgets sit on the desktop, under your windows. Settings live in ~/.config/auxo/widgets.conf;
+Auxo Settings > Widgets changes the same file. The weather comes from wttr.in (only when the
+weather widget is on).
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.parse
+import urllib.request
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+
+HOME = os.environ.get("AUXO_HOME") or os.path.expanduser("~")
+CONF = os.path.join(HOME, ".config/auxo/widgets.conf")
+COLORS = os.path.join(HOME, ".config/auxo/colors.css")
+CACHE = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "auxo/weather.json")
+WIDGETS = {"clock": "Clock and date", "weather": "Weather (wttr.in)", "music": "Now playing, with controls",
+           "system": "CPU, memory and disk", "calendar": "This month"}
+PLACES = ("top-left", "top-right", "bottom-left", "bottom-right")
+DEFAULTS = {"WIDGETS": "clock,system,music", "PLACE": "top-right", "CITY": "", "UNITS": "metric", "CLOCK24": "1"}
+
+
+# ── settings (no GTK needed: Auxo Settings and the tests use these) ──
+def load():
+    c = dict(DEFAULTS)
+    try:
+        for line in open(CONF):
+            k, sep, v = line.strip().partition("=")
+            if sep and not k.startswith("#"):
+                c[k.strip()] = v.strip()
+    except OSError:
+        pass
+    return c
+
+
+def save(c):
+    os.makedirs(os.path.dirname(CONF), exist_ok=True)
+    with open(CONF, "w") as f:
+        f.write("# Auxo desktop widgets (auxo-widgets, Auxo Settings > Widgets)\n")
+        for k in DEFAULTS:
+            f.write(f"{k}={c.get(k, DEFAULTS[k])}\n")
+
+
+def enabled(c=None):
+    c = c or load()
+    return [w for w in c.get("WIDGETS", "").split(",") if w in WIDGETS]
+
+
+def set_enabled(names):
+    c = load()
+    c["WIDGETS"] = ",".join(n for n in WIDGETS if n in names)
+    save(c)
+    return enabled(c)
+
+
+def pids():
+    out = []
+    for d in os.listdir("/proc"):
+        if d.isdigit() and int(d) != os.getpid():
+            try:
+                cmd = open(f"/proc/{d}/cmdline", "rb").read().split(b"\0")
+            except OSError:
+                continue
+            if len(cmd) > 1 and cmd[1].endswith(b"auxo-widgets") and (len(cmd) < 3 or cmd[2] in (b"", b"show")):
+                out.append(int(d))
+    return out
+
+
+def stop():
+    for p in pids():
+        try:
+            os.kill(p, signal.SIGTERM)
+        except OSError:
+            pass
+
+
+def start_detached():
+    if not enabled():
+        return
+    subprocess.Popen([sys.argv[0]], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True)
+
+
+def weather(city, units="metric", fetch=None):
+    """{'temp', 'feels', 'desc', 'city', 'icon'} from wttr.in, cached for 30 minutes."""
+    try:
+        cached = json.load(open(CACHE))
+        if time.time() - cached.get("at", 0) < 1800 and cached.get("city_asked") == city:
+            return cached
+    except (OSError, ValueError):
+        pass
+    url = f"https://wttr.in/{urllib.parse.quote(city)}?format=j1"
+    try:
+        raw = fetch(url) if fetch else urllib.request.urlopen(
+            urllib.request.Request(url, headers={"User-Agent": "auxo-widgets"}), timeout=8).read()
+        j = json.loads(raw)
+        cur = j["current_condition"][0]
+        area = (j.get("nearest_area") or [{}])[0]
+        f = units == "imperial"
+        w = {"temp": cur["temp_F" if f else "temp_C"], "feels": cur["FeelsLikeF" if f else "FeelsLikeC"],
+             "unit": "°F" if f else "°C", "desc": cur["weatherDesc"][0]["value"],
+             "code": int(cur.get("weatherCode", 113)),
+             "city": city or (area.get("areaName") or [{"value": ""}])[0]["value"],
+             "at": time.time(), "city_asked": city}
+        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+        json.dump(w, open(CACHE, "w"))
+        return w
+    except Exception:   # offline, wttr.in down, odd answer: the widget says so instead of crashing
+        return None
+
+
+def weather_glyph(code):
+    """Font Awesome glyph for a wttr.in (WWO) weather code."""
+    if code == 113:
+        return ""                       # sun
+    if code in (116, 119, 122):
+        return ""                       # cloud
+    if code in (143, 248, 260):
+        return ""                       # smog
+    if code in (200, 386, 389, 392, 395):
+        return ""                       # bolt
+    if code in (179, 182, 185, 227, 230, 311, 314, 317, 320, 323, 326, 329, 332, 335, 338, 350, 362, 365,
+                368, 371, 374, 377):
+        return ""                       # snowflake
+    return ""                           # rain
+
+
+def music_status(run=None):
+    """(status, title, artist) from playerctl, or None when nothing plays."""
+    run = run or (lambda a: subprocess.run(a, capture_output=True, text=True, timeout=2).stdout)
+    try:
+        out = run(["playerctl", "metadata", "--format", "{{status}}\t{{title}}\t{{artist}}"]).strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    parts = out.split("\t")
+    if len(parts) < 3 or not parts[1]:
+        return None
+    return parts[0], parts[1], parts[2]
+
+
+# ── the widgets (GTK 3 + gtk-layer-shell: they live on the desktop layer) ──
+def show():
+    import gi
+    gi.require_version("Gtk", "3.0")
+    gi.require_version("GtkLayerShell", "0.1")
+    from gi.repository import GLib, Gtk, GtkLayerShell
+    import auxo_sysstats
+
+    c = load()
+    names = enabled(c)
+    if not names:
+        print("auxo-widgets: no widgets are on (auxo-widgets add clock)", file=sys.stderr)
+        return 0
+    win = Gtk.Window()
+    win.set_title("auxo-widgets")
+    GtkLayerShell.init_for_window(win)
+    GtkLayerShell.set_namespace(win, "auxo-widgets")
+    GtkLayerShell.set_layer(win, GtkLayerShell.Layer.BOTTOM)
+    place = c.get("PLACE") if c.get("PLACE") in PLACES else "top-right"
+    v, h = place.split("-")
+    edge = {"top": GtkLayerShell.Edge.TOP, "bottom": GtkLayerShell.Edge.BOTTOM,
+            "left": GtkLayerShell.Edge.LEFT, "right": GtkLayerShell.Edge.RIGHT}
+    for e in (v, h):
+        GtkLayerShell.set_anchor(win, edge[e], True)
+        GtkLayerShell.set_margin(win, edge[e], 28)
+    GtkLayerShell.set_keyboard_mode(win, GtkLayerShell.KeyboardMode.NONE)
+    GtkLayerShell.set_exclusive_zone(win, -1)      # don't push windows away; sit under the bars' gaps
+
+    css = Gtk.CssProvider()
+    imp = f'@import url("file://{COLORS}");\n' if os.path.exists(COLORS) else \
+        "@define-color fg #f2f2f7; @define-color muted #a8a8b8; @define-color accent #a78bfa; @define-color bg #14141c;\n"
+    css.load_from_data((imp + """
+        window { background: transparent; }
+        .card { background: alpha(@bg, 0.62); border: 1px solid alpha(@fg, 0.10); border-radius: 22px;
+                padding: 16px 20px; margin-bottom: 14px; color: @fg; font-family: Inter, sans-serif; }
+        .time { font-size: 54px; font-weight: 800; }
+        .date { font-size: 15px; color: @muted; }
+        .head { font-size: 11px; font-weight: 700; color: @muted; letter-spacing: 1px; }
+        .big { font-size: 30px; font-weight: 700; }
+        .title { font-size: 17px; font-weight: 700; }
+        .muted { color: @muted; }
+        .glyph { font-family: "Font Awesome 6 Free"; font-weight: 900; font-size: 26px; color: @accent; }
+        .btn { font-family: "Font Awesome 6 Free"; font-weight: 900; background: alpha(@fg, 0.08); border: none;
+               border-radius: 999px; padding: 6px 12px; color: @fg; box-shadow: none; }
+        .btn:hover { background: alpha(@accent, 0.35); }
+        progressbar trough { min-height: 6px; border-radius: 3px; background: alpha(@fg, 0.12); }
+        progressbar progress { min-height: 6px; border-radius: 3px; background: @accent; }
+        calendar { background: transparent; color: @fg; border: none; }
+        calendar:selected { background: @accent; border-radius: 6px; }
+    """).encode())
+    Gtk.StyleContext.add_provider_for_screen(win.get_screen(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    col.set_size_request(300, -1)
+    win.add(col)
+    updaters = []
+
+    def card(title=None):
+        b = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        b.get_style_context().add_class("card")
+        if title:
+            t = Gtk.Label(label=title.upper(), xalign=0)
+            t.get_style_context().add_class("head")
+            b.pack_start(t, False, False, 0)
+        col.pack_start(b, False, False, 0)
+        return b
+
+    def label(cls=None, x=0):
+        lab = Gtk.Label(xalign=x)
+        lab.set_line_wrap(True)
+        if cls:
+            lab.get_style_context().add_class(cls)
+        return lab
+
+    for name in names:
+        if name == "clock":
+            b = card()
+            t, d = label("time"), label("date")
+            b.pack_start(t, False, False, 0)
+            b.pack_start(d, False, False, 0)
+            fmt = "%H:%M" if c.get("CLOCK24", "1") == "1" else "%-I:%M %p"
+            updaters.append(lambda t=t, d=d, fmt=fmt: (t.set_text(time.strftime(fmt)),
+                                                        d.set_text(time.strftime("%A, %-d %B"))))
+        elif name == "weather":
+            b = card("Weather")
+            row = Gtk.Box(spacing=14)
+            g, big, desc = label("glyph"), label("big"), label("muted")
+            row.pack_start(g, False, False, 0)
+            row.pack_start(big, False, False, 0)
+            b.pack_start(row, False, False, 0)
+            b.pack_start(desc, False, False, 0)
+            big.set_text("…")
+            state = {"next": 0}
+
+            def upd_weather(g=g, big=big, desc=desc, state=state):
+                if time.time() < state["next"]:
+                    return
+                state["next"] = time.time() + 900
+
+                def work():
+                    w = weather(c.get("CITY", ""), c.get("UNITS", "metric"))
+                    GLib.idle_add(lambda: (
+                        g.set_text(weather_glyph(w["code"]) if w else ""),
+                        big.set_text(f"{w['temp']}{w['unit']}" if w else "—"),
+                        desc.set_text(f"{w['desc']} · feels {w['feels']}{w['unit']}\n{w['city']}" if w
+                                      else "No weather right now (offline?)"), False)[-1])
+                threading.Thread(target=work, daemon=True).start()
+            updaters.append(upd_weather)
+        elif name == "music":
+            b = card("Now playing")
+            title, artist = label("title"), label("muted")
+            title.set_ellipsize(3)               # Pango.EllipsizeMode.END
+            title.set_line_wrap(False)
+            title.set_max_width_chars(26)
+            row = Gtk.Box(spacing=8)
+            buttons = {}
+            for glyph, cmd in (("", "previous"), ("", "play-pause"), ("", "next")):
+                btn = Gtk.Button(label=glyph)
+                btn.get_style_context().add_class("btn")
+                btn.connect("clicked", lambda _b, cmd=cmd: subprocess.Popen(["playerctl", cmd]))
+                row.pack_start(btn, False, False, 0)
+                buttons[cmd] = btn
+            b.pack_start(title, False, False, 0)
+            b.pack_start(artist, False, False, 0)
+            b.pack_start(row, False, False, 4)
+
+            def upd_music(title=title, artist=artist, buttons=buttons):
+                m = music_status()
+                title.set_text(m[1] if m else "Nothing playing")
+                artist.set_text(m[2] if m else "Play something and it shows here")
+                buttons["play-pause"].set_label("" if m and m[0] == "Playing" else "")
+            updaters.append(upd_music)
+        elif name == "system":
+            b = card("System")
+            stats = auxo_sysstats.Stats()
+            stats.cpu()
+            rows = {}
+            for key in ("CPU", "Memory", "Disk"):
+                lab = label("muted")
+                bar = Gtk.ProgressBar()
+                b.pack_start(lab, False, False, 0)
+                b.pack_start(bar, False, False, 2)
+                rows[key] = (lab, bar)
+
+            def upd_system(stats=stats, rows=rows):
+                cpu, _ = stats.cpu()
+                used, total, _su, _st = stats.memory()
+                disks = stats.disks()
+                root = next((d for d in disks if d[0] == "/"), disks[0] if disks else ("/", 0, 1))
+                for key, frac, text in (
+                        ("CPU", cpu / 100, f"CPU  {cpu:.0f}%"),
+                        ("Memory", used / total if total else 0,
+                         f"Memory  {auxo_sysstats.human(used)} of {auxo_sysstats.human(total)}"),
+                        ("Disk", root[1] / root[2] if root[2] else 0,
+                         f"Disk  {auxo_sysstats.human(root[1])} of {auxo_sysstats.human(root[2])}")):
+                    rows[key][0].set_text(text)
+                    rows[key][1].set_fraction(max(0, min(1, frac)))
+            updaters.append(upd_system)
+        elif name == "calendar":
+            b = card(time.strftime("%B %Y"))
+            cal = Gtk.Calendar()
+            cal.set_display_options(Gtk.CalendarDisplayOptions.SHOW_DAY_NAMES)
+            b.pack_start(cal, False, False, 0)
+
+    def tick():
+        for u in updaters:
+            try:
+                u()
+            except Exception as e:          # one broken widget never takes the others down
+                print(f"auxo-widgets: {e}", file=sys.stderr)
+        return True
+
+    tick()
+    GLib.timeout_add_seconds(2, tick)
+    win.connect("destroy", Gtk.main_quit)
+    GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, Gtk.main_quit)
+    win.show_all()
+    if os.environ.get("AUXO_WIDGETS_SHOT"):           # tests: save a picture and quit
+        def shot():
+            from gi.repository import Gdk
+            gw = win.get_window()
+            pb = Gdk.pixbuf_get_from_window(gw, 0, 0, gw.get_width(), gw.get_height())
+            pb.savev(os.environ["AUXO_WIDGETS_SHOT"], "png", [], [])
+            Gtk.main_quit()
+        GLib.timeout_add(1500, shot)
+    Gtk.main()
+    return 0
+
+
+def main(argv):
+    cmd = argv[0] if argv else "show"
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    if cmd == "show":
+        if pids():
+            return 0                                   # already showing
+        return show()
+    if cmd == "list":
+        on = enabled()
+        c = load()
+        for k, d in WIDGETS.items():
+            print(f"  {'[on] ' if k in on else '[off]'} {k:<9} {d}")
+        print(f"\n  place: {c['PLACE']}" + (f" · weather city: {c['CITY']}" if c.get("CITY") else ""))
+        return 0
+    if cmd in ("add", "remove", "on", "off") and len(argv) > 1:
+        bad = [n for n in argv[1:] if n not in WIDGETS]
+        if bad:
+            print(f"auxo-widgets: no widget called {', '.join(bad)} (choose: {', '.join(WIDGETS)})", file=sys.stderr)
+            return 1
+        on = enabled()
+        on = on + argv[1:] if cmd in ("add", "on") else [n for n in on if n not in argv[1:]]
+        set_enabled(on)
+    elif cmd == "place" and len(argv) > 1 and argv[1] in PLACES:
+        c = load()
+        c["PLACE"] = argv[1]
+        save(c)
+    elif cmd == "city":
+        c = load()
+        c["CITY"] = " ".join(argv[1:])
+        save(c)
+        try:
+            os.remove(CACHE)
+        except OSError:
+            pass
+    elif cmd == "units" and len(argv) > 1 and argv[1] in ("metric", "imperial"):
+        c = load()
+        c["UNITS"] = argv[1]
+        save(c)
+    elif cmd == "stop":
+        stop()
+        return 0
+    elif cmd != "restart":
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    stop()                                            # show the change right away
+    time.sleep(0.2)
+    if os.environ.get("WAYLAND_DISPLAY"):
+        start_detached()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

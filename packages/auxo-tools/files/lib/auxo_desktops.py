@@ -13,12 +13,6 @@ GUI_BASE = ["dbus", "elogind", "polkit", "NetworkManager", "pipewire", "wireplum
             "python3-pyqt6", "python3-pyqt6-gui", "python3-pyqt6-widgets"]
 GUI_SERVICES = ["dbus", "elogind", "NetworkManager"]
 
-# Plasma without the kde-plasma meta package (which adds a 254 MB wallpaper pack, Oxygen and
-# extras). The live ISO ships exactly this list (mklive/packages.txt), so Plasma installs offline.
-PLASMA_CORE = ["plasma-desktop", "plasma-workspace-x11", "plasma-nm", "plasma-pa", "powerdevil", "bluedevil",
-               "kscreen", "kinfocenter", "kwallet-pam", "ksshaskpass", "kwrited", "sddm-kcm", "plasma-thunderbolt",
-               "kf6-kded", "upower", "udisks2"]
-
 COMMON_WM = [
     "Thunar", "thunar-archive-plugin", "gvfs", "pulseaudio-utils", "network-manager-applet",
     "blueman", "brightnessctl", "playerctl", "power-profiles-daemon", "font-awesome6", "papirus-icon-theme",
@@ -55,14 +49,6 @@ AUXO_PACKAGES_URL = "https://github.com/rxvy-dev/AUXO/releases/latest/download/a
 AUXO_REPO = "/var/lib/auxo/auxo-repo"
 
 DESKTOPS = {
-    "plasma": {
-        "name": "KDE Plasma",
-        "packages": GUI_BASE + PLASMA_CORE + ["dolphin", "konsole", "kate", "ark", "spectacle",
-                                "xdg-desktop-portal-kde", "kde-gtk-config", "breeze-gtk", "greetd", "tuigreet"],
-        "dm": "greetd",
-        "session": "plasma",
-        "cmd": "dbus-run-session startplasma-wayland",
-    },
     "gnome": {
         "name": "GNOME",
         # GNOME is Wayland-only and has to be started by its own login screen (GDM).
@@ -136,9 +122,32 @@ DESKTOPS = {
     },
 }
 
-# What the live ISO's desktop ships; removed when the user installs a different desktop.
-LIVE_PLASMA = [p for p in PLASMA_CORE if p not in ("upower", "udisks2")] + [
-    "kde-plasma", "dolphin", "konsole", "kate", "ark", "spectacle", "xdg-desktop-portal-kde"]
+# The live ISO boots Hyprland in the Windows style (AUXO 5.0; KDE Plasma was dropped). Its packages
+# ship on the ISO (mklive/packages.txt), so Hyprland (any style) and Sway install offline. When you
+# install another desktop, what only the live desktop needed is removed (auxo-tweak desktop --replace).
+LIVE_DESKTOP = "hyprland"
+OFFLINE_DESKTOPS = ("hyprland", "sway", "none")
+# Older installs may still say DESKTOP=plasma; Auxo no longer offers or themes it, but leaves it working.
+RETIRED_DESKTOPS = {"plasma": "KDE Plasma (no longer offered by Auxo)"}
+
+
+def live_packages():
+    """What the live session's desktop installed: Hyprland + its rice + the Sway fallback."""
+    return DESKTOPS["hyprland"]["packages"] + ["sway", "swaybg", "swayidle", "swaylock", "foot"]
+
+
+# Hyprland styles: (style, rice, name, what it looks like). Every style is the Auxo Hyprland rice
+# with its own bar, colours and window look on top; the keys are the same in all of them.
+HYPR_STYLES = [
+    ("auxo", "hyprland", "Auxo", "Floating bar, tiling with gaps: the classic Auxo look"),
+    ("mac", "hyprland-mac", "Mac", "Liquid Glass menu bar, dock, Launchpad, Control Center"),
+    ("windows", "hyprland-win", "Windows", "Taskbar with Start in the middle, Quick settings"),
+    ("neon", "hyprland-neon", "Neon", "Cyberpunk: glowing borders and a terminal-style top bar"),
+    ("zen", "hyprland-zen", "Zen", "Minimal: a slim bar, wide gaps, calm colours, nothing extra"),
+    ("candy", "hyprland-candy", "Candy", "Pastel and round: floating island bars, bouncy windows"),
+]
+STYLE_RICE = {s: r for s, r, _n, _d in HYPR_STYLES}
+
 
 # Void kernel meta packages (each pulls in a versioned linuxX.Y package).
 KERNELS = {

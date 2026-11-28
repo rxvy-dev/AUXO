@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""auxo-pins — the apps pinned to the taskbar / dock / bar of the Auxo Hyprland rices.
+
+  auxo-pins                    list the pins, in order
+  auxo-pins add APP [--at N]   pin an app (firefox, Firefox or firefox.desktop)
+  auxo-pins remove APP         unpin it
+  auxo-pins move APP left|right
+  auxo-pins apps               installed apps you can pin
+  auxo-pins launch APP         open the app, or switch to it if it's open (what a click does)
+  auxo-pins menu APP           the right-click menu: open, move, unpin
+  auxo-pins refresh            rewrite Waybar's pin files and reload the bar
+
+Pins are also changed from the Start menu / Launchpad (right-click an app) and in
+Auxo Settings > Taskbar & dock.
+"""
+import os
+import subprocess
+import sys
+
+sys.path.insert(0, os.environ.get("AUXO_LIB", "/usr/lib/auxo"))
+import auxo_pins as P  # noqa: E402
+import auxo_shell as S  # noqa: E402
+
+
+def refresh(apps):
+    P.write_waybar(apps)
+    P.reload_waybar()
+
+
+def notify(title, body=""):
+    subprocess.run(["notify-send", "-a", "Auxo", title, body], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def menu(name, apps):
+    i = P.app_id(name, apps) or name
+    label = next((a["name"] for a in apps if a["id"] == i), i)
+    choices = {f"Open {label}": "open", "Move left": "left", "Move right": "right", f"Unpin {label}": "unpin"}
+    try:
+        r = subprocess.run(["wofi", "--dmenu", "--prompt", label, "--lines", str(len(choices) + 1),
+                            "--width", "260", "--location", "bottom", "--cache-file", "/dev/null"],
+                           input="\n".join(choices), capture_output=True, text=True, timeout=60)
+        pick = choices.get(r.stdout.strip())
+    except (OSError, subprocess.TimeoutExpired):
+        pick = None
+    if pick == "open":
+        P.launch(i, apps)
+    elif pick in ("left", "right"):
+        P.move(i, -1 if pick == "left" else 1, apps)
+        refresh(apps)
+    elif pick == "unpin":
+        P.remove(i, apps)
+        refresh(apps)
+        notify(f"Unpinned {label}", "Pin it again from the Start menu: right-click it")
+
+
+def main(argv):
+    if argv[:1] in (["-h"], ["--help"], ["help"]):
+        print(__doc__.strip())
+        return 0
+    apps = S.load_apps()
+    cmd = argv[0] if argv else "list"
+    try:
+        if cmd == "list":
+            by_id = {a["id"]: a for a in apps}
+            for n, i in enumerate(P.load(apps), 1):
+                print(f"{n:2}. {by_id[i]['name']:<28} {i}")
+        elif cmd == "apps":
+            for a in apps:
+                print(f"{a['name']:<32} {a['id']}")
+        elif cmd in ("add", "pin") and len(argv) > 1:
+            at = int(argv[argv.index("--at") + 1]) - 1 if "--at" in argv else None
+            P.add(argv[1], apps, at)
+            refresh(apps)
+        elif cmd in ("remove", "unpin", "rm") and len(argv) > 1:
+            P.remove(argv[1], apps)
+            refresh(apps)
+        elif cmd == "move" and len(argv) > 2:
+            P.move(argv[1], -1 if argv[2] in ("left", "up", "-1") else 1, apps)
+            refresh(apps)
+        elif cmd == "launch" and len(argv) > 1:
+            return 0 if P.launch(argv[1], apps) else 1
+        elif cmd == "menu" and len(argv) > 1:
+            menu(argv[1], apps)
+        elif cmd in ("refresh", "write"):
+            P.write_waybar(apps)
+            if "--no-reload" not in argv:
+                P.reload_waybar()
+        else:
+            print(__doc__.strip(), file=sys.stderr)
+            return 2
+    except ValueError as e:
+        print(f"auxo-pins: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

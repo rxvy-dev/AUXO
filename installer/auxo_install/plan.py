@@ -20,14 +20,15 @@ BTRFS_OPTS = "noatime,compress=zstd:1"
 SUBVOLS = [("@", ""), ("@home", "home"), ("@log", "var/log"), ("@cache", "var/cache"), ("@snapshots", ".snapshots")]
 USER_GROUPS = ["wheel", "audio", "video", "input", "storage", "network", "lp", "scanner", "plugdev",
                "kvm", "bluetooth", "_seatd"]
-ONLINE_DESKTOPS = {"gnome", "xfce", "cinnamon", "hyprland", "sway", "i3", "chrono"}
+# everything else ships on the ISO (the live session is Hyprland, Windows style, with Sway as its fallback)
+ONLINE_DESKTOPS = {"gnome", "xfce", "cinnamon", "i3", "chrono"}
 RSYNC_EXCLUDES = ["/dev/*", "/proc/*", "/sys/*", "/run/*", "/tmp/*", "/mnt/*", "/media/*", "/lost+found",
                   "/var/cache/xbps/*", "/swapfile"]
 # live-session files: from the Auxo ISO overlay, plus what void-mklive's boot hooks create
 LIVE_FILES = ["/etc/auxo/live", "/etc/xdg/autostart/auxo-live-welcome.desktop",
               "/usr/share/applications/auxo-install.desktop", "/etc/profile.d/auxo-live.sh",
               "/etc/sudoers.d/99-void-live", "/etc/polkit-1/rules.d/void-live.rules",
-              "/etc/sddm.conf", "/etc/default/live.conf", "/etc/dracut.conf.d/90-auxo-live.conf"]
+              "/etc/sddm.conf", "/etc/default/live.conf", "/etc/greetd/auxo-live.toml", "/etc/dracut.conf.d/90-auxo-live.conf"]
 
 
 @dataclass
@@ -203,8 +204,8 @@ def build_plan(cfg, env):
     steps, notes = [], []
     desktop, kernel = cfg.desktop, cfg.kernel
     if desktop in ONLINE_DESKTOPS and not env.online:
-        notes.append(f"{desktop} needs internet — KDE Plasma installed instead (switch later: auxo-tweak desktop {desktop})")
-        desktop = "plasma"
+        notes.append(f"{desktop} needs internet — Hyprland installed instead (switch later: auxo-tweak desktop {desktop})")
+        desktop = "hyprland"
     if kernel != "linux" and not env.online:
         notes.append(f"{kernel} needs internet — the stable kernel is installed (switch later: auxo-tweak kernel {kernel})")
         kernel = "linux"
@@ -318,10 +319,7 @@ def build_plan(cfg, env):
             tweak(T, "shell", cfg.shell, *u)]
     if kernel != "linux":
         acts.append(tweak(T, "kernel", kernel, "--no-grub", "--no-initramfs"))
-    if desktop == "plasma":
-        acts.append(tweak(T, "desktop", "plasma", *u))
-    else:
-        acts.append(tweak(T, "desktop", desktop, "--replace", *u))
+    acts.append(tweak(T, "desktop", desktop, "--replace", *u))
     if desktop == "hyprland" and cfg.style != "auxo":
         acts.append(tweak(T, "rice", STYLES[cfg.style][2], *u))
     if "drivers" in extras:

@@ -271,6 +271,17 @@ class StylePreview(QWidget):
         elif self.style_key == "windows":
             g.setColorAt(0, QColor("#e4e9ef"))
             g.setColorAt(1, QColor("#8fa6bf"))
+        elif self.style_key == "neon":
+            g.setColorAt(0, QColor("#090914"))
+            g.setColorAt(0.65, QColor("#2a0b3d"))
+            g.setColorAt(1, QColor("#ff2bd6"))
+        elif self.style_key == "zen":
+            g.setColorAt(0, QColor("#e9e4da"))
+            g.setColorAt(1, QColor("#c9cfc2"))
+        elif self.style_key == "candy":
+            g.setColorAt(0, QColor("#ffd6e8"))
+            g.setColorAt(0.5, QColor("#e3d5ff"))
+            g.setColorAt(1, QColor("#c8f3e6"))
         else:
             g.setColorAt(0, QColor("#141420"))
             g.setColorAt(1, QColor(self.accent[0]).darker(220))
@@ -302,6 +313,34 @@ class StylePreview(QWidget):
             for i, c in enumerate(("#2563eb", "#9ca3af", "#f97316", "#374151", "#1e3a8a", "#5865f2")):
                 p.setBrush(QColor(c))
                 p.drawRoundedRect(QRectF(w / 2 - 40 + i * 14, h - 10, 8, 8), 2, 2)
+        elif self.style_key == "neon":
+            p.setBrush(QColor(9, 9, 20, 230))
+            p.drawRect(QRectF(0, 0, w, 10))
+            p.setBrush(QColor("#22e6ff"))
+            for i in range(4):
+                p.drawRect(QRectF(5 + i * 9, 3, 6, 4))
+            win(8, 16, 84, h - 22, False, 2)
+            win(98, 16, w - 106, h - 22, False, 2)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor("#ff2bd6"), 1.6))
+            p.drawRect(QRectF(8, 16, 84, h - 22))
+            p.setPen(QPen(QColor("#22e6ff"), 1.0))
+            p.drawRect(QRectF(98, 16, w - 106, h - 22))
+        elif self.style_key == "zen":
+            win(18, 14, w - 36, h - 36, True, 3)
+            p.setBrush(QColor(40, 42, 38, 200))
+            p.drawRoundedRect(QRectF(w / 2 - 36, h - 14, 72, 8), 4, 4)
+            p.setBrush(QColor("#8fa889"))
+            p.drawEllipse(QPointF(w / 2, h - 10), 2, 2)
+        elif self.style_key == "candy":
+            p.setBrush(QColor(255, 255, 255, 200))
+            for x, ww in ((6, 34), (w / 2 - 22, 44), (w - 46, 40)):
+                p.drawRoundedRect(QRectF(x, 5, ww, 11), 5.5, 5.5)
+            win(14, 24, 90, 66, True, 12)
+            win(110, 24, w - 124, 66, True, 12)
+            for i, c in enumerate(("#ff8fc6", "#a98bff", "#6fdcbf")):
+                p.setBrush(QColor(c))
+                p.drawEllipse(QPointF(w / 2 - 12 + i * 12, 10.5), 3, 3)
         else:
             p.setBrush(QColor(20, 20, 30, 210))
             p.drawRoundedRect(QRectF(6, 5, w - 12, 10), 5, 5)
@@ -400,7 +439,7 @@ class WelcomePage(Page):
         self.lay.addWidget(box)
         feats = QHBoxLayout()
         feats.setSpacing(12)
-        for head, text in (("Riced, every desktop", "Plasma, GNOME, Hyprland (Auxo, Mac or Windows style), Sway, "
+        for head, text in (("Riced, every desktop", "Hyprland in six styles (Windows, Mac, Auxo, Neon, Zen, Candy), Sway, GNOME, "
                                                      "i3 and more, all themed in your colour."),
                            ("Undo button", "btrfs snapshots before every update. Boot into one if an update "
                                            "goes wrong."),
@@ -429,7 +468,7 @@ class WelcomePage(Page):
             self.net.setText("Connected")
             self.net.setObjectName("ok")
         else:
-            self.net.setText("Offline — Plasma and the stable kernel still install. Connect for every desktop, "
+            self.net.setText("Offline — Hyprland (every style), Sway and the stable kernel still install. Connect for every desktop, "
                              "Steam and Discord.")
             self.net.setObjectName("warn")
         self.net.setWordWrap(True)
@@ -695,8 +734,8 @@ class DesktopPage(Page):
         for k, d in DESKTOPS.items():
             if k == "hyprland":
                 for style, (sname, sdesc, _rice) in STYLES.items():
-                    name = "Hyprland" if style == "auxo" else f"Hyprland — {sname} style"
-                    info = DESKTOP_INFO.get(k, "") if style == "auxo" else sdesc + "."
+                    name = f"Hyprland — {sname} style" + (" (the live session)" if style == "windows" else "")
+                    info = sdesc + "."
                     entries.append((f"hyprland:{style}", name, info, k, style))
             else:
                 entries.append((k, d["name"], DESKTOP_INFO.get(k, ""), k, None))
@@ -712,7 +751,7 @@ class DesktopPage(Page):
             row.addWidget(label(f"<b>{name}</b>"))
             row.addStretch(1)
             if desk in ONLINE_DESKTOPS:
-                row.addWidget(label("needs internet" if self.env.online else "offline: Plasma instead", "chip"))
+                row.addWidget(label("needs internet" if self.env.online else "offline: Hyprland instead", "chip"))
             else:
                 row.addWidget(label("installs offline", "chipon"))
             v.addLayout(row)

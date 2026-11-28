@@ -1,0 +1,50 @@
+// Auxo Hyprland · Neon style: one thin terminal-style bar along the top.
+{
+  "layer": "top",
+  "position": "top",
+  "height": 30,
+  "margin": "6 10 0 10",
+  "include": ["~/.config/waybar/pins-22.jsonc"],
+  "modules-left": ["custom/auxo", "hyprland/workspaces", "hyprland/window"],
+  "modules-center": ["group/pins"],
+  "modules-right": ["cpu", "memory", "network", "pulseaudio", "battery", "custom/update", "tray", "clock"],
+  "custom/auxo": {
+    "format": "▲ auxo",
+    "tooltip": false,
+    "on-click": "auxo-launcher --style mac"
+  },
+  "hyprland/workspaces": {
+    "format": "[{id}]",
+    "on-click": "activate"
+  },
+  "hyprland/window": {
+    "format": "> {}",
+    "max-length": 48,
+    "separate-outputs": true
+  },
+  "cpu": { "format": "cpu {usage}%", "interval": 3, "on-click": "auxo-monitor" },
+  "memory": { "format": "mem {percentage}%", "interval": 5, "on-click": "auxo-monitor" },
+  "network": {
+    "format-wifi": "net {signalStrength}%",
+    "format-ethernet": "net eth",
+    "format-disconnected": "net --",
+    "tooltip-format": "{essid} {ipaddr}",
+    "on-click": "auxo-control --style mac"
+  },
+  "pulseaudio": {
+    "format": "vol {volume}%",
+    "format-muted": "vol mute",
+    "on-click": "auxo-sound",
+    "on-scroll-up": "wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+",
+    "on-scroll-down": "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
+  },
+  "battery": { "format": "bat {capacity}%", "states": { "warning": 25, "critical": 10 } },
+  "custom/update": {
+    "exec": "n=$(xbps-install -Mun 2>/dev/null | wc -l); [ \"$n\" -gt 0 ] && echo \"upd $n\" || echo ''",
+    "interval": 1800,
+    "tooltip": false,
+    "on-click": "kitty -e auxo-update"
+  },
+  "clock": { "format": "{:%H:%M:%S}", "interval": 1, "tooltip-format": "<tt>{calendar}</tt>" },
+  "tray": { "spacing": 8, "icon-size": 15 }
+}
